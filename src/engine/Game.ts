@@ -12,8 +12,11 @@ import { buildTrees, loadTrees } from '../world/Trees';
 import { loadWorldData, type WorldPlace } from '../world/WorldData';
 import { MapView } from '../ui/MapView';
 
-/** Part de la résolution de l'écran réellement calculée (style rétro + fluidité). */
-const RENDER_SCALE = 0.6;
+/**
+ * Part de la résolution de l'écran réellement calculée. 1 = image nette.
+ * Si le jeu rame, ajouter ?res=0.6 à l'adresse pour alléger le calcul.
+ */
+const RENDER_SCALE = Math.min(1, Math.max(0.3, Number(new URLSearchParams(window.location.search).get('res')) || 1));
 const ENTER_DISTANCE = 4.5;
 
 export interface GameEvents {
@@ -121,7 +124,7 @@ export class Game {
         CAR_CATALOG.forEach((spec, i) => {
           const car = new Car(spec, spec.colors[0]);
           const column = i % 5, row = Math.floor(i / 5);
-          car.place(me.x + (column - 2) * 3.4, me.z + 7 + row * 6.5, Math.PI + (row === 0 ? 0.6 : -2.4));
+          car.place(me.x + (column - 2) * 3.1, me.z + 5 + row * 5.5, Math.PI + (row === 0 ? 0.7 : -2.5));
           this.cars.push(car);
           this.scene.add(car.object);
         });

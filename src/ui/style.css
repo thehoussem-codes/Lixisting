@@ -2,7 +2,7 @@ html, body, #root { margin: 0; height: 100%; overflow: hidden; background: #000;
 
 .game-view { position: fixed; inset: 0; }
 /* Le jeu est rendu en basse résolution puis agrandi : c'est le grain "PS2". */
-.game-view canvas { width: 100%; height: 100%; display: block; image-rendering: pixelated; }
+.game-view canvas { width: 100%; height: 100%; display: block; }
 
 .hud {
   position: fixed; left: 16px; bottom: 16px; pointer-events: none;
