@@ -45,3 +45,13 @@
   Zone de test fictive : `?test=1`. Affichage du nombre d'images par seconde.
   Mesures en simulation (berline de 1 192 kg) : 0 à 100 km/h en 6,9 s ; pointe 112 km/h ; côte à 15 % : 99 km/h ;
   descente à 15 % sans accélérer : 47 km/h après 10 s ; tremplin de 3 m à 90 km/h : environ 3,4 m de haut et 30 à 40 m de portée.
+- 2026-11-11 : suite de la refonte.
+  Vitesse d'avant rétablie avec la nouvelle physique (0 à 100 km/h en 3,3 s en simulation, pointe 115 km/h, élan en ligne droite conservé).
+  Mer : surface animée et translucide (`src/world/Water.ts`), rivage en pente douce sous l'eau, fond marin, immersion des véhicules
+  (freinage, flottaison brève, moteur noyé), nage du personnage. Ombres portées simplifiées sous le personnage et les voitures.
+  Résolution automatique selon la fluidité ; décor éloigné masqué par blocs.
+  Catalogue central des modèles 3D (`public/assets/catalog.json`, `src/assets/AssetLibrary.ts`, mode d'emploi `docs/ASSETS.md`) :
+  véhicules, personnage, objets ; téléchargement automatique listé dans `tools/assets.txt`.
+  Personnage provisoire articulé et animé (mannequin « X Bot » des exemples three.js, issu de Mixamo) : à remplacer.
+  Végétation : 19 144 plantes de 5 espèces (pin, palmier, ficus, cyprès, buisson dont lauriers-roses), dans les zones vertes OSM,
+  sur les collines non bâties et en alignement le long des rues à trottoir (palmiers près de la mer). Emplacements plausibles, non relevés.
