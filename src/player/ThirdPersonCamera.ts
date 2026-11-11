@@ -3,7 +3,6 @@ import type { Input } from '../engine/Input';
 import type { Collider } from '../world/Collider';
 
 const SENSITIVITY = 0.0025;
-const DISTANCE = 6.5;
 const TARGET_HEIGHT = 1.6;
 const MIN_PITCH = -0.1;
 const MAX_PITCH = 1.3;
@@ -14,13 +13,23 @@ export class ThirdPersonCamera {
   /** Angle horizontal (radians). Le joueur s'en sert pour avancer "vers l'écran". */
   yaw = Math.PI;
   private pitch = 0.3;
-  private distance = DISTANCE;
+  private distance = 6.5;
   private target = new THREE.Vector3();
 
   constructor(private camera: THREE.PerspectiveCamera) {}
 
-  update(input: Input, playerPosition: THREE.Vector3, collider: Collider | null): void {
+  /**
+   * maxDistance : recul de la caméra (plus grand en voiture).
+   * followYaw : si fourni, la caméra revient doucement derrière cette direction.
+   */
+  update(input: Input, playerPosition: THREE.Vector3, collider: Collider | null, dt: number, maxDistance = 6.5, followYaw: number | null = null): void {
+    const DISTANCE = maxDistance;
     const { dx, dy } = input.consumeMouse();
+    if (followYaw !== null && dx === 0) {
+      let diff = followYaw - this.yaw;
+      diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+      this.yaw += diff * Math.min(1, 2.5 * dt);
+    }
     this.yaw -= dx * SENSITIVITY;
     this.pitch = THREE.MathUtils.clamp(this.pitch + dy * SENSITIVITY, MIN_PITCH, MAX_PITCH);
 
