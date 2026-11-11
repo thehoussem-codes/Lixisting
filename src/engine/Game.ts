@@ -114,6 +114,9 @@ export class Game {
         this.scene.add(car.object);
       });
       this.goToPlace(0);
+      // Adresse du type ...?at=x,n : démarre à ce point de la carte (mètres depuis la gare, n = nord).
+      const at = new URLSearchParams(window.location.search).get('at')?.split(',').map(Number);
+      if (at && at.length === 2 && at.every(Number.isFinite)) this.player.teleport(at[0], this.ground(at[0], -at[1]), -at[1]);
       const estimated = Math.round((100 * data.meta.buildings_height_estimated) / data.meta.buildings);
       this.events.onStatus(`${data.meta.buildings} bâtiments (hauteurs estimées : ${estimated} %) · ${data.meta.roads} tronçons de voies · ${treeCount} arbres · relief réel à 30 m`);
     } catch (error) {
