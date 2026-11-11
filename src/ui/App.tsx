@@ -8,9 +8,15 @@ export function App() {
   const containerRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState('');
   const [places, setPlaces] = useState<WorldPlace[]>([]);
+  const [zone, setZone] = useState('');
+  const [speed, setSpeed] = useState<number | null>(null);
 
   useEffect(() => {
-    const game = new Game(containerRef.current!, { onStatus: setStatus, onPlaces: setPlaces });
+    const game = new Game(containerRef.current!, {
+      onStatus: setStatus,
+      onPlaces: setPlaces,
+      onHud: (z, s) => { setZone(z); setSpeed(s === null ? null : Math.round(s)); },
+    });
     game.start();
     return () => game.dispose();
   }, []);
@@ -18,7 +24,7 @@ export function App() {
   return (
     <>
       <div ref={containerRef} className="game-view" />
-      <Hud status={status} places={places} />
+      <Hud status={status} places={places} zone={zone} speed={speed} />
     </>
   );
 }

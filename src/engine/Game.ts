@@ -6,6 +6,7 @@ import { Car } from '../vehicles/Car';
 import { buildAnnabaWorld } from '../world/AnnabaWorld';
 import type { Collider } from '../world/Collider';
 import { loadTerrain } from '../world/Terrain';
+import { buildTrees, loadTrees } from '../world/Trees';
 import { loadWorldData, type WorldPlace } from '../world/WorldData';
 import { MapView } from '../ui/MapView';
 
@@ -17,6 +18,8 @@ const ENTER_DISTANCE = 4.5;
 export interface GameEvents {
   onStatus(text: string): void;
   onPlaces(places: WorldPlace[]): void;
+  /** Quartier le plus proche et vitesse (km/h, null à pied), quelques fois par seconde. */
+  onHud(zone: string, speed: number | null): void;
 }
 
 /** Le moteur : crée la scène, fait tourner la boucle de jeu, nettoie à la fin. */
@@ -34,6 +37,8 @@ export class Game {
   private places: WorldPlace[] = [];
   private cars: Car[] = [];
   private map: MapView | null = null;
+  private sky: THREE.Mesh | null = null;
+  private hudTimer = 0;
   /** Voiture conduite en ce moment (null = à pied). */
   private driving: Car | null = null;
   /** Ce qui bloque le personnage à pied : bâtiments et voitures. */
@@ -78,10 +83,13 @@ export class Game {
   private async loadWorld(): Promise<void> {
     try {
       this.events.onStatus('Chargement de la carte d\'Annaba...');
-      const [data, terrain] = await Promise.all([loadWorldData(), loadTerrain()]);
+      const [data, terrain, trees] = await Promise.all([loadWorldData(), loadTerrain(), loadTrees()]);
       if (this.disposed) return;
       this.ground = terrain.heightAt;
-      this.collider = buildAnnabaWorld(this.scene, data, terrain);
+      const world = buildAnnabaWorld(this.scene, data, terrain);
+      this.collider = world.collider;
+      this.sky = world.sky;
+      const treeCount = buildTrees(this.scene, trees, terrain.heightAt);
       this.places = data.places;
       this.map = new MapView(data, (index) => this.goToPlace(index));
       this.events.onPlaces(data.places);
@@ -98,7 +106,7 @@ export class Game {
       });
       this.goToPlace(0);
       const estimated = Math.round((100 * data.meta.buildings_height_estimated) / data.meta.buildings);
-      this.events.onStatus(`${data.meta.buildings} bâtiments, ${data.meta.roads} tronçons de voies · hauteurs estimées : ${estimated} % · relief réel (précision 30 m)`);
+      this.events.onStatus(`${data.meta.buildings} bâtiments (hauteurs estimées : ${estimated} %) · ${data.meta.roads} tronçons de voies · ${treeCount} arbres · relief réel à 30 m`);
     } catch (error) {
       this.events.onStatus(`Erreur : ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -114,6 +122,17 @@ export class Game {
       this.player.object.visible = true;
     }
     this.player.teleport(place.x, this.ground(place.x, -place.n), -place.n);
+  }
+
+  /** Nom du repère le plus proche (à moins de 700 m), façon "nom de quartier". */
+  private nearestPlace(): string {
+    const { x, z } = this.player.object.position;
+    let best = 700, name = '';
+    for (const place of this.places) {
+      const d = Math.hypot(place.x - x, -place.n - z);
+      if (d < best) { best = d; name = place.name; }
+    }
+    return name;
   }
 
   /** Touche F : monter dans la voiture la plus proche, ou en descendre. */
@@ -177,6 +196,12 @@ export class Game {
     for (const car of this.cars) if (car !== this.driving) car.settle(this.ground);
     const heading = this.driving ? this.driving.heading : this.player.object.rotation.y;
     this.map?.update(this.player.object.position.x, this.player.object.position.z, heading);
+    this.sky?.position.copy(this.camera.position);
+    this.hudTimer -= dt;
+    if (this.hudTimer <= 0) {
+      this.hudTimer = 0.25;
+      this.events.onHud(this.nearestPlace(), this.driving ? Math.abs(this.driving.speed) * 3.6 : null);
+    }
     this.renderer.render(this.scene, this.camera);
   };
 

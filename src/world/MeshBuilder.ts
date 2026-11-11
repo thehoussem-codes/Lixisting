@@ -15,11 +15,11 @@ export class MeshBuilder {
     return this.indices.length === 0;
   }
 
-  /** Ajoute un sommet, renvoie son numéro. */
+  /** Ajoute un sommet, renvoie son numéro. u, v : position dans la texture. */
   vertex(x: number, y: number, z: number, color: THREE.Color, shade = 1, u = 0, v = 0): number {
     this.positions.push(x, y, z);
-    this.uvs.push(u, v);
     this.colors.push(color.r * shade, color.g * shade, color.b * shade);
+    this.uvs.push(u, v);
     return this.positions.length / 3 - 1;
   }
 
@@ -42,12 +42,17 @@ export class MeshBuilder {
     for (const face of faces) this.triangle(base + face[0], base + face[1], base + face[2]);
   }
 
-  /** Ruban de largeur donnée le long d'une ligne (routes, rails). */
-  ribbon(points: number[], width: number, y: number, color: THREE.Color, ground?: (x: number, z: number) => number): void {
+  /**
+   * Ruban de largeur donnée le long d'une ligne (routes, rails), posé sur le sol.
+   * y : hauteur au-dessus du terrain. tile : longueur (m) d'un motif de texture.
+   */
+  ribbon(points: number[], width: number, y: number, color: THREE.Color,
+         ground?: (x: number, z: number) => number, tile = 12): void {
     const count = points.length / 2;
     if (count < 2) return;
     const half = width / 2;
     const base = this.positions.length / 3;
+    let travelled = 0;
     for (let i = 0; i < count; i++) {
       const x = points[i * 2];
       const z = -points[i * 2 + 1];
@@ -57,6 +62,7 @@ export class MeshBuilder {
       let ax = x - points[prev * 2], az = z + points[prev * 2 + 1];
       let bx = points[next * 2] - x, bz = -points[next * 2 + 1] - z;
       const al = Math.hypot(ax, az) || 1, bl = Math.hypot(bx, bz) || 1;
+      if (i > 0) travelled += Math.hypot(ax, az);
       ax /= al; az /= al; bx /= bl; bz /= bl;
       if (i === 0) { ax = bx; az = bz; }
       if (i === count - 1) { bx = ax; bz = az; }
@@ -66,15 +72,14 @@ export class MeshBuilder {
       // Dans un virage serré on élargit un peu, sans dépasser 2x.
       const cos = Math.max(0.5, Math.abs(nx * -az + nz * ax));
       const offset = half / cos;
-      // Chaque bord du ruban est posé sur le sol (y = hauteur au-dessus du terrain).
       const lx = x + nx * offset, lz = z + nz * offset, rx = x - nx * offset, rz = z - nz * offset;
-      this.vertex(lx, y + (ground ? ground(lx, lz) : 0), lz, color);
-      this.vertex(rx, y + (ground ? ground(rx, rz) : 0), rz, color);
+      this.vertex(lx, y + (ground ? ground(lx, lz) : 0), lz, color, 1, 0, travelled / tile);
+      this.vertex(rx, y + (ground ? ground(rx, rz) : 0), rz, color, 1, 1, travelled / tile);
     }
     for (let i = 0; i < count - 1; i++) {
       const a = base + i * 2;
-      this.triangle(a, a + 1, a + 2);
-      this.triangle(a + 1, a + 3, a + 2);
+      this.triangle(a, a + 2, a + 1); // ordre choisi pour que la face visible soit vers le haut
+      this.triangle(a + 1, a + 2, a + 3);
     }
   }
 

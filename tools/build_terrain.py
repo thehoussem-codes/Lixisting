@@ -20,6 +20,11 @@ ROOT = Path(__file__).resolve().parent.parent
 WORLD = ROOT / "public" / "world" / "annaba.json"
 DEM = ROOT / "data" / "elevation" / "annaba_dem.json.gz"
 OUT = ROOT / "public" / "world" / "terrain.bin"
+TREES_OUT = ROOT / "public" / "world" / "trees.json"
+
+# Arbres : un arbre pour N m² selon le type de zone OSM, et l'espèce plantée.
+TREE_DENSITY = {"wood": (260, "pine"), "scrub": (1100, "pine"), "grass": (420, "mixed")}
+MAX_TREES = 9000
 
 STEP = 30.0          # espacement des points du terrain (m)
 COAST_STEP = 12.0    # espacement maximal des points le long de la côte (m)
@@ -152,9 +157,45 @@ def main():
         f.write(color_array.tobytes())
         f.write(indices.tobytes())
 
+    build_trees(world)
     print(f"terrain : {len(positions)} points, {len(indices)} triangles, grille {cols} x {rows}, "
           f"altitude max {grid.max():.0f} m, fichier {OUT.stat().st_size // 1024} ko")
     return points, triangles, heights, colors
+
+
+def build_trees(world):
+    """Place des arbres DANS les zones vertes réelles d'OSM (bois, garrigue, parcs).
+    L'emplacement exact de chaque arbre est tiré au hasard (toujours le même tirage) :
+    c'est un décor plausible, pas un relevé arbre par arbre."""
+    rng = np.random.default_rng(7)
+    road_points = np.vstack([pairs(r["p"]) for r in world["roads"]])
+    building_points = np.vstack([pairs(b["p"]) for b in world["buildings"]])
+    roads, buildings = cKDTree(road_points), cKDTree(building_points)
+    out = {"pine": [], "palm": []}
+    for area in world["areas"]:
+        if area["k"] not in TREE_DENSITY:
+            continue
+        per_tree, species = TREE_DENSITY[area["k"]]
+        ring = pairs(area["p"])
+        lo, hi = ring.min(axis=0), ring.max(axis=0)
+        count = int((hi[0] - lo[0]) * (hi[1] - lo[1]) / per_tree)
+        if count == 0:
+            continue
+        candidates = lo + rng.random((count, 2)) * (hi - lo)
+        candidates = candidates[Polygon(ring).contains_points(candidates)]
+        if len(candidates) == 0:
+            continue
+        candidates = candidates[(roads.query(candidates)[0] > 7) & (buildings.query(candidates)[0] > 5)]
+        for x, n in candidates:
+            kind = species if species != "mixed" else ("palm" if rng.random() < 0.5 else "pine")
+            out[kind] += [round(float(x), 1), round(float(n), 1), round(float(0.75 + rng.random() * 0.6), 2)]
+    total = (len(out["pine"]) + len(out["palm"])) // 3
+    if total > MAX_TREES:  # on éclaircit les pins si la limite est dépassée
+        keep = max(0, MAX_TREES - len(out["palm"]) // 3)
+        pines = np.array(out["pine"]).reshape(-1, 3)
+        out["pine"] = pines[rng.choice(len(pines), keep, replace=False)].ravel().tolist()
+    TREES_OUT.write_text(json.dumps(out, separators=(",", ":")), encoding="utf-8")
+    print(f"arbres : {len(out['pine']) // 3} pins, {len(out['palm']) // 3} palmiers")
 
 
 if __name__ == "__main__":

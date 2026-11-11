@@ -21,3 +21,10 @@ html, body, #root { margin: 0; height: 100%; overflow: hidden; background: #000;
   border: 3px solid #fff; border-radius: 6px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5); cursor: pointer;
 }
 .fullmap { position: fixed; inset: 0; width: 100%; height: 100%; display: none; cursor: pointer; }
+
+.hud-places { font-size: 12px; }
+.hud-zone { left: auto; right: 16px; bottom: 36px; text-align: right; }
+.hud-zone-name { font-size: 30px; font-style: italic; font-weight: bold; color: #ffd23f; letter-spacing: 1px; }
+.hud-speed { font-size: 34px; font-weight: bold; }
+.hud-speed span { font-size: 15px; }
+.hud-help { font-size: 12px; max-width: 60vw; }
