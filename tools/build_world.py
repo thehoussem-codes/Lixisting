@@ -82,6 +82,21 @@ def densify(points, step):
     return out
 
 
+def smooth(points, passes=2):
+    """Arrondit les angles d'un tracé (méthode de Chaikin) sans déplacer ses extrémités :
+    le tracé général réel est conservé, seuls les coudes deviennent des courbes."""
+    for _ in range(passes):
+        if len(points) < 3:
+            return points
+        out = [points[0]]
+        for a, b in zip(points, points[1:]):
+            out.append((a[0] * 0.75 + b[0] * 0.25, a[1] * 0.75 + b[1] * 0.25))
+            out.append((a[0] * 0.25 + b[0] * 0.75, a[1] * 0.25 + b[1] * 0.75))
+        out.append(points[-1])
+        points = out
+    return points
+
+
 def simplify(points, tolerance):
     """Douglas-Peucker : enlève les points qui ne changent pas la forme."""
     if len(points) < 3:
@@ -316,8 +331,14 @@ def main():
             except ValueError:
                 pass
             for piece in clip_to_rect(p, rect):  # on coupe ce qui dépasse de la zone
-                line = densify(simplify(piece, 0.3), 10)
-                roads.append({"k": kind, "w": width, "p": flat(line), "_line": line})
+                line = densify(simplify(smooth(simplify(piece, 0.3)), 0.12), 10)
+                road = {"k": kind, "w": width, "p": flat(line), "_line": line, "_way": w["id"]}
+                name = tags.get("name:fr") or tags.get("name")
+                if name:
+                    road["n"] = name
+                if kind in ("trunk", "primary"):
+                    road["kp"] = 1  # bordures peintes rouge et blanc : hypothèse limitée aux grands axes
+                roads.append(road)
                 if kind not in ("footway", "path", "steps", "trunk", "trunk_link"):
                     for a, b in zip(line, line[1:]):
                         road_points.append((a[0], a[1], b[0] - a[0], b[1] - a[1], len(roads) - 1))
@@ -475,6 +496,51 @@ def main():
         road["w"] = round(width, 1)
         road["sw"] = round(max(0.0, min(1.8, free - width / 2 - 0.2)), 1)  # trottoir de chaque côté
 
+    # --- carrefours : là où plusieurs rues carrossables se rejoignent, un disque d'enrobé
+    # (et de trottoir dessous) viendra raccorder proprement les chaussées.
+    PAVED = DRIVABLE | {"service"}
+    way_width, way_walk = {}, {}
+    for road in roads:
+        wid = road.pop("_way")
+        if road["k"] in PAVED:
+            way_width[wid] = min(way_width.get(wid, 99), road["w"])
+            way_walk[wid] = min(way_walk.get(wid, 99), road.get("sw", 0))
+    node_ways = {}
+    for w in ways:
+        if w["id"] in way_width:
+            for node in set(w["nodes"]):
+                node_ways.setdefault(node, []).append(w["id"])
+    junctions = []
+    for node, ids in node_ways.items():
+        if len(ids) < 2 or node not in xy:
+            continue
+        x, n = xy[node]
+        if not (rx0 <= x <= rx1 and ry0 <= n <= ry1):
+            continue
+        radius = max(way_width[i] for i in ids) / 2
+        junctions += [round(x, 1), round(n, 1), round(radius, 1), round(radius + max(way_walk[i] for i in ids), 1)]
+
+    # --- ronds-points réels (anneaux OSM junction=roundabout) : centre et rayon de l'îlot central
+    roundabouts = []
+    for w in ways:
+        tags = w.get("tags", {})
+        if tags.get("junction") != "roundabout" or w["nodes"][0] != w["nodes"][-1] or w["id"] not in way_width:
+            continue
+        ring = pts(w)[:-1]
+        cx, cn = sum(p[0] for p in ring) / len(ring), sum(p[1] for p in ring) / len(ring)
+        radius = sum(math.hypot(p[0] - cx, p[1] - cn) for p in ring) / len(ring)
+        island = radius - way_width[w["id"]] / 2 - 0.2
+        if island > 1.2 and rx0 <= cx <= rx1 and ry0 <= cn <= ry1:
+            roundabouts += [round(cx, 1), round(cn, 1), round(island, 1)]
+
+    # --- feux tricolores réels (points OSM highway=traffic_signals) : position et point du graphe routier
+    signals = []
+    for e in elements:
+        if e["type"] == "node" and e.get("tags", {}).get("highway") == "traffic_signals" and e["id"] in xy:
+            x, n = xy[e["id"]]
+            if rx0 <= x <= rx1 and ry0 <= n <= ry1:
+                signals += [round(x, 1), round(n, 1), graph_index.get(e["id"], -1)]
+
     # --- points de téléportation : repère OSM -> point de rue le plus proche
     def nearest_road(x, n):
         return min(road_points, key=lambda q: (q[0] - x) ** 2 + (q[1] - n) ** 2)
@@ -520,6 +586,7 @@ def main():
             "buildings_by_kind": kinds,
             "roads": len(roads),
             "roads_narrowed_to_fit_buildings": narrowed,
+            "junctions": len(junctions) // 4, "roundabouts": len(roundabouts) // 3, "traffic_signals": len(signals) // 3,
             "roads_skipped_by_type": skipped,
             "relief": "Terrain Tiles (AWS Open Data), environ 30 m de précision",
         },
@@ -529,6 +596,9 @@ def main():
         "roads": roads,
         "rails": rails,
         "graph": {"nodes": graph_nodes, "edges": graph_edges},
+        "junctions": junctions,
+        "roundabouts": roundabouts,
+        "signals": signals,
         "buildings": buildings,
     }
     OUT.parent.mkdir(parents=True, exist_ok=True)

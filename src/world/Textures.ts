@@ -99,23 +99,34 @@ export function createFacadeTexture(style: FacadeStyle): THREE.CanvasTexture {
   return finish(element);
 }
 
-/**
- * Chaussée : asphalte moucheté, bordures de trottoir peintes en rouge et blanc
- * (usage courant en Algérie : hypothèse de style, à confirmer rue par rue),
- * lignes de rive et ligne centrale discontinue pour les grands axes.
- */
-export function createRoadTexture(major: boolean): THREE.CanvasTexture {
-  const [element, ctx] = canvas(64, 128);
-  ctx.fillStyle = major ? '#43444a' : '#4b4c52';
-  ctx.fillRect(0, 0, 64, 128);
-  let seed = major ? 11 : 29;
+/** Asphalte moucheté, sans aucun marquage. */
+function asphalt(ctx: CanvasRenderingContext2D, width: number, height: number, base: string, seed: number): void {
+  ctx.fillStyle = base;
+  ctx.fillRect(0, 0, width, height);
   const random = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
-  for (let i = 0; i < 900; i++) {
+  for (let i = 0; i < (width * height) / 9; i++) {
     ctx.fillStyle = random() < 0.5 ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.08)';
-    ctx.fillRect(Math.floor(random() * 64), Math.floor(random() * 128), 2, 2);
+    ctx.fillRect(Math.floor(random() * width), Math.floor(random() * height), 2, 2);
   }
+}
+
+/** Enrobé nu des carrefours. */
+export function createAsphaltTexture(): THREE.CanvasTexture {
+  const [element, ctx] = canvas(64, 64);
+  asphalt(ctx, 64, 64, '#47484e', 53);
+  return finish(element);
+}
+
+/**
+ * Chaussée. Les bords portent la bordure de trottoir : béton gris par défaut,
+ * peinte en rouge et blanc seulement sur les grands axes (painted = vrai).
+ * Les grands axes ont aussi des lignes de rive et une ligne centrale discontinue.
+ */
+export function createRoadTexture(major: boolean, painted = false): THREE.CanvasTexture {
+  const [element, ctx] = canvas(64, 128);
+  asphalt(ctx, 64, 128, major ? '#43444a' : '#4b4c52', major ? 11 : 29);
   for (let y = 0; y < 128; y += 16) {
-    ctx.fillStyle = (y / 16) % 2 === 0 ? '#c23b2e' : '#ecebe4';
+    ctx.fillStyle = painted ? ((y / 16) % 2 === 0 ? '#c23b2e' : '#ecebe4') : ((y / 16) % 2 === 0 ? '#b4b1a9' : '#aaa79f');
     ctx.fillRect(0, y, 2, 16); ctx.fillRect(62, y, 2, 16);
   }
   if (major) {
@@ -128,11 +139,21 @@ export function createRoadTexture(major: boolean): THREE.CanvasTexture {
   return texture;
 }
 
-/** Trottoir : dalles claires. */
-export function createPavementTexture(): THREE.CanvasTexture {
+/** Trottoir. Ordinaire : dalles de béton gris. Soigné (avenues, places) : pavage bicolore. */
+export function createPavementTexture(fine = false): THREE.CanvasTexture {
   const [element, ctx] = canvas(32, 32);
-  ctx.fillStyle = '#c9c2b4'; ctx.fillRect(0, 0, 32, 32);
-  ctx.fillStyle = '#b3ac9e';
-  ctx.fillRect(0, 0, 32, 1); ctx.fillRect(0, 16, 32, 1); ctx.fillRect(0, 0, 1, 32); ctx.fillRect(16, 0, 1, 32);
+  if (fine) {
+    for (let y = 0; y < 4; y++) for (let x = 0; x < 4; x++) {
+      ctx.fillStyle = (x + y) % 2 === 0 ? '#cfc6b4' : '#b9ad98';
+      ctx.fillRect(x * 8, y * 8, 8, 8);
+    }
+    ctx.fillStyle = 'rgba(0,0,0,0.12)';
+    for (let i = 0; i < 32; i += 8) { ctx.fillRect(i, 0, 1, 32); ctx.fillRect(0, i, 32, 1); }
+  } else {
+    ctx.fillStyle = '#b7b5ae'; ctx.fillRect(0, 0, 32, 32);
+    ctx.fillStyle = '#a3a19a';
+    ctx.fillRect(0, 0, 32, 1); ctx.fillRect(0, 16, 32, 1); ctx.fillRect(0, 0, 1, 32); ctx.fillRect(16, 0, 1, 32);
+    ctx.fillStyle = 'rgba(255,255,255,0.06)'; ctx.fillRect(3, 3, 9, 9); ctx.fillRect(20, 19, 8, 8);
+  }
   return finish(element);
 }

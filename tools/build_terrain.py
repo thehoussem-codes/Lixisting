@@ -113,12 +113,20 @@ def main():
     heights = height(points[:, 0], points[:, 1])
 
     # --- couleur de chaque point : type de sol OSM, sinon selon l'altitude et la pente
-    colors = np.tile(COLORS["land"], (len(points), 1))
+    # Sol : gris minéral en ville, terre sèche en lisière, vert sur les terrains sans construction.
+    # (Les photos d'Annaba montrent des collines couvertes de maquis, pas du sable.)
+    built = cKDTree(np.vstack([pairs(b["p"]) for b in world["buildings"]]))
+    away = built.query(points)[0]
+    town, edge, wild = np.array([0.60, 0.58, 0.54]), np.array([0.62, 0.60, 0.44]), np.array([0.40, 0.52, 0.29])
+    t1 = np.clip((away - 30) / 40, 0, 1)[:, None]     # 30 à 70 m des bâtiments : ville -> lisière
+    t2 = np.clip((away - 70) / 80, 0, 1)[:, None]     # 70 à 150 m : lisière -> nature
+    colors = (town * (1 - t1) + edge * t1) * (1 - t2) + wild * t2
+    patchy = np.sin(points[:, 0] * 0.031) * np.cos(points[:, 1] * 0.027)   # nuances larges, pour éviter l'aplat
+    colors = colors * (1 + 0.06 * patchy[:, None])
     gy, gxx = np.gradient(grid, STEP)
     slope = np.hypot(gxx, gy)
     ix = np.clip(((points[:, 0] - x0) / STEP).round().astype(int), 0, cols - 1)
     iy = np.clip(((points[:, 1] - n0) / STEP).round().astype(int), 0, rows - 1)
-    colors[heights > 60] = COLORS["hill"]
     colors[slope[iy, ix] > 0.55] = COLORS["cliff"]
     for area in world["areas"]:
         mask = Polygon(pairs(area["p"])).contains_points(points)

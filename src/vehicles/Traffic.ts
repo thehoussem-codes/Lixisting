@@ -31,6 +31,8 @@ export class Traffic {
   private out: Edge[][] = [];
   private cells = new Map<string, number[]>();
   private seed = 12345;
+  /** Feux tricolores (fournis par le jeu une fois la ville construite). */
+  lights: { stateFor(node: number, dx: number, dz: number): 'green' | 'amber' | 'red' | null } | null = null;
 
   constructor(data: WorldData, private addToScene: (car: Car) => void) {
     this.nodes = data.graph.nodes;
@@ -151,12 +153,17 @@ export class Traffic {
         }
         return false;
       };
-      const blocked = blockedAt(wantedLane);
+      // Feu rouge ou orange au bout du tronçon : on s'arrête quelques mètres avant le carrefour.
+      const remaining = driver.length - driver.travelled;
+      const light = this.lights?.stateFor(driver.to, dx, dz);
+      const atRedLight = (light === 'red' || light === 'amber') && remaining < 18 && remaining > 5;
+      const blocked = atRedLight || blockedAt(wantedLane);
 
       if (blocked) {
         driver.waiting += dt;
         // Après 3 s derrière un obstacle immobile, on tente de passer par la gauche si c'est libre.
-        if (driver.waiting > 3 && driver.passing <= 0 && !blockedAt(-LANE_OFFSET)) driver.passing = 5;
+        if (atRedLight) driver.waiting = 0; // on ne double pas à un feu
+        else if (driver.waiting > 3 && driver.passing <= 0 && !blockedAt(-LANE_OFFSET)) driver.passing = 5;
       } else {
         driver.waiting = 0;
       }

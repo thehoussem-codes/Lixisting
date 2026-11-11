@@ -6,6 +6,7 @@ import { Car } from '../vehicles/Car';
 import { CAR_CATALOG, applyVehicleAssets } from '../vehicles/CarModels';
 import { assets } from '../assets/AssetLibrary';
 import { Traffic } from '../vehicles/Traffic';
+import { TrafficLights } from '../world/TrafficLights';
 import { buildAnnabaWorld } from '../world/AnnabaWorld';
 import { buildTestTrack } from '../world/TestTrack';
 import type { Water } from '../world/Water';
@@ -48,6 +49,7 @@ export class Game {
   private cars: Car[] = [];
   private map: MapView | null = null;
   private traffic: Traffic | null = null;
+  private lights: TrafficLights | null = null;
   private sky: THREE.Mesh | null = null;
   private water: Water | null = null;
   private time = 0;
@@ -159,6 +161,8 @@ export class Game {
       });
       this.places = data.places;
       this.traffic = new Traffic(data, (car) => this.scene.add(car.object));
+      this.lights = new TrafficLights(this.scene, data, this.ground);
+      this.traffic.lights = this.lights;
       this.map = new MapView(data, (index) => this.goToPlace(index));
       this.events.onPlaces(data.places);
       // Une voiture garée à chaque repère, pour en avoir toujours une sous la main.
@@ -288,6 +292,7 @@ export class Game {
     }
     for (const car of this.cars) if (car !== this.driving) car.settle(this.ground, true);
     const me = this.player.object.position;
+    this.lights?.update(dt);
     this.traffic?.update(dt, me.x, me.z, this.driving === null, this.cars, this.ground);
     const heading = this.driving ? this.driving.heading : this.player.object.rotation.y;
     this.map?.update(this.player.object.position.x, this.player.object.position.z, heading);

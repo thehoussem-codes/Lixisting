@@ -83,6 +83,22 @@ export class MeshBuilder {
     }
   }
 
+  /**
+   * Disque posé sur le sol (carrefour, îlot). y : hauteur au-dessus du terrain.
+   * La texture est plaquée selon la position dans le monde (un motif tous les `tile` mètres).
+   */
+  disc(x: number, z: number, radius: number, y: number, color: THREE.Color,
+       ground: (x: number, z: number) => number, tile = 6, segments = 14, edgeColor = color): void {
+    const center = this.vertex(x, ground(x, z) + y, z, color, 1, x / tile, z / tile);
+    const ring: number[] = [];
+    for (let i = 0; i < segments; i++) {
+      const a = (i / segments) * Math.PI * 2;
+      const px = x + Math.cos(a) * radius, pz = z + Math.sin(a) * radius;
+      ring.push(this.vertex(px, ground(px, pz) + y, pz, edgeColor, 1, px / tile, pz / tile));
+    }
+    for (let i = 0; i < segments; i++) this.triangle(center, ring[(i + 1) % segments], ring[i]);
+  }
+
   build(): THREE.BufferGeometry {
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(this.positions, 3));

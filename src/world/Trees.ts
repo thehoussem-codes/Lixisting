@@ -138,6 +138,11 @@ function bush(b: MeshBuilder, i: number, x: number, y: number, z: number, s: num
   blob(b, x, y + h * 0.55, z, r, h, r * (0.7 + noise(i, 3) * 0.5), 6, 3, color, i % 5 === 0 ? FLOWER : color);
 }
 
+/** Ajoute une plante isolée (îlots de ronds-points, places...). */
+export function addPlant(b: MeshBuilder, species: string, i: number, x: number, y: number, z: number, size: number): void {
+  SHAPES[species]?.(b, i, x, y, z, size);
+}
+
 const SHAPES: Record<string, (b: MeshBuilder, i: number, x: number, y: number, z: number, s: number) => void> = { pine, palm, ficus, cypress, bush };
 
 /** Ajoute toute la végétation à la scène, regroupée par blocs. Renvoie le nombre de plantes. */

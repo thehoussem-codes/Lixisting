@@ -3,7 +3,8 @@ import type { Collider } from './Collider';
 import { MeshBuilder } from './MeshBuilder';
 import type { Terrain } from './Terrain';
 import { buildBuildings } from './Buildings';
-import { createPavementTexture, createRoadTexture } from './Textures';
+import { createAsphaltTexture, createPavementTexture, createRoadTexture } from './Textures';
+import { addPlant } from './Trees';
 import { Water } from './Water';
 import type { WorldData } from './WorldData';
 
@@ -83,29 +84,59 @@ export function buildAnnabaWorld(scene: THREE.Scene, data: WorldData, terrain: T
   // Terre ferme en relief ; plages, bois et pelouses sont peints dans ses couleurs.
   scene.add(terrain.mesh);
 
-  // Voies : trottoirs et chemins dessous, chaussées dessus.
+  // Voies : chemins et trottoirs dessous, chaussées dessus, carrefours par-dessus.
   const white = new THREE.Color(0xffffff);
   const dirt = new THREE.Color(0xa89878);
-  const pavement = new MeshBuilder(), tracks = new MeshBuilder(), minor = new MeshBuilder(), major = new MeshBuilder();
+  const tracks = new MeshBuilder(), walk = new MeshBuilder(), walkFine = new MeshBuilder();
+  const minor = new MeshBuilder(), major = new MeshBuilder(), painted = new MeshBuilder(), crossings = new MeshBuilder();
   for (const road of data.roads) {
     if (road.k === 'path' || road.k === 'track') {
       tracks.ribbon(road.p, road.w, 0.1, dirt, ground);
-    } else if (road.k === 'footway' || road.k === 'steps' || road.k === 'pedestrian') {
-      pavement.ribbon(road.p, road.w, 0.12, white, ground, 2);
+    } else if (road.k === 'footway' || road.k === 'steps') {
+      walk.ribbon(road.p, road.w, 0.12, white, ground, 2);
+    } else if (road.k === 'pedestrian') {
+      walkFine.ribbon(road.p, road.w, 0.12, white, ground, 2);
     } else {
-      if (WITH_SIDEWALK.has(road.k) && (road.sw ?? 0) > 0.3) pavement.ribbon(road.p, road.w + (road.sw ?? 0) * 2, 0.12, white, ground, 2);
-      (road.w >= 8 ? major : minor).ribbon(road.p, road.w, 0.2, white, ground);
+      // Trottoir : pavage soigné le long des avenues, dalles de béton ailleurs.
+      const sidewalk = road.sw ?? 0;
+      if (WITH_SIDEWALK.has(road.k) && sidewalk > 0.3) (road.w >= 9 ? walkFine : walk).ribbon(road.p, road.w + sidewalk * 2, 0.12, white, ground, 2);
+      (road.kp ? painted : road.w >= 8 ? major : minor).ribbon(road.p, road.w, 0.2, white, ground);
     }
   }
+  // Carrefours : un disque de trottoir puis un disque d'enrobé nu raccordent les rues entre elles
+  // (plus de marquages qui se croisent ni de coins de chaussée manquants).
+  for (let i = 0; i < data.junctions.length; i += 4) {
+    const x = data.junctions[i], z = -data.junctions[i + 1], r = data.junctions[i + 2], rs = data.junctions[i + 3];
+    if (rs > r + 0.3) walk.disc(x, z, rs, 0.12, white, ground, 2);
+    crossings.disc(x, z, r + 0.05, 0.2, white, ground, 6);
+  }
   add(tracks, layer(1));
-  add(pavement, layer(2, createPavementTexture()));
+  add(walk, layer(2, createPavementTexture(false)));
+  add(walkFine, layer(2, createPavementTexture(true)));
   add(minor, layer(3, createRoadTexture(false)));
   add(major, layer(4, createRoadTexture(true)));
+  add(painted, layer(4, createRoadTexture(true, true)));
+  add(crossings, layer(5, createAsphaltTexture()));
+
+  // Ronds-points réels : îlot central surélevé, bordé de béton, engazonné et planté.
+  const islands = new MeshBuilder();
+  const grass = new THREE.Color(0x5f9a4a), kerb = new THREE.Color(0xc9c6bd);
+  for (let i = 0; i < data.roundabouts.length; i += 3) {
+    const x = data.roundabouts[i], z = -data.roundabouts[i + 1], r = data.roundabouts[i + 2];
+    islands.disc(x, z, r, 0.42, kerb, ground, 6, 18);
+    islands.disc(x, z, r - 0.4, 0.46, grass, ground, 6, 18);
+    addPlant(islands, r > 5 ? 'palm' : 'bush', i, x, ground(x, z) + 0.46, z, r > 5 ? 1.1 : 1.3);
+    if (r > 7) for (let k = 0; k < 5; k++) {
+      const a = (k / 5) * Math.PI * 2;
+      addPlant(islands, 'bush', i + k + 1, x + Math.cos(a) * r * 0.6, ground(x, z) + 0.46, z + Math.sin(a) * r * 0.6, 0.9);
+    }
+  }
+  add(islands, layer(6));
 
   const rails = new MeshBuilder();
   const railColor = new THREE.Color(0x5a4a3c);
   for (const rail of data.rails) rails.ribbon(rail.p, 2.2, 0.26, railColor, ground);
-  add(rails, layer(5));
+  add(rails, layer(7));
 
   // Lampadaires le long des grands axes, tous les 40 m, en alternant les côtés.
   // Leur emplacement exact est générique (OSM ne les répertorie pas ici).

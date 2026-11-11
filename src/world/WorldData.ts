@@ -9,7 +9,14 @@ export interface WorldData {
   land: number[][];
   areas: { k: string; p: number[] }[];
   /** w = largeur de chaussée, sw = largeur de trottoir de chaque côté (ajustées aux bâtiments voisins). */
-  roads: { k: string; w: number; p: number[]; sw?: number }[];
+  /** n = nom de la rue ; kp = bordures peintes en rouge et blanc. */
+  roads: { k: string; w: number; p: number[]; sw?: number; n?: string; kp?: number }[];
+  /** Carrefours : x, n, rayon de chaussée, rayon avec trottoir... */
+  junctions: number[];
+  /** Ronds-points réels : x, n, rayon de l'îlot central... */
+  roundabouts: number[];
+  /** Feux tricolores réels : x, n, numéro du point du réseau routier (-1 si aucun)... */
+  signals: number[];
   rails: { p: number[] }[];
   /** t = usage (house, apartment, tower, mosque, school...) ; s = commerces au rez-de-chaussée. */
   buildings: { h: number; t: string; p: number[]; n?: string; s?: number[]; c?: number }[];
