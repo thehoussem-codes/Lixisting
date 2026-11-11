@@ -9,7 +9,6 @@ import type { WorldData } from './WorldData';
 const HORIZON = 0xbfe0ee;
 const ZENITH = 0x3f8fd0;
 const CHUNK = 400;         // les bâtiments sont regroupés par blocs de 400 m
-const SIDEWALK = 1.8;      // largeur de trottoir de chaque côté (m), valeur générique
 
 const WITH_SIDEWALK = new Set(['primary', 'secondary', 'tertiary', 'residential', 'unclassified', 'living_street']);
 
@@ -93,7 +92,7 @@ export function buildAnnabaWorld(scene: THREE.Scene, data: WorldData, terrain: T
     } else if (road.k === 'footway' || road.k === 'steps' || road.k === 'pedestrian') {
       pavement.ribbon(road.p, road.w, 0.12, white, ground, 2);
     } else {
-      if (WITH_SIDEWALK.has(road.k)) pavement.ribbon(road.p, road.w + SIDEWALK * 2, 0.12, white, ground, 2);
+      if (WITH_SIDEWALK.has(road.k) && (road.sw ?? 0) > 0.3) pavement.ribbon(road.p, road.w + (road.sw ?? 0) * 2, 0.12, white, ground, 2);
       (road.w >= 8 ? major : minor).ribbon(road.p, road.w, 0.2, white, ground);
     }
   }
@@ -113,7 +112,7 @@ export function buildAnnabaWorld(scene: THREE.Scene, data: WorldData, terrain: T
   const lamps = new Map<string, MeshBuilder>();
   let lampSide = 1;
   for (const road of data.roads) {
-    if (road.w < 10 || road.k === 'trunk') continue;
+    if (road.w < 9 || road.k === 'trunk') continue;
     let since = 20;
     for (let i = 2; i < road.p.length; i += 2) {
       const ax = road.p[i - 2], an = road.p[i - 1], bx = road.p[i], bn = road.p[i + 1];

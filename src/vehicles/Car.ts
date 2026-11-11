@@ -78,6 +78,22 @@ export class Car {
     this.object.rotation.y = heading;
   }
 
+  /**
+   * Cette voiture, si elle était placée en (x, z) avec cette direction, toucherait-elle `other` ?
+   * Test exact entre deux rectangles orientés (méthode des axes séparateurs).
+   */
+  wouldOverlap(other: Car, x: number, z: number, heading: number): boolean {
+    const dx = other.object.position.x - x, dz = other.object.position.z - z;
+    if (Math.abs(dx) > 6 || Math.abs(dz) > 6) return false;
+    const a = [Math.sin(heading), Math.cos(heading)], b = [Math.sin(other.heading), Math.cos(other.heading)];
+    // Les 4 axes à tester : avant et côté de chaque voiture.
+    for (const [ux, uz] of [[a[0], a[1]], [-a[1], a[0]], [b[0], b[1]], [-b[1], b[0]]]) {
+      const reach = (f: number[]) => HALF_LENGTH * Math.abs(f[0] * ux + f[1] * uz) + HALF_WIDTH * Math.abs(-f[1] * ux + f[0] * uz);
+      if (Math.abs(dx * ux + dz * uz) > reach(a) + reach(b)) return false;
+    }
+    return true;
+  }
+
   /** Ce point (vu du dessus) est-il sous la voiture ? */
   contains(x: number, z: number, margin = 0): boolean {
     const dx = x - this.object.position.x, dz = z - this.object.position.z;
@@ -126,7 +142,7 @@ export class Car {
     const x = position.x + fx * this.speed * dt;
     const z = position.z + fz * this.speed * dt;
 
-    const other = this.hitCar(others, x, z, fx, fz);
+    const other = this.hitCar(others, x, z, heading);
     if (other || (collider && this.hits(collider, x, z, fx, fz))) {
       // La voiture percutée est poussée dans le sens du choc.
       if (other) other.speed = this.speed * 0.5 * Math.cos(other.heading - heading);
@@ -140,16 +156,12 @@ export class Car {
     this.object.rotation.y = heading;
   }
 
-  private hitCar(others: Car[], x: number, z: number, fx: number, fz: number): Car | null {
-    const rx = -fz, rz = fx;
+  private hitCar(others: Car[], x: number, z: number, heading: number): Car | null {
     for (const other of others) {
-      if (other === this) continue;
-      if (Math.abs(other.object.position.x - x) > 6 || Math.abs(other.object.position.z - z) > 6) continue;
-      for (const l of [HALF_LENGTH, 0, -HALF_LENGTH]) {
-        for (const w of [HALF_WIDTH, -HALF_WIDTH]) {
-          if (other.contains(x + fx * l + rx * w, z + fz * l + rz * w)) return other;
-        }
-      }
+      if (other === this || !other.object.visible) continue;
+      // Si les deux voitures se touchaient déjà (apparition, poussée), on laisse repartir pour se dégager.
+      if (this.wouldOverlap(other, x, z, heading) &&
+          !this.wouldOverlap(other, this.object.position.x, this.object.position.z, this.heading)) return other;
     }
     return null;
   }

@@ -103,11 +103,11 @@ export function buildBuildings(scene: THREE.Scene, data: WorldData, ground: (x: 
     const top = base + building.h;
     // Rez-de-chaussée distinct pour les immeubles : commerces le long des grandes rues, entrées ailleurs.
     const tall = building.t === 'apartment' || building.t === 'tower' || building.t === 'hotel';
-    const groundStyle: FacadeStyle | null = tall && building.h > 7 ? (building.s ? 'shop' : 'ground') : null;
-    const upperFrom = groundStyle ? base + GROUND_FLOOR : base;
+    const hasGround = tall && building.h > 7;
+    const shopWalls = new Set(building.s ?? []);
+    const upperFrom = hasGround ? base + GROUND_FLOOR : base;
     const floors = Math.max(1, Math.round((top - upperFrom) / FLOOR_HEIGHT));
     const upper = builderIn(walls, `${look.style}|${cell}`);
-    const lower = groundStyle ? builderIn(walls, `${groundStyle}|${cell}`) : null;
 
     for (let i = 0; i < count; i++) {
       const j = (i + 1) % count;
@@ -115,11 +115,14 @@ export function buildBuildings(scene: THREE.Scene, data: WorldData, ground: (x: 
       const length = Math.hypot(bx - ax, bz - az);
       // Soubassement uni, du point bas du terrain jusqu'au niveau du rez-de-chaussée.
       wallQuad(upper, ax, az, bx, bz, low - 1, base, wall, 0.6, 0.7, 0, 0, 0);
-      if (lower && groundStyle) {
-        wallQuad(lower, ax, az, bx, bz, base, upperFrom, wall, 0.8, 0.9, Math.max(1, Math.round(length / FACADE_WIDTH[groundStyle])), 0, 1);
+      if (hasGround) {
+        // Commerces seulement sur les murs qui donnent sur une grande rue ; entrées ailleurs.
+        const groundStyle: FacadeStyle = shopWalls.has(i) ? 'shop' : 'ground';
+        const u = Math.max(1, Math.round(length / FACADE_WIDTH[groundStyle]));
+        wallQuad(builderIn(walls, `${groundStyle}|${cell}`), ax, az, bx, bz, base, upperFrom, wall, 0.8, 0.9, u, 0, 1);
       }
       // Nombre entier de travées et d'étages : pas de fenêtre coupée.
-      wallQuad(upper, ax, az, bx, bz, upperFrom, top, wall, lower ? 0.92 : 0.75, 1, Math.round(length / FACADE_WIDTH[look.style]), 0, floors);
+      wallQuad(upper, ax, az, bx, bz, upperFrom, top, wall, hasGround ? 0.92 : 0.75, 1, Math.round(length / FACADE_WIDTH[look.style]), 0, floors);
     }
 
     const roof = builderIn(roofs, cell);

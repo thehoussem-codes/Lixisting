@@ -6,17 +6,23 @@ const CELL = 200;            // taille des cases servant à trouver des rues pro
 const SPAWN_MIN = 110;       // elles apparaissent assez loin pour ne pas surgir sous nos yeux
 const DESPAWN = 480;
 const LANE_OFFSET = 1.7;     // on roule à droite de l'axe de la rue
+const PROBES = [3, 5, 7, 9]; // distances (m) devant le capot où l'on regarde si la voie est libre
 const COLORS = [0xf2f2f2, 0xd9d9d9, 0x9aa0a6, 0x2c3e50, 0x1b1b1b, 0xb03a2e, 0x1f618d, 0xd4ac0d, 0x7d6608, 0x196f3d];
 
 interface Edge { to: number; fast: boolean }
-interface Driver { car: Car; from: number; to: number; travelled: number; length: number; cruise: number }
-
-/** Un point devant lequel une voiture doit s'arrêter (joueur, autre véhicule). */
-export interface Obstacle { x: number; z: number }
+interface Driver {
+  car: Car; from: number; to: number; travelled: number; length: number; cruise: number;
+  /** Décalage latéral actuel par rapport à l'axe de la rue (m, positif = à droite). */
+  lane: number;
+  /** Secondes passées à l'arrêt derrière un obstacle. */
+  waiting: number;
+  /** Secondes restantes de manœuvre de contournement (on passe par la voie de gauche). */
+  passing: number;
+}
 
 /**
- * Circulation automatique : des voitures suivent le vrai réseau de rues,
- * respectent les sens uniques, et freinent quand quelque chose est devant elles.
+ * Circulation automatique : des voitures suivent le vrai réseau de rues, respectent
+ * les sens uniques, s'arrêtent derrière un obstacle, puis le contournent s'il ne bouge pas.
  */
 export class Traffic {
   readonly cars: Car[] = [];
@@ -77,12 +83,19 @@ export class Traffic {
     return driver.length > 0.01;
   }
 
-  private respawn(driver: Driver, px: number, pz: number): boolean {
+  private respawn(driver: Driver, px: number, pz: number, others: Car[]): boolean {
     const node = this.pickSpawn(px, pz);
     if (node < 0 || !this.startEdge(driver, node, -1)) return false;
-    const heading = Math.atan2(this.nodeX(driver.to) - this.nodeX(node), this.nodeZ(driver.to) - this.nodeZ(node));
+    const x = this.nodeX(node), z = this.nodeZ(node);
+    // Pas d'apparition sur une voiture déjà présente.
+    for (const other of others) {
+      if (other !== driver.car && other.object.visible && Math.hypot(other.object.position.x - x, other.object.position.z - z) < 12) return false;
+    }
     driver.car.speed = driver.cruise;
-    driver.car.setPose(this.nodeX(node), this.nodeZ(node), heading);
+    driver.lane = LANE_OFFSET;
+    driver.waiting = 0;
+    driver.passing = 0;
+    driver.car.setPose(x, z, Math.atan2(this.nodeX(driver.to) - x, this.nodeZ(driver.to) - z));
     driver.car.object.visible = true;
     return true;
   }
@@ -94,12 +107,17 @@ export class Traffic {
     if (index >= 0) this.cars.splice(index, 1);
   }
 
-  update(dt: number, px: number, pz: number, obstacles: Obstacle[], ground: (x: number, z: number) => number): void {
+  /**
+   * px, pz : position du joueur. onFoot : il est à pied (et compte comme obstacle).
+   * others : toutes les autres voitures du jeu (garées, conduite par le joueur).
+   */
+  update(dt: number, px: number, pz: number, onFoot: boolean, others: Car[], ground: (x: number, z: number) => number): void {
+    const everyCar = [...others, ...this.cars];
     // On complète peu à peu l'effectif (une tentative par image, pour ne pas ralentir le jeu).
     if (this.drivers.length < COUNT) {
       const car = new Car(COLORS[Math.floor(this.random() * COLORS.length)]);
-      const driver: Driver = { car, from: 0, to: 0, travelled: 0, length: 1, cruise: 8 };
-      if (this.respawn(driver, px, pz)) {
+      const driver: Driver = { car, from: 0, to: 0, travelled: 0, length: 1, cruise: 8, lane: LANE_OFFSET, waiting: 0, passing: 0 };
+      if (this.respawn(driver, px, pz, everyCar)) {
         this.drivers.push(driver);
         this.cars.push(car);
         this.addToScene(car);
@@ -109,26 +127,45 @@ export class Traffic {
     for (const driver of this.drivers) {
       const car = driver.car;
       const position = car.object.position;
-      if (Math.hypot(position.x - px, position.z - pz) > DESPAWN) {
-        if (!this.respawn(driver, px, pz)) { car.object.visible = false; continue; }
+      const distance = Math.hypot(position.x - px, position.z - pz);
+      // Trop loin, ou bloquée depuis longtemps hors de vue : on la replace ailleurs.
+      if (distance > DESPAWN || !car.object.visible || (driver.waiting > 12 && distance > 70)) {
+        if (!this.respawn(driver, px, pz, everyCar)) { if (distance > DESPAWN) car.object.visible = false; }
+        if (!car.object.visible) continue;
       }
-      if (!car.object.visible) continue;
 
       const ax = this.nodeX(driver.from), az = this.nodeZ(driver.from);
       const dx = (this.nodeX(driver.to) - ax) / driver.length, dz = (this.nodeZ(driver.to) - az) / driver.length;
 
-      // Quelque chose devant, à moins de 10 m et à peu près dans l'axe ? On freine.
-      let target = driver.cruise;
-      const check = (ox: number, oz: number) => {
-        const rx = ox - position.x, rz = oz - position.z;
-        const ahead = rx * dx + rz * dz;
-        if (ahead > 0.5 && ahead < 10 && Math.abs(-rx * dz + rz * dx) < 2.2) target = 0;
+      // La voie est-elle libre devant ? On teste quelques points en avant du capot.
+      const wantedLane = driver.passing > 0 ? -LANE_OFFSET : LANE_OFFSET;
+      const blockedAt = (lane: number): boolean => {
+        const shift = lane - driver.lane;
+        for (const probe of PROBES) {
+          const qx = position.x + dx * probe - dz * shift, qz = position.z + dz * probe + dx * shift;
+          if (onFoot && Math.hypot(qx - px, qz - pz) < 1.3) return true;
+          for (const other of everyCar) {
+            if (other !== car && other.object.visible && other.contains(qx, qz, 0.35)) return true;
+          }
+        }
+        return false;
       };
-      for (const o of obstacles) check(o.x, o.z);
-      for (const other of this.drivers) if (other !== driver && other.car.object.visible) check(other.car.object.position.x, other.car.object.position.z);
+      const blocked = blockedAt(wantedLane);
 
-      car.speed += Math.sign(target - car.speed) * Math.min(Math.abs(target - car.speed), (target < car.speed ? 14 : 4) * dt);
+      if (blocked) {
+        driver.waiting += dt;
+        // Après 3 s derrière un obstacle immobile, on tente de passer par la gauche si c'est libre.
+        if (driver.waiting > 3 && driver.passing <= 0 && !blockedAt(-LANE_OFFSET)) driver.passing = 5;
+      } else {
+        driver.waiting = 0;
+      }
+      driver.passing = Math.max(0, driver.passing - dt);
+
+      const target = blocked ? 0 : driver.passing > 0 ? 5 : driver.cruise;
+      car.speed += Math.sign(target - car.speed) * Math.min(Math.abs(target - car.speed), (target < car.speed ? 16 : 4) * dt);
       if (car.speed < 0) car.speed = 0;
+      driver.lane += Math.sign(wantedLane - driver.lane) * Math.min(Math.abs(wantedLane - driver.lane), 2.2 * dt * Math.min(1, car.speed / 3));
+
       driver.travelled += car.speed * dt;
       if (driver.travelled >= driver.length) {
         const extra = driver.travelled - driver.length;
@@ -137,11 +174,11 @@ export class Traffic {
         continue; // la position sera mise à jour à l'image suivante, sur le nouveau tronçon
       }
 
-      // Position : sur le tronçon, décalée à droite ; la direction tourne en douceur.
+      // Position : sur le tronçon, décalée sur sa voie ; la direction tourne en douceur.
       let diff = Math.atan2(dx, dz) - car.heading;
       diff = Math.atan2(Math.sin(diff), Math.cos(diff));
       const heading = car.heading + diff * Math.min(1, 5 * dt);
-      car.setPose(ax + dx * driver.travelled - dz * LANE_OFFSET, az + dz * driver.travelled + dx * LANE_OFFSET, heading);
+      car.setPose(ax + dx * driver.travelled - dz * driver.lane, az + dz * driver.travelled + dx * driver.lane, heading);
       car.settle(ground);
     }
   }

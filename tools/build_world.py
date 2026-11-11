@@ -316,9 +316,11 @@ def main():
             except ValueError:
                 pass
             for piece in clip_to_rect(p, rect):  # on coupe ce qui dépasse de la zone
-                roads.append({"k": kind, "w": width, "p": flat(densify(simplify(piece, 0.3), 10))})
+                line = densify(simplify(piece, 0.3), 10)
+                roads.append({"k": kind, "w": width, "p": flat(line), "_line": line})
                 if kind not in ("footway", "path", "steps", "trunk", "trunk_link"):
-                    road_points += piece
+                    for a, b in zip(line, line[1:]):
+                        road_points.append((a[0], a[1], b[0] - a[0], b[1] - a[1], len(roads) - 1))
         elif kind:
             skipped[kind] = skipped.get(kind, 0) + 1
         elif tags.get("railway") == "rail" and tags.get("tunnel") != "yes":
@@ -375,16 +377,19 @@ def main():
     # Points des grandes rues, rangés par cases de 20 m : sert à repérer les immeubles à commerces.
     main_cells = set()
     for w in ways:
-        if w.get("tags", {}).get("highway") in ("primary", "secondary", "tertiary"):
+        if w.get("tags", {}).get("highway") in ("primary", "secondary"):
             for x, n in densify(pts(w), 8):
                 main_cells.add((int(x // 20), int(n // 20)))
 
-    def near_main_road(points):
-        for x, n in points:
-            cx, cn = int(x // 20), int(n // 20)
-            if any((cx + i, cn + j) in main_cells for i in (-1, 0, 1) for j in (-1, 0, 1)):
-                return True
-        return False
+    def shop_walls(points):
+        """Numéros des murs dont le milieu donne sur une grande rue (à moins de 20 m environ)."""
+        out = []
+        for i in range(len(points)):
+            a, b = points[i], points[(i + 1) % len(points)]
+            cx, cn = int((a[0] + b[0]) / 2 // 20), int((a[1] + b[1]) / 2 // 20)
+            if math.hypot(b[0] - a[0], b[1] - a[1]) >= 5 and any((cx + i2, cn + j) in main_cells for i2 in (-1, 0, 1) for j in (-1, 0, 1)):
+                out.append(i)
+        return out
 
     buildings, estimated, kinds = [], 0, {}
     for w in ways:
@@ -428,11 +433,47 @@ def main():
         item = {"h": round(height, 1), "t": kind, "p": flat(p)}
         if sure:
             item["c"] = 1  # usage certain (étiqueté dans OSM), et non déduit de la taille
-        if kind == "apartment" and near_main_road(p):
-            item["s"] = 1  # rez-de-chaussée commerçant : hypothèse, car le long d'une grande rue
+        if kind == "apartment" and w["id"] % 2 == 0:
+            walls = shop_walls(p)
+            if walls:
+                item["s"] = walls  # murs à commerces : hypothèse (un immeuble sur deux, côté grande rue)
         if tags.get("name"):
             item["n"] = tags.get("name:fr") or tags["name"]
         buildings.append(item)
+
+    # --- largeur des rues : elles ne doivent pas mordre sur les bâtiments voisins.
+    # On mesure, le long de chaque rue, la distance au bâtiment le plus proche.
+    CELL = 8
+    wall_cells = {}
+    for b in buildings:
+        q = b["p"]
+        ring = [(q[i], q[i + 1]) for i in range(0, len(q), 2)]
+        for x, n in densify(ring + [ring[0]], 2):
+            wall_cells.setdefault((int(x // CELL), int(n // CELL)), []).append((x, n))
+
+    def clearance(x, n):
+        best = 24.0
+        cx, cn = int(x // CELL), int(n // CELL)
+        for i in (-2, -1, 0, 1, 2):
+            for j in (-2, -1, 0, 1, 2):
+                for wx, wn in wall_cells.get((cx + i, cn + j), ()):
+                    d = math.hypot(wx - x, wn - n)
+                    if d < best:
+                        best = d
+        return best
+
+    narrowed = 0
+    for road in roads:
+        line = road.pop("_line")
+        gaps = sorted(clearance(x, n) for x, n in line)
+        free = gaps[len(gaps) // 6]  # on tolère quelques points serrés (1 sur 6)
+        if road["k"] in ("footway", "path", "steps", "track", "pedestrian"):
+            road["w"] = round(max(1.2, min(road["w"], 2 * free - 0.6)), 1)
+            continue
+        width = max(2.6, min(road["w"], 2 * free - 1.6))
+        narrowed += width < road["w"]
+        road["w"] = round(width, 1)
+        road["sw"] = round(max(0.0, min(1.8, free - width / 2 - 0.2)), 1)  # trottoir de chaque côté
 
     # --- points de téléportation : repère OSM -> point de rue le plus proche
     def nearest_road(x, n):
@@ -460,7 +501,13 @@ def main():
             print("REPÈRE INTROUVABLE :", label)
             continue
         r = nearest_road(*center(e))
-        places.append({"name": label, "x": round(r[0], 1), "n": round(r[1], 1), "origin": origin})
+        # Place de stationnement : contre le trottoir de droite, dans le sens de la rue.
+        length = math.hypot(r[2], r[3]) or 1.0
+        dx, dn = r[2] / length, r[3] / length
+        side = roads[r[4]]["w"] / 2 - 1.0
+        places.append({"name": label, "x": round(r[0], 1), "n": round(r[1], 1), "origin": origin,
+                       "cx": round(r[0] + dn * side + dx * 6, 1), "cn": round(r[1] - dx * side + dn * 6, 1),
+                       "ch": round(math.atan2(dx, -dn), 3)})
 
     world = {
         "meta": {
@@ -472,6 +519,7 @@ def main():
             "buildings_height_estimated": estimated,
             "buildings_by_kind": kinds,
             "roads": len(roads),
+            "roads_narrowed_to_fit_buildings": narrowed,
             "roads_skipped_by_type": skipped,
             "relief": "Terrain Tiles (AWS Open Data), environ 30 m de précision",
         },

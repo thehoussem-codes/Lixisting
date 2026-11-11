@@ -3,7 +3,7 @@ import { Input } from './Input';
 import { Player } from '../player/Player';
 import { ThirdPersonCamera } from '../player/ThirdPersonCamera';
 import { Car } from '../vehicles/Car';
-import { Traffic, type Obstacle } from '../vehicles/Traffic';
+import { Traffic } from '../vehicles/Traffic';
 import { buildAnnabaWorld } from '../world/AnnabaWorld';
 import type { Collider } from '../world/Collider';
 import { loadTerrain } from '../world/Terrain';
@@ -105,11 +105,8 @@ export class Game {
       // Une voiture garée à chaque repère, pour en avoir toujours une sous la main.
       data.places.forEach((place, i) => {
         const car = new Car(CAR_COLORS[i % CAR_COLORS.length]);
-        // Garée à 3 m du repère, du premier côté où il n'y a pas de bâtiment.
-        const spot = [[3, 0], [-3, 0], [0, 3], [0, -3]].find(
-          ([dx, dz]) => !this.collider?.blocked(place.x + dx, -place.n + dz, 2.2),
-        ) ?? [0, 0];
-        car.place(place.x + spot[0], -place.n + spot[1]);
+        // Garée contre le trottoir, dans le sens de la rue (emplacement calculé avec la carte).
+        car.place(place.cx, -place.cn, place.ch);
         this.cars.push(car);
         this.scene.add(car.object);
       });
@@ -217,15 +214,8 @@ export class Game {
       this.cameraRig.update(this.input, this.player.object.position, this.collider, dt, this.ground);
     }
     for (const car of this.cars) if (car !== this.driving) car.settle(this.ground);
-    // La circulation s'arrête devant le joueur et devant les voitures garées proches.
     const me = this.player.object.position;
-    const obstacles: Obstacle[] = [{ x: me.x, z: me.z }];
-    for (const car of this.cars) {
-      if (Math.abs(car.object.position.x - me.x) < 400 && Math.abs(car.object.position.z - me.z) < 400) {
-        obstacles.push({ x: car.object.position.x, z: car.object.position.z });
-      }
-    }
-    this.traffic?.update(dt, me.x, me.z, obstacles, this.ground);
+    this.traffic?.update(dt, me.x, me.z, this.driving === null, this.cars, this.ground);
     const heading = this.driving ? this.driving.heading : this.player.object.rotation.y;
     this.map?.update(this.player.object.position.x, this.player.object.position.z, heading);
     this.sky?.position.copy(this.camera.position);

@@ -24,14 +24,14 @@ function canvas(width: number, height: number): [HTMLCanvasElement, CanvasRender
 
 export type FacadeStyle = 'apartment' | 'house' | 'tower' | 'school' | 'public' | 'industrial' | 'mosque' | 'shop' | 'ground';
 
-/** Largeur réelle (m) couverte par un motif : 2 travées pour les rez-de-chaussée, 1 sinon. */
+/** Largeur réelle (m) couverte par un motif : 4 travées pour les rez-de-chaussée, 1 sinon. */
 export const FACADE_WIDTH: Record<FacadeStyle, number> = {
-  apartment: 3.2, house: 3.2, tower: 3.2, school: 4, public: 3.2, industrial: 3, mosque: 4, shop: 6.4, ground: 6.4,
+  apartment: 3.2, house: 3.2, tower: 3.2, school: 4, public: 3.2, industrial: 3, mosque: 4, shop: 12.8, ground: 12.8,
 };
 
 export function createFacadeTexture(style: FacadeStyle): THREE.CanvasTexture {
   const wide = style === 'shop' || style === 'ground';
-  const [element, ctx] = canvas(wide ? 128 : 64, 64);
+  const [element, ctx] = canvas(wide ? 256 : 64, 64);
   const rect = (color: string, x: number, y: number, w: number, h: number) => { ctx.fillStyle = color; ctx.fillRect(x, y, w, h); };
   switch (style) {
     case 'apartment': // fenêtre + balcon à garde-corps
@@ -75,21 +75,25 @@ export function createFacadeTexture(style: FacadeStyle): THREE.CanvasTexture {
       ctx.beginPath(); ctx.arc(32, 25, 6, Math.PI, 0); ctx.fill(); ctx.fillRect(26, 25, 12, 21);
       break;
     }
-    case 'shop': // deux commerces : rideau métallique fermé, vitrine ouverte avec store
-      rect('#e6e2d8', 0, 0, 128, 6);
-      rect('#2f6f9f', 4, 8, 56, 10); rect('#e9eef2', 10, 11, 44, 4);
-      rect('#8f979d', 6, 20, 52, 42); for (let y = 22; y < 62; y += 4) rect('#737b81', 6, y, 52, 1);
-      rect('#a8432f', 68, 8, 56, 10); rect('#f4e9d8', 74, 11, 44, 4);
-      rect('#1d2a33', 70, 24, 52, 38); rect('#3d5566', 72, 26, 22, 30); rect('#6b5a45', 98, 26, 22, 36);
-      for (let x = 68; x < 124; x += 8) { rect('#c9482f', x, 18, 4, 7); rect('#f1ead9', x + 4, 18, 4, 7); }
-      rect('#5a5a5a', 0, 62, 128, 2);
+    case 'shop': // 4 travées : vitrine avec enseigne, entrée d'immeuble, rideau baissé, vitrine à store
+      rect('#e6e2d8', 0, 0, 256, 5);
+      rect('#2f6f9f', 6, 8, 52, 9); rect('#e9eef2', 12, 11, 40, 3);
+      rect('#1d2a33', 8, 20, 48, 42); rect('#3d5566', 10, 22, 28, 32); rect('#6b5a45', 40, 22, 14, 40);
+      rect('#b9b2a2', 82, 14, 28, 50); rect('#5b4632', 85, 17, 22, 47); rect('#3d2f22', 95, 17, 2, 47);
+      rect('#8f979d', 134, 18, 52, 44); for (let y = 20; y < 62; y += 4) rect('#737b81', 134, y, 52, 1);
+      rect('#a8432f', 198, 8, 52, 9); rect('#f4e9d8', 204, 11, 40, 3);
+      rect('#1d2a33', 200, 24, 48, 38); rect('#3d5566', 202, 26, 44, 28);
+      for (let x = 198; x < 250; x += 8) { rect('#c9482f', x, 17, 4, 7); rect('#f1ead9', x + 4, 17, 4, 7); }
+      rect('#5a5a5a', 0, 62, 256, 2);
       break;
-    case 'ground': // rez-de-chaussée d'habitation : porte d'entrée, fenêtre à barreaux
-      rect('#dcd6c8', 0, 0, 128, 5);
+    case 'ground': // 4 travées d'habitation : une porte d'entrée, trois fenêtres à barreaux
+      rect('#dcd6c8', 0, 0, 256, 5);
       rect('#b9b2a2', 20, 14, 26, 50); rect('#5b4632', 23, 17, 20, 47); rect('#3d2f22', 32, 17, 2, 47); rect('#c8b27a', 36, 40, 2, 3);
-      rect('#9aa0a6', 82, 20, 26, 24); rect('#2f4458', 85, 23, 20, 18);
-      for (let x = 87; x < 105; x += 4) rect('#444444', x, 23, 1, 18);
-      rect('#cfc8b8', 0, 58, 128, 6);
+      for (const x0 of [83, 147, 211]) {
+        rect('#9aa0a6', x0, 20, 26, 24); rect('#2f4458', x0 + 3, 23, 20, 18);
+        for (let x = x0 + 5; x < x0 + 23; x += 4) rect('#444444', x, 23, 1, 18);
+      }
+      rect('#cfc8b8', 0, 58, 256, 6);
       break;
   }
   return finish(element);
