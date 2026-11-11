@@ -18,6 +18,7 @@ import { MapView } from '../ui/MapView';
  */
 const RENDER_SCALE = Math.min(1, Math.max(0.3, Number(new URLSearchParams(window.location.search).get('res')) || 1));
 const ENTER_DISTANCE = 4.5;
+const ROAD_SURFACE = 0.2;
 
 export interface GameEvents {
   onStatus(text: string): void;
@@ -96,7 +97,9 @@ export class Game {
       this.events.onStatus('Chargement de la carte d\'Annaba...');
       const [data, terrain, trees] = await Promise.all([loadWorldData(), loadTerrain(), loadTrees()]);
       if (this.disposed) return;
-      this.ground = terrain.heightAt;
+      // Personnage et voitures roulent sur la surface des rues, posée 20 cm au-dessus du terrain brut.
+      // Sans ce décalage, les roues s'enfonçaient dans la chaussée.
+      this.ground = (x, z) => terrain.heightAt(x, z) + ROAD_SURFACE;
       const world = buildAnnabaWorld(this.scene, data, terrain);
       this.collider = world.collider;
       this.sky = world.sky;

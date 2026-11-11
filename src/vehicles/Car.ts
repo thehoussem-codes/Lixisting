@@ -53,7 +53,8 @@ export class Car {
     const lx = fz, lz = -fx; // vecteur "à gauche" de la voiture
     const front = ground(x + fx * this.halfLength, z + fz * this.halfLength), back = ground(x - fx * this.halfLength, z - fz * this.halfLength);
     const left = ground(x + lx * this.halfWidth, z + lz * this.halfWidth), right = ground(x - lx * this.halfWidth, z - lz * this.halfWidth);
-    this.object.position.y = (front + back + left + right) / 4;
+    // Hauteur : la plus haute entre la moyenne des quatre côtés et le sol sous le centre (évite de s'enfoncer sur une bosse).
+    this.object.position.y = Math.max((front + back + left + right) / 4, ground(x, z));
     this.object.rotation.x = -Math.atan2(front - back, this.halfLength * 2);
     this.object.rotation.z = Math.atan2(left - right, this.halfWidth * 2);
     // Les roues tournent selon la vitesse.
