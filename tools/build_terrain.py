@@ -185,6 +185,7 @@ def build_trees(world, grid=None, grid_origin=None):
     c'est un décor plausible, pas un relevé arbre par arbre."""
     rng = np.random.default_rng(7)
     road_points = np.vstack([pairs(r["p"]) for r in world["roads"]])
+    road_owner = np.concatenate([np.full(len(r["p"]) // 2, i) for i, r in enumerate(world["roads"])])
     building_points = np.vstack([pairs(b["p"]) for b in world["buildings"]])
     roads, buildings = cKDTree(road_points), cKDTree(building_points)
     land = [Polygon(pairs(r)) for r in world["land"] if len(r) >= 6]
@@ -232,7 +233,7 @@ def build_trees(world, grid=None, grid_origin=None):
 
     # 3. Arbres d'alignement le long des rues à trottoir
     side = 1
-    for road in world["roads"]:
+    for road_index, road in enumerate(world["roads"]):
         width, walk = road["w"], road.get("sw", 0)
         if walk < 1.5 or road["k"] not in ("primary", "secondary", "tertiary", "residential"):
             continue
@@ -251,6 +252,10 @@ def build_trees(world, grid=None, grid_origin=None):
             point = b + normal * offset * side
             # Pas dans un carrefour (une autre rue passe là) ni contre une façade.
             if roads.query(point)[0] < offset * 0.85 or buildings.query(point)[0] < 1.6:
+                continue
+            # Pas non plus sur la chaussée d'une AUTRE rue toute proche (voies parallèles, bretelles).
+            near = roads.query_ball_point(point, 7.5)
+            if any(road_owner[k] != road_index for k in near):
                 continue
             near_sea = coast.query(point)[0] < 160
             if near_sea and road["k"] != "residential":
