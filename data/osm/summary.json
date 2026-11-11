@@ -1,0 +1,2430 @@
+{
+  "extracted_at": "2026-11-11T13:59:43+00:00",
+  "bbox_south_west_north_east": [
+    36.88,
+    7.73,
+    36.98,
+    7.8
+  ],
+  "elements": {
+    "node": 82345,
+    "way": 12775,
+    "relation": 20
+  },
+  "roads_count_by_type": {
+    "residential": 921,
+    "service": 418,
+    "primary": 92,
+    "tertiary": 84,
+    "secondary": 76,
+    "footway": 68,
+    "trunk": 47,
+    "trunk_link": 28,
+    "pedestrian": 26,
+    "construction": 20,
+    "steps": 20,
+    "primary_link": 17,
+    "unclassified": 10,
+    "secondary_link": 9,
+    "tertiary_link": 6,
+    "path": 4,
+    "living_street": 1,
+    "track": 1
+  },
+  "roads_km_by_type": {
+    "residential": 188.7,
+    "service": 54.5,
+    "secondary": 49.8,
+    "primary": 28.0,
+    "tertiary": 26.7,
+    "trunk": 24.2,
+    "trunk_link": 8.2,
+    "construction": 7.9,
+    "footway": 7.2,
+    "unclassified": 5.8,
+    "pedestrian": 2.6,
+    "track": 1.6,
+    "primary_link": 0.6,
+    "path": 0.5,
+    "secondary_link": 0.3,
+    "steps": 0.2,
+    "tertiary_link": 0.2,
+    "living_street": 0.0
+  },
+  "roads_km_total": 406.9,
+  "roads_with_name": 471,
+  "roads_with_lanes": 42,
+  "roads_oneway": 428,
+  "roundabouts": 30,
+  "buildings_total": 10446,
+  "buildings_with_levels": 518,
+  "buildings_with_height": 1,
+  "buildings_with_name": 89,
+  "buildings_by_type": {
+    "yes": 9708,
+    "residential": 517,
+    "hospital": 31,
+    "industrial": 30,
+    "university": 29,
+    "apartments": 25,
+    "house": 24,
+    "school": 20,
+    "terrace": 15,
+    "mosque": 11,
+    "public": 8,
+    "hotel": 6,
+    "ruins": 5,
+    "stadium": 3,
+    "greenhouse": 3,
+    "retail": 2,
+    "dome": 2,
+    "storage_tank": 2,
+    "civic": 1,
+    "grandstand": 1,
+    "train_station": 1,
+    "construction": 1,
+    "roof": 1
+  },
+  "natural_by_type": {
+    "coastline": 14,
+    "beach": 10,
+    "cliff": 8,
+    "bare_rock": 8,
+    "wood": 6,
+    "scrub": 4,
+    "tree_row": 2
+  },
+  "landuse_by_type": {
+    "residential": 82,
+    "grass": 18,
+    "construction": 7,
+    "cemetery": 6,
+    "forest": 5,
+    "industrial": 3,
+    "retail": 2,
+    "greenfield": 1,
+    "religious": 1,
+    "commercial": 1,
+    "harbour": 1
+  },
+  "leisure_by_type": {
+    "pitch": 33,
+    "garden": 7,
+    "park": 5,
+    "sports_centre": 4,
+    "sports_hall": 3,
+    "stadium": 2,
+    "dance": 2,
+    "swimming_pool": 1,
+    "resort": 1
+  },
+  "tree_nodes": 18,
+  "named_places": [
+    {
+      "name": "\" Al Hidaya\"",
+      "kind": "amenity=school",
+      "position": [
+        36.8979457,
+        7.7599927
+      ]
+    },
+    {
+      "name": "08 Mai 45",
+      "kind": "leisure=park",
+      "position": [
+        36.895779,
+        7.739267
+      ]
+    },
+    {
+      "name": "ANNABA RP LS1",
+      "kind": "amenity=atm",
+      "position": [
+        36.9029677,
+        7.7596022
+      ]
+    },
+    {
+      "name": "ANNABA RP LS2",
+      "kind": "amenity=atm",
+      "position": [
+        36.9029784,
+        7.7595939
+      ]
+    },
+    {
+      "name": "ANNABA-EDOUGH",
+      "kind": "amenity=atm",
+      "position": [
+        36.9108896,
+        7.7354535
+      ]
+    },
+    {
+      "name": "APC Antenne Menadia (Mairie)",
+      "kind": "amenity=townhall",
+      "position": [
+        36.9130813,
+        7.7660557
+      ]
+    },
+    {
+      "name": "Adel café",
+      "kind": "amenity=cafe",
+      "position": [
+        36.9025233,
+        7.7592249
+      ]
+    },
+    {
+      "name": "Agence Sonelgaz (Payement facture)",
+      "kind": "amenity=payment_centre",
+      "position": [
+        36.9026914,
+        7.7607518
+      ]
+    },
+    {
+      "name": "Algérie Poste",
+      "kind": "amenity=post_office",
+      "position": [
+        36.909297,
+        7.735425
+      ]
+    },
+    {
+      "name": "Andalous",
+      "kind": "tourism=hotel",
+      "position": [
+        36.9007078,
+        7.7615304
+      ]
+    },
+    {
+      "name": "Annaba",
+      "kind": "amenity=ferry_terminal",
+      "position": [
+        36.8967968,
+        7.7646249
+      ]
+    },
+    {
+      "name": "Annaba",
+      "kind": "place=city",
+      "position": [
+        36.8982165,
+        7.7549272
+      ]
+    },
+    {
+      "name": "Annaba",
+      "kind": "railway=station",
+      "position": [
+        36.895546,
+        7.758763
+      ]
+    },
+    {
+      "name": "Annaba - Tébessa",
+      "kind": "railway=stop",
+      "position": [
+        36.8955456,
+        7.7587295
+      ]
+    },
+    {
+      "name": "Annaba Amirouche",
+      "kind": "amenity=post_office",
+      "position": [
+        36.9040253,
+        7.7518664
+      ]
+    },
+    {
+      "name": "Annaba Idoukh",
+      "kind": "amenity=post_office",
+      "position": [
+        36.9110673,
+        7.7355668
+      ]
+    },
+    {
+      "name": "Annaba Menadia",
+      "kind": "amenity=post_office",
+      "position": [
+        36.9122847,
+        7.7641846
+      ]
+    },
+    {
+      "name": "Annaba Port",
+      "kind": "amenity=post_office",
+      "position": [
+        36.897793,
+        7.7629062
+      ]
+    },
+    {
+      "name": "Annaba Port",
+      "kind": "amenity=atm",
+      "position": [
+        36.8978017,
+        7.7628722
+      ]
+    },
+    {
+      "name": "Annaba Rp",
+      "kind": "amenity=post_office",
+      "position": [
+        36.9025564,
+        7.7600179
+      ]
+    },
+    {
+      "name": "Annaba Rp",
+      "kind": "amenity=atm",
+      "position": [
+        36.9026819,
+        7.7598385
+      ]
+    },
+    {
+      "name": "Annaba Theater",
+      "kind": "historic=archaeological_site",
+      "position": [
+        36.8814029,
+        7.7467203
+      ]
+    },
+    {
+      "name": "Annexe de l'Institut Francais",
+      "kind": "amenity=school",
+      "position": [
+        36.9062631,
+        7.75407
+      ]
+    },
+    {
+      "name": "BNP Paribas El Djazaïr",
+      "kind": "amenity=bank",
+      "position": [
+        36.9045593,
+        7.746531
+      ]
+    },
+    {
+      "name": "Bamako",
+      "kind": "amenity=lounger",
+      "position": [
+        36.909216,
+        7.771493
+      ]
+    },
+    {
+      "name": "Banque de développement local",
+      "kind": "amenity=bank",
+      "position": [
+        36.8988385,
+        7.7610517
+      ]
+    },
+    {
+      "name": "Batiment B1",
+      "kind": "building=residential",
+      "position": [
+        36.915513,
+        7.764041
+      ]
+    },
+    {
+      "name": "Batiment B2",
+      "kind": "building=residential",
+      "position": [
+        36.91457,
+        7.764574
+      ]
+    },
+    {
+      "name": "Batiment B3",
+      "kind": "building=residential",
+      "position": [
+        36.914913,
+        7.765138
+      ]
+    },
+    {
+      "name": "Batiment C1",
+      "kind": "building=residential",
+      "position": [
+        36.914581,
+        7.765864
+      ]
+    },
+    {
+      "name": "Batiment C2",
+      "kind": "building=residential",
+      "position": [
+        36.915158,
+        7.76583
+      ]
+    },
+    {
+      "name": "Batiment C3",
+      "kind": "building=residential",
+      "position": [
+        36.915783,
+        7.765862
+      ]
+    },
+    {
+      "name": "Batiment C4",
+      "kind": "building=residential",
+      "position": [
+        36.916303,
+        7.765475
+      ]
+    },
+    {
+      "name": "Belvedere Tour A",
+      "kind": "building=residential",
+      "position": [
+        36.913318,
+        7.759467
+      ]
+    },
+    {
+      "name": "Belvedere Tour B",
+      "kind": "building=residential",
+      "position": [
+        36.912198,
+        7.759357
+      ]
+    },
+    {
+      "name": "Belvedere Tour C",
+      "kind": "building=residential",
+      "position": [
+        36.912021,
+        7.760263
+      ]
+    },
+    {
+      "name": "Belvedere Tour D",
+      "kind": "building=residential",
+      "position": [
+        36.912641,
+        7.760167
+      ]
+    },
+    {
+      "name": "Belvedere Tour E",
+      "kind": "building=residential",
+      "position": [
+        36.912556,
+        7.761161
+      ]
+    },
+    {
+      "name": "Bibliothèque d'Annaba",
+      "kind": "amenity=library",
+      "position": [
+        36.902698,
+        7.758377
+      ]
+    },
+    {
+      "name": "Big Baba",
+      "kind": "amenity=fast_food",
+      "position": [
+        36.9121058,
+        7.750359
+      ]
+    },
+    {
+      "name": "Bkakch",
+      "kind": "amenity=cafe",
+      "position": [
+        36.901446,
+        7.7624243
+      ]
+    },
+    {
+      "name": "Bloc 1",
+      "kind": "building=residential",
+      "position": [
+        36.924392,
+        7.755142
+      ]
+    },
+    {
+      "name": "Bna Banque",
+      "kind": "amenity=atm",
+      "position": [
+        36.8913163,
+        7.7360868
+      ]
+    },
+    {
+      "name": "Bon appétit !",
+      "kind": "amenity=fast_food",
+      "position": [
+        36.8975662,
+        7.760742
+      ]
+    },
+    {
+      "name": "Boukhadra",
+      "kind": "amenity=bus_station",
+      "position": [
+        36.8965814,
+        7.7528254
+      ]
+    },
+    {
+      "name": "Bouzered Hocine",
+      "kind": "amenity=post_office",
+      "position": [
+        36.8948701,
+        7.7447265
+      ]
+    },
+    {
+      "name": "Bouzitoune hocine",
+      "kind": "amenity=pharmacy",
+      "position": [
+        36.8933941,
+        7.7314646
+      ]
+    },
+    {
+      "name": "Bureau FedEx",
+      "kind": "amenity=post_depot",
+      "position": [
+        36.9119467,
+        7.7624855
+      ]
+    },
+    {
+      "name": "Bureau de Poste",
+      "kind": "amenity=post_office",
+      "position": [
+        36.9038571,
+        7.7518202
+      ]
+    },
+    {
+      "name": "Bureau de poste",
+      "kind": "amenity=post_office",
+      "position": [
+        36.897674,
+        7.762609
+      ]
+    },
+    {
+      "name": "CEM Babou Mhamed Cherif",
+      "kind": "amenity=school",
+      "position": [
+        36.922315,
+        7.752602
+      ]
+    },
+    {
+      "name": "CNEP-Banque",
+      "kind": "amenity=bank",
+      "position": [
+        36.9004498,
+        7.7600217
+      ]
+    },
+    {
+      "name": "CNEP-Banque",
+      "kind": "amenity=bank",
+      "position": [
+        36.896576,
+        7.730974
+      ]
+    },
+    {
+      "name": "CRF Armée Nationale Ain Achir",
+      "kind": "leisure=resort",
+      "position": [
+        36.952888,
+        7.780431
+      ]
+    },
+    {
+      "name": "Cabinet médical Rachedi Mahmoud",
+      "kind": "amenity=doctors",
+      "position": [
+        36.8943096,
+        7.7486896
+      ]
+    },
+    {
+      "name": "Café EL Hillel - WASSIM -",
+      "kind": "amenity=cafe",
+      "position": [
+        36.9015033,
+        7.7583025
+      ]
+    },
+    {
+      "name": "Café El Assad (le Lion) chez El Hadi",
+      "kind": "amenity=cafe",
+      "position": [
+        36.9072357,
+        7.7517105
+      ]
+    },
+    {
+      "name": "Café du peuple",
+      "kind": "amenity=cafe",
+      "position": [
+        36.8946055,
+        7.7574161
+      ]
+    },
+    {
+      "name": "Cam",
+      "kind": "amenity=community_centre",
+      "position": [
+        36.8975264,
+        7.752662
+      ]
+    },
+    {
+      "name": "Centre Culturel Francais",
+      "kind": "amenity=arts_centre",
+      "position": [
+        36.9054612,
+        7.7603978
+      ]
+    },
+    {
+      "name": "Centre de chèques postaux",
+      "kind": "amenity=atm",
+      "position": [
+        36.9121595,
+        7.764107
+      ]
+    },
+    {
+      "name": "Centre de diagnostic médical (El Madina) Medical Diagnostic Center",
+      "kind": "amenity=doctors",
+      "position": [
+        36.8961714,
+        7.7572253
+      ]
+    },
+    {
+      "name": "Chahid Kefaifia Allaoua",
+      "kind": "amenity=atm",
+      "position": [
+        36.8905717,
+        7.7312788
+      ]
+    },
+    {
+      "name": "Chem's",
+      "kind": "tourism=hotel",
+      "position": [
+        36.9629186,
+        7.7866579
+      ]
+    },
+    {
+      "name": "Chicha Châtelet",
+      "kind": "amenity=cafe",
+      "position": [
+        36.9290773,
+        7.7594608
+      ]
+    },
+    {
+      "name": "Cinéma Olympia",
+      "kind": "amenity=cinema",
+      "position": [
+        36.9028349,
+        7.7551924
+      ]
+    },
+    {
+      "name": "Cinémathèque",
+      "kind": "amenity=cinema",
+      "position": [
+        36.9064838,
+        7.7603541
+      ]
+    },
+    {
+      "name": "Cite 11 decembr b b",
+      "kind": "place=neighbourhood",
+      "position": [
+        36.8941415,
+        7.7463952
+      ]
+    },
+    {
+      "name": "Cite 11 decembre b c",
+      "kind": "place=neighbourhood",
+      "position": [
+        36.8939303,
+        7.7453854
+      ]
+    },
+    {
+      "name": "Cite 11decembre B 1-10",
+      "kind": "place=neighbourhood",
+      "position": [
+        36.8959734,
+        7.7445288
+      ]
+    },
+    {
+      "name": "Cite 627 log ouad dheb",
+      "kind": "place=neighbourhood",
+      "position": [
+        36.8924435,
+        7.7367987
+      ]
+    },
+    {
+      "name": "Cite 68 log 8 mars",
+      "kind": "place=neighbourhood",
+      "position": [
+        36.8904867,
+        7.7356532
+      ]
+    },
+    {
+      "name": "Cite 8 mai 45",
+      "kind": "place=neighbourhood",
+      "position": [
+        36.8958803,
+        7.7413991
+      ]
+    },
+    {
+      "name": "Cité 100 logements",
+      "kind": "place=neighbourhood",
+      "position": [
+        36.9246591,
+        7.7557003
+      ]
+    },
+    {
+      "name": "Cité 1000 logements",
+      "kind": "place=neighbourhood",
+      "position": [
+        36.9155883,
+        7.7653844
+      ]
+    },
+    {
+      "name": "Cité 11 Décembre",
+      "kind": "place=neighbourhood",
+      "position": [
+        36.8952963,
+        7.7424061
+      ]
+    },
+    {
+      "name": "Cité 1172 logements 8 mars",
+      "kind": "place=neighbourhood",
+      "position": [
+        36.8898653,
+        7.7307992
+      ]
+    },
+    {
+      "name": "Cité 1276 logements",
+      "kind": "place=neighbourhood",
+      "position": [
+        36.8978644,
+        7.7329855
+      ]
+    },
+    {
+      "name": "Cité 200 logements 8 Mars",
+      "kind": "place=neighbourhood",
+      "position": [
+        36.8902661,
+        7.732521
+      ]
+    },
+    {
+      "name": "Cité 200 logements 8 mars",
+      "kind": "place=neighbourhood",
+      "position": [
+        36.8912537,
+        7.7335224
+      ]
+    },
+    {
+      "name": "Cité 500 logements",
+      "kind": "place=neighbourhood",
+      "position": [
+        36.9209349,
+        7.7576966
+      ]
+    },
+    {
+      "name": "Cité 600 logements",
+      "kind": "place=suburb",
+      "position": [
+        36.9025636,
+        7.7351042
+      ]
+    },
+    {
+      "name": "Cité Patrice Lumumba",
+      "kind": "place=neighbourhood",
+      "position": [
+        36.9142137,
+        7.7689031
+      ]
+    },
+    {
+      "name": "Cité des pins",
+      "kind": "place=neighbourhood",
+      "position": [
+        36.9228489,
+        7.7543671
+      ]
+    },
+    {
+      "name": "Clinique El Alia",
+      "kind": "amenity=clinic",
+      "position": [
+        36.9019745,
+        7.7300032
+      ]
+    },
+    {
+      "name": "Clinique El Farabi",
+      "kind": "amenity=clinic",
+      "position": [
+        36.9016457,
+        7.7464943
+      ]
+    },
+    {
+      "name": "Clinique Ibn Nafis",
+      "kind": "amenity=clinic",
+      "position": [
+        36.8815095,
+        7.7359349
+      ]
+    },
+    {
+      "name": "Clinique Orl Oranger",
+      "kind": "amenity=clinic",
+      "position": [
+        36.9044273,
+        7.7442451
+      ]
+    },
+    {
+      "name": "Clinique Saint-Cloud",
+      "kind": "amenity=clinic",
+      "position": [
+        36.9104234,
+        7.7715291
+      ]
+    },
+    {
+      "name": "Clinique Seybouse",
+      "kind": "amenity=clinic",
+      "position": [
+        36.904657,
+        7.745835
+      ]
+    },
+    {
+      "name": "Clinique dentaire Le sourire",
+      "kind": "amenity=dentist",
+      "position": [
+        36.9051208,
+        7.7448096
+      ]
+    },
+    {
+      "name": "Cls",
+      "kind": "amenity=community_centre",
+      "position": [
+        36.900982,
+        7.75702
+      ]
+    },
+    {
+      "name": "Col de la cigogne",
+      "kind": "place=locality",
+      "position": [
+        36.8965135,
+        7.7670734
+      ]
+    },
+    {
+      "name": "Collège hippone",
+      "kind": "building=school",
+      "position": [
+        36.891152,
+        7.749697
+      ]
+    },
+    {
+      "name": "Collège hippone",
+      "kind": "building=school",
+      "position": [
+        36.891267,
+        7.74945
+      ]
+    },
+    {
+      "name": "Compexe Sportif \"Pont Blanc\"",
+      "kind": "leisure=sports_centre",
+      "position": [
+        36.904929,
+        7.738882
+      ]
+    },
+    {
+      "name": "Complexe sportif du 19 Mai 1956",
+      "kind": "leisure=sports_centre",
+      "position": [
+        36.886054,
+        7.735464
+      ]
+    },
+    {
+      "name": "Cour d'Annaba",
+      "kind": "amenity=courthouse",
+      "position": [
+        36.9007874,
+        7.7543589
+      ]
+    },
+    {
+      "name": "Court 1 Tennis",
+      "kind": "leisure=sports_hall",
+      "position": [
+        36.908799,
+        7.759317
+      ]
+    },
+    {
+      "name": "Court 2 Tennis",
+      "kind": "leisure=sports_hall",
+      "position": [
+        36.909132,
+        7.759494
+      ]
+    },
+    {
+      "name": "Court 3 Tennis",
+      "kind": "leisure=sports_hall",
+      "position": [
+        36.908844,
+        7.759586
+      ]
+    },
+    {
+      "name": "Crédit populaire d'Algérie",
+      "kind": "amenity=bank",
+      "position": [
+        36.9148554,
+        7.7638817
+      ]
+    },
+    {
+      "name": "Crédit populaire d'Algérie",
+      "kind": "amenity=bank",
+      "position": [
+        36.897214,
+        7.7630539
+      ]
+    },
+    {
+      "name": "Direction des Travaux Publics de la Wilaya de Annaba",
+      "kind": "building=public",
+      "position": [
+        36.905892,
+        7.760468
+      ]
+    },
+    {
+      "name": "Direction des affaires religieuses et des wakfs",
+      "kind": "amenity=place_of_worship",
+      "position": [
+        36.9030662,
+        7.7451718
+      ]
+    },
+    {
+      "name": "Dortoir Sidi Brahim",
+      "kind": "tourism=motel",
+      "position": [
+        36.8967919,
+        7.7531901
+      ]
+    },
+    {
+      "name": "Dr Aouiche A Yacine pneumologue",
+      "kind": "amenity=doctors",
+      "position": [
+        36.8946894,
+        7.7310532
+      ]
+    },
+    {
+      "name": "Dr Aouiche Pneumologie",
+      "kind": "amenity=doctors",
+      "position": [
+        36.8984657,
+        7.7315463
+      ]
+    },
+    {
+      "name": "Dr Far endocrinologie.",
+      "kind": "amenity=doctors",
+      "position": [
+        36.9044794,
+        7.7550226
+      ]
+    },
+    {
+      "name": "Département maritime d'Annaba",
+      "kind": "tourism=apartment",
+      "position": [
+        36.8976918,
+        7.7633148
+      ]
+    },
+    {
+      "name": "Ecole Beausejour Garçon",
+      "kind": "amenity=school",
+      "position": [
+        36.9112844,
+        7.7617195
+      ]
+    },
+    {
+      "name": "Ecole Paramédicale",
+      "kind": "amenity=college",
+      "position": [
+        36.908318,
+        7.732811
+      ]
+    },
+    {
+      "name": "Ecole Primaire Les Crêtes (El Kimam)",
+      "kind": "amenity=school",
+      "position": [
+        36.9139506,
+        7.7567911
+      ]
+    },
+    {
+      "name": "Ecole Privé Al Idrissi Le Petit Prince",
+      "kind": "amenity=school",
+      "position": [
+        36.9192252,
+        7.7642846
+      ]
+    },
+    {
+      "name": "Ecole Supérieure des Sciences de Gestion",
+      "kind": "amenity=school",
+      "position": [
+        36.902243,
+        7.7602908
+      ]
+    },
+    {
+      "name": "Ecole primaire Colonel Amirouche",
+      "kind": "amenity=school",
+      "position": [
+        36.9049203,
+        7.7452209
+      ]
+    },
+    {
+      "name": "El rio",
+      "kind": "amenity=bar",
+      "position": [
+        36.9010521,
+        7.7606515
+      ]
+    },
+    {
+      "name": "Ems Annaba",
+      "kind": "amenity=post_office",
+      "position": [
+        36.8970859,
+        7.7309982
+      ]
+    },
+    {
+      "name": "GEMA",
+      "kind": "amenity=ferry_terminal",
+      "position": [
+        36.8972196,
+        7.7634923
+      ]
+    },
+    {
+      "name": "Gare Maritime",
+      "kind": "amenity=ferry_terminal",
+      "position": [
+        36.8972177,
+        7.7634079
+      ]
+    },
+    {
+      "name": "Gare d´Annaba",
+      "kind": "building=train_station",
+      "position": [
+        36.89543,
+        7.758886
+      ]
+    },
+    {
+      "name": "Gatro-entérologue BOUAKKAZ Safia",
+      "kind": "amenity=doctors",
+      "position": [
+        36.9052405,
+        7.7615604
+      ]
+    },
+    {
+      "name": "Gendarmerie nationale",
+      "kind": "amenity=police",
+      "position": [
+        36.8996797,
+        7.7548845
+      ]
+    },
+    {
+      "name": "Gendarmerie nationale",
+      "kind": "amenity=police",
+      "position": [
+        36.9561588,
+        7.7785823
+      ]
+    },
+    {
+      "name": "Glace",
+      "kind": "amenity=ice_cream",
+      "position": [
+        36.922708,
+        7.7620896
+      ]
+    },
+    {
+      "name": "Golfe d'Annaba",
+      "kind": "natural=bay",
+      "position": null
+    },
+    {
+      "name": "Grand poste Annaba",
+      "kind": "amenity=post_office",
+      "position": [
+        36.902552,
+        7.759715
+      ]
+    },
+    {
+      "name": "Griade du Port",
+      "kind": "amenity=fast_food",
+      "position": [
+        36.8975047,
+        7.7638893
+      ]
+    },
+    {
+      "name": "Gulf Bank",
+      "kind": "amenity=bank",
+      "position": [
+        36.8973991,
+        7.7496221
+      ]
+    },
+    {
+      "name": "Gynecologie et Obstétrique \"Dr. Kebbar\"",
+      "kind": "amenity=doctors",
+      "position": [
+        36.9051694,
+        7.7567862
+      ]
+    },
+    {
+      "name": "Gynecologie et Obstétrique \"Dr. Nezzar\"",
+      "kind": "amenity=doctors",
+      "position": [
+        36.9040989,
+        7.7562234
+      ]
+    },
+    {
+      "name": "Gynécologue",
+      "kind": "amenity=doctors",
+      "position": [
+        36.9004295,
+        7.7591568
+      ]
+    },
+    {
+      "name": "Hostel Liberté",
+      "kind": "tourism=hostel",
+      "position": [
+        36.8987735,
+        7.7613063
+      ]
+    },
+    {
+      "name": "Hotel Royal Elisa Annaba",
+      "kind": "tourism=hotel",
+      "position": [
+        36.9087092,
+        7.7466746
+      ]
+    },
+    {
+      "name": "Hotel Royal Elisa Annaba",
+      "kind": "tourism=hotel",
+      "position": [
+        36.908808,
+        7.746708
+      ]
+    },
+    {
+      "name": "Hotel Touring",
+      "kind": "tourism=hotel",
+      "position": [
+        36.9003047,
+        7.7597334
+      ]
+    },
+    {
+      "name": "Hotel l'Orient",
+      "kind": "tourism=hotel",
+      "position": [
+        36.8991839,
+        7.7599759
+      ]
+    },
+    {
+      "name": "Hotel le Majestic",
+      "kind": "tourism=hotel",
+      "position": [
+        36.905885,
+        7.759984
+      ]
+    },
+    {
+      "name": "Hôpital Ibn Rochd",
+      "kind": "amenity=hospital",
+      "position": [
+        36.9107362,
+        7.746547
+      ]
+    },
+    {
+      "name": "Hôpital Ibn Sina (ex Caroubier)",
+      "kind": "amenity=hospital",
+      "position": [
+        36.9042439,
+        7.7667381
+      ]
+    },
+    {
+      "name": "Hôpital ophtalmologique",
+      "kind": "amenity=clinic",
+      "position": [
+        36.8964375,
+        7.7558533
+      ]
+    },
+    {
+      "name": "Hôtel Sabri",
+      "kind": "tourism=hotel",
+      "position": [
+        36.938508,
+        7.766754
+      ]
+    },
+    {
+      "name": "Hôtel Seybouse International",
+      "kind": "tourism=hotel",
+      "position": [
+        36.90387,
+        7.761152
+      ]
+    },
+    {
+      "name": "Hôtel el Amane",
+      "kind": "tourism=hotel",
+      "position": [
+        36.9344525,
+        7.7617828
+      ]
+    },
+    {
+      "name": "Hôtel maraignan",
+      "kind": "tourism=hotel",
+      "position": [
+        36.9004415,
+        7.7526419
+      ]
+    },
+    {
+      "name": "Imara Résidence (ex-Chateau Chancel)",
+      "kind": "tourism=hotel",
+      "position": [
+        36.9137134,
+        7.7503395
+      ]
+    },
+    {
+      "name": "Institut Français d'Annaba",
+      "kind": "amenity=college",
+      "position": [
+        36.9045447,
+        7.75726
+      ]
+    },
+    {
+      "name": "Jardin El Moukaouama",
+      "kind": "leisure=garden",
+      "position": [
+        36.906358,
+        7.740619
+      ]
+    },
+    {
+      "name": "Jardin d'enfants du Petit Prince",
+      "kind": "amenity=childcare",
+      "position": [
+        36.8962889,
+        7.7544723
+      ]
+    },
+    {
+      "name": "Jardin du Champs de Mars",
+      "kind": "leisure=park",
+      "position": [
+        36.895551,
+        7.755707
+      ]
+    },
+    {
+      "name": "Kouadri Ouassim Kouba",
+      "kind": "amenity=pharmacy",
+      "position": [
+        36.924371,
+        7.760183
+      ]
+    },
+    {
+      "name": "L'artista",
+      "kind": "amenity=restaurant",
+      "position": [
+        36.9296994,
+        7.7593961
+      ]
+    },
+    {
+      "name": "La Caravelle",
+      "kind": "amenity=restaurant",
+      "position": [
+        36.9085084,
+        7.7752455
+      ]
+    },
+    {
+      "name": "La Placette",
+      "kind": "leisure=garden",
+      "position": [
+        36.901079,
+        7.758189
+      ]
+    },
+    {
+      "name": "La Poste Menadia",
+      "kind": "amenity=post_office",
+      "position": [
+        36.9121547,
+        7.7641575
+      ]
+    },
+    {
+      "name": "Laboratoire d’analyses médicales NIHA",
+      "kind": "amenity=doctors",
+      "position": [
+        36.8961909,
+        7.7572535
+      ]
+    },
+    {
+      "name": "Le Jasmin",
+      "kind": "amenity=restaurant",
+      "position": [
+        36.9209781,
+        7.7633111
+      ]
+    },
+    {
+      "name": "Le Petit Prince",
+      "kind": "amenity=school",
+      "position": [
+        36.914339,
+        7.768308
+      ]
+    },
+    {
+      "name": "Mairie d'Annaba",
+      "kind": "amenity=townhall",
+      "position": [
+        36.900338,
+        7.760759
+      ]
+    },
+    {
+      "name": "Maison Familiale",
+      "kind": "building=house",
+      "position": [
+        36.893129,
+        7.748773
+      ]
+    },
+    {
+      "name": "Maison Familiale",
+      "kind": "building=house",
+      "position": [
+        36.893287,
+        7.748452
+      ]
+    },
+    {
+      "name": "Maison de jeunesse",
+      "kind": "tourism=hostel",
+      "position": [
+        36.8879349,
+        7.7460503
+      ]
+    },
+    {
+      "name": "Marché Oued Forcha",
+      "kind": "amenity=marketplace",
+      "position": [
+        36.909928,
+        7.735106
+      ]
+    },
+    {
+      "name": "Marché des Oiseaux",
+      "kind": "amenity=marketplace",
+      "position": [
+        36.9025565,
+        7.7563511
+      ]
+    },
+    {
+      "name": "Masdjid Badr",
+      "kind": "amenity=place_of_worship",
+      "position": [
+        36.918134,
+        7.762262
+      ]
+    },
+    {
+      "name": "Masdjid ar-Rahma",
+      "kind": "amenity=place_of_worship",
+      "position": [
+        36.913848,
+        7.767029
+      ]
+    },
+    {
+      "name": "Masjid EL-Aziz",
+      "kind": "amenity=place_of_worship",
+      "position": [
+        36.903329,
+        7.745446
+      ]
+    },
+    {
+      "name": "Masjid El Forkane",
+      "kind": "amenity=place_of_worship",
+      "position": [
+        36.9045934,
+        7.7499724
+      ]
+    },
+    {
+      "name": "Masjid El-Arkam Ibn Abi El-Arkam",
+      "kind": "amenity=place_of_worship",
+      "position": [
+        36.895699,
+        7.73806
+      ]
+    },
+    {
+      "name": "Menadia",
+      "kind": "place=neighbourhood",
+      "position": [
+        36.9122604,
+        7.7648864
+      ]
+    },
+    {
+      "name": "Menadia",
+      "kind": "amenity=atm",
+      "position": [
+        36.91227,
+        7.7641438
+      ]
+    },
+    {
+      "name": "Mosquè ohode",
+      "kind": "amenity=place_of_worship",
+      "position": [
+        36.9161323,
+        7.7607229
+      ]
+    },
+    {
+      "name": "Mosquée El-Imam El-Kortobi",
+      "kind": "amenity=place_of_worship",
+      "position": [
+        36.909645,
+        7.735838
+      ]
+    },
+    {
+      "name": "Mosquée Israâ et El Miâradj",
+      "kind": "amenity=place_of_worship",
+      "position": [
+        36.905795,
+        7.73722
+      ]
+    },
+    {
+      "name": "Mosquée Okba Ibn Nafaa",
+      "kind": "amenity=place_of_worship",
+      "position": [
+        36.899148,
+        7.744113
+      ]
+    },
+    {
+      "name": "Mosquée Salah Bey",
+      "kind": "amenity=place_of_worship",
+      "position": [
+        36.8990148,
+        7.7623041
+      ]
+    },
+    {
+      "name": "Mosquée Sidi Brahim",
+      "kind": "amenity=place_of_worship",
+      "position": [
+        36.889306,
+        7.7488042
+      ]
+    },
+    {
+      "name": "Mosquée de Sidi Bou Merouane",
+      "kind": "amenity=place_of_worship",
+      "position": [
+        36.898455,
+        7.76414
+      ]
+    },
+    {
+      "name": "Motel Nassim",
+      "kind": "tourism=motel",
+      "position": [
+        36.9450354,
+        7.7633189
+      ]
+    },
+    {
+      "name": "Musée des Ruines d'Hippone",
+      "kind": "tourism=museum",
+      "position": [
+        36.8820339,
+        7.7517817
+      ]
+    },
+    {
+      "name": "Médecin psychiatre Docteur CHORFI",
+      "kind": "amenity=doctors",
+      "position": [
+        36.8974403,
+        7.7396815
+      ]
+    },
+    {
+      "name": "Naftal",
+      "kind": "amenity=fuel",
+      "position": [
+        36.8933889,
+        7.7555016
+      ]
+    },
+    {
+      "name": "Naftal",
+      "kind": "amenity=fuel",
+      "position": [
+        36.8926533,
+        7.7346122
+      ]
+    },
+    {
+      "name": "Natixis Algérie",
+      "kind": "amenity=bank",
+      "position": [
+        36.9033409,
+        7.7685861
+      ]
+    },
+    {
+      "name": "Nextholidays Travel",
+      "kind": "building=apartments",
+      "position": [
+        36.919686,
+        7.760244
+      ]
+    },
+    {
+      "name": "Oued Kouba",
+      "kind": "amenity=post_office",
+      "position": [
+        36.9245629,
+        7.7600562
+      ]
+    },
+    {
+      "name": "Oued Kouba",
+      "kind": "amenity=atm",
+      "position": [
+        36.92461,
+        7.7598188
+      ]
+    },
+    {
+      "name": "Palais de la Culture Mohamed Boudiaf",
+      "kind": "amenity=arts_centre",
+      "position": [
+        36.902646,
+        7.75737
+      ]
+    },
+    {
+      "name": "Parking Wilaya",
+      "kind": "amenity=parking",
+      "position": [
+        36.9039893,
+        7.7585565
+      ]
+    },
+    {
+      "name": "Petite Mousse",
+      "kind": "amenity=events_venue",
+      "position": [
+        36.9012841,
+        7.7515237
+      ]
+    },
+    {
+      "name": "Phare de Cap de Garde",
+      "kind": "man_made=lighthouse",
+      "position": [
+        36.967081,
+        7.7835559
+      ]
+    },
+    {
+      "name": "Pharmacie 8487",
+      "kind": "amenity=pharmacy",
+      "position": [
+        36.8969689,
+        7.7318553
+      ]
+    },
+    {
+      "name": "Pharmacie Amara Sara",
+      "kind": "amenity=pharmacy",
+      "position": [
+        36.9022653,
+        7.7515549
+      ]
+    },
+    {
+      "name": "Pharmacie Belhouchet",
+      "kind": "amenity=pharmacy",
+      "position": [
+        36.8976932,
+        7.7395453
+      ]
+    },
+    {
+      "name": "Pharmacie Bentrad.a",
+      "kind": "amenity=pharmacy",
+      "position": [
+        36.9012304,
+        7.751577
+      ]
+    },
+    {
+      "name": "Pharmacie Cheribi",
+      "kind": "amenity=pharmacy",
+      "position": [
+        36.8954585,
+        7.748432
+      ]
+    },
+    {
+      "name": "Pharmacie Hafiane Saliha",
+      "kind": "amenity=pharmacy",
+      "position": [
+        36.8999329,
+        7.7561839
+      ]
+    },
+    {
+      "name": "Pharmacie Hazem Abdelkader",
+      "kind": "amenity=pharmacy",
+      "position": [
+        36.8994698,
+        7.7530049
+      ]
+    },
+    {
+      "name": "Pharmacie Lamri",
+      "kind": "amenity=pharmacy",
+      "position": [
+        36.9022765,
+        7.7474855
+      ]
+    },
+    {
+      "name": "Pharmacie Myriam Bouri",
+      "kind": "amenity=pharmacy",
+      "position": [
+        36.9083922,
+        7.7347585
+      ]
+    },
+    {
+      "name": "Pharmacie TRIDI",
+      "kind": "amenity=pharmacy",
+      "position": [
+        36.8925686,
+        7.7380361
+      ]
+    },
+    {
+      "name": "Pharmacie bouzitoune hocine",
+      "kind": "amenity=pharmacy",
+      "position": [
+        36.893387,
+        7.7314758
+      ]
+    },
+    {
+      "name": "Plage Ain Achir",
+      "kind": "natural=beach",
+      "position": [
+        36.957107,
+        7.780163
+      ]
+    },
+    {
+      "name": "Plage Kettara",
+      "kind": "natural=beach",
+      "position": [
+        36.909278,
+        7.772505
+      ]
+    },
+    {
+      "name": "Plage La Caroube",
+      "kind": "natural=beach",
+      "position": [
+        36.933798,
+        7.763907
+      ]
+    },
+    {
+      "name": "Plage Rachid Fellah",
+      "kind": "natural=beach",
+      "position": [
+        36.918784,
+        7.765871
+      ]
+    },
+    {
+      "name": "Plage Refas Zahouen",
+      "kind": "natural=beach",
+      "position": [
+        36.943639,
+        7.767737
+      ]
+    },
+    {
+      "name": "Plage Rizzi Amor",
+      "kind": "natural=beach",
+      "position": [
+        36.927645,
+        7.76106
+      ]
+    },
+    {
+      "name": "Plage des Juifs",
+      "kind": "natural=beach",
+      "position": [
+        36.916534,
+        7.768325
+      ]
+    },
+    {
+      "name": "Plage du Belvédère",
+      "kind": "natural=beach",
+      "position": [
+        36.946593,
+        7.770557
+      ]
+    },
+    {
+      "name": "Plaine Ouest",
+      "kind": "amenity=post_office",
+      "position": [
+        36.8962914,
+        7.7312012
+      ]
+    },
+    {
+      "name": "Plaine Ouest",
+      "kind": "amenity=atm",
+      "position": [
+        36.89642,
+        7.7310738
+      ]
+    },
+    {
+      "name": "Police nationale",
+      "kind": "amenity=police",
+      "position": [
+        36.9061236,
+        7.7567898
+      ]
+    },
+    {
+      "name": "Police nationale",
+      "kind": "amenity=police",
+      "position": [
+        36.8987756,
+        7.7455949
+      ]
+    },
+    {
+      "name": "Police nationale",
+      "kind": "amenity=police",
+      "position": [
+        36.9084181,
+        7.7537858
+      ]
+    },
+    {
+      "name": "Police nationale",
+      "kind": "amenity=police",
+      "position": [
+        36.9071243,
+        7.7371347
+      ]
+    },
+    {
+      "name": "Police nationale",
+      "kind": "amenity=police",
+      "position": [
+        36.8986592,
+        7.7523396
+      ]
+    },
+    {
+      "name": "Police nationale",
+      "kind": "amenity=police",
+      "position": [
+        36.8935217,
+        7.7580093
+      ]
+    },
+    {
+      "name": "Pouponnière El moukaouama",
+      "kind": "amenity=social_facility",
+      "position": [
+        36.9095017,
+        7.7314715
+      ]
+    },
+    {
+      "name": "Protection civile",
+      "kind": "amenity=fire_station",
+      "position": [
+        36.897975,
+        7.7645395
+      ]
+    },
+    {
+      "name": "Radio Annaba",
+      "kind": "amenity=studio",
+      "position": [
+        36.907882,
+        7.772871
+      ]
+    },
+    {
+      "name": "Redouane Fenghour",
+      "kind": "amenity=fast_food",
+      "position": [
+        36.8991974,
+        7.7427732
+      ]
+    },
+    {
+      "name": "Rym El Djamil",
+      "kind": "tourism=hotel",
+      "position": [
+        36.9479969,
+        7.7723269
+      ]
+    },
+    {
+      "name": "Résidence Djenan El-Bey",
+      "kind": "tourism=apartment",
+      "position": [
+        36.9149002,
+        7.7509237
+      ]
+    },
+    {
+      "name": "Résidence El Ferdaous",
+      "kind": "building=residential",
+      "position": [
+        36.925793,
+        7.760208
+      ]
+    },
+    {
+      "name": "Sabri Lakhder",
+      "kind": "building=school",
+      "position": [
+        36.901719,
+        7.73364
+      ]
+    },
+    {
+      "name": "SafSaf",
+      "kind": "tourism=hotel",
+      "position": [
+        36.8995045,
+        7.7620201
+      ]
+    },
+    {
+      "name": "Salle Omnisport",
+      "kind": "leisure=sports_centre",
+      "position": [
+        36.905105,
+        7.738402
+      ]
+    },
+    {
+      "name": "Salle des Fetes",
+      "kind": "leisure=dance",
+      "position": [
+        36.908434,
+        7.773366
+      ]
+    },
+    {
+      "name": "Salle des Fêtes Le Petit Mousse",
+      "kind": "leisure=dance",
+      "position": [
+        36.908388,
+        7.773128
+      ]
+    },
+    {
+      "name": "Sidi Amar",
+      "kind": "amenity=bus_station",
+      "position": [
+        36.8960562,
+        7.7533804
+      ]
+    },
+    {
+      "name": "Sidi brahim",
+      "kind": "amenity=bus_station",
+      "position": [
+        36.8905019,
+        7.7506937
+      ]
+    },
+    {
+      "name": "Siège de La Wilaya d'Annaba",
+      "kind": "building=public",
+      "position": [
+        36.903826,
+        7.759268
+      ]
+    },
+    {
+      "name": "Sky Lounge",
+      "kind": "amenity=bar",
+      "position": [
+        36.9288163,
+        7.7597824
+      ]
+    },
+    {
+      "name": "Southern Baths",
+      "kind": "historic=archaeological_site",
+      "position": [
+        36.8807164,
+        7.7509349
+      ]
+    },
+    {
+      "name": "Square Houria",
+      "kind": "leisure=garden",
+      "position": [
+        36.90165,
+        7.755955
+      ]
+    },
+    {
+      "name": "Square de l'Eddough nord",
+      "kind": "leisure=park",
+      "position": [
+        36.908787,
+        7.757079
+      ]
+    },
+    {
+      "name": "Square de l'Edough",
+      "kind": "leisure=garden",
+      "position": [
+        36.905004,
+        7.758454
+      ]
+    },
+    {
+      "name": "Stade 19 Mai 1956",
+      "kind": "leisure=stadium",
+      "position": null
+    },
+    {
+      "name": "Stade Municipal Colonel-Chabou-Abdelkader",
+      "kind": "leisure=stadium",
+      "position": [
+        36.907838,
+        7.757442
+      ]
+    },
+    {
+      "name": "Stade du 19 Mai 1956",
+      "kind": "leisure=pitch",
+      "position": [
+        36.885947,
+        7.732982
+      ]
+    },
+    {
+      "name": "Station Kouche Noureddine",
+      "kind": "amenity=bus_station",
+      "position": [
+        36.8941314,
+        7.7544963
+      ]
+    },
+    {
+      "name": "Station Relevage d'eau",
+      "kind": "man_made=storage_tank",
+      "position": [
+        36.909929,
+        7.771213
+      ]
+    },
+    {
+      "name": "Station Service Naftal (Essence)",
+      "kind": "amenity=fuel",
+      "position": [
+        36.8957182,
+        7.7580781
+      ]
+    },
+    {
+      "name": "Station Service Naftal (Menadia)",
+      "kind": "amenity=fuel",
+      "position": [
+        36.9135773,
+        7.7638023
+      ]
+    },
+    {
+      "name": "Station Service Naftal (Transformateur)",
+      "kind": "amenity=fuel",
+      "position": [
+        36.9115263,
+        7.7621975
+      ]
+    },
+    {
+      "name": "Station Service Naftal (el Hattab)",
+      "kind": "amenity=fuel",
+      "position": [
+        36.897992,
+        7.7543324
+      ]
+    },
+    {
+      "name": "Station Service Naftal Aissa",
+      "kind": "amenity=fuel",
+      "position": [
+        36.9166728,
+        7.7634387
+      ]
+    },
+    {
+      "name": "Sunstar coffee",
+      "kind": "amenity=cafe",
+      "position": [
+        36.9177954,
+        7.7528011
+      ]
+    },
+    {
+      "name": "Terrain Foot Six Menadia",
+      "kind": "leisure=pitch",
+      "position": [
+        36.913265,
+        7.766596
+      ]
+    },
+    {
+      "name": "Théatre Azzedine Medjoubi",
+      "kind": "amenity=theatre",
+      "position": [
+        36.899713,
+        7.759643
+      ]
+    },
+    {
+      "name": "Théâtre de verdure",
+      "kind": "amenity=theatre",
+      "position": [
+        36.903223,
+        7.757693
+      ]
+    },
+    {
+      "name": "Tribunal administratif",
+      "kind": "amenity=courthouse",
+      "position": [
+        36.8962422,
+        7.7568804
+      ]
+    },
+    {
+      "name": "Tribunal d'Annaba",
+      "kind": "amenity=courthouse",
+      "position": [
+        36.901624,
+        7.759778
+      ]
+    },
+    {
+      "name": "Truts bank",
+      "kind": "amenity=bank",
+      "position": [
+        36.9251207,
+        7.7548383
+      ]
+    },
+    {
+      "name": "Trésor Public",
+      "kind": "building=public",
+      "position": [
+        36.904765,
+        7.760734
+      ]
+    },
+    {
+      "name": "Vidro",
+      "kind": "place=locality",
+      "position": [
+        36.9092713,
+        7.7723665
+      ]
+    },
+    {
+      "name": "Villa Of Procurator",
+      "kind": "historic=archaeological_site",
+      "position": [
+        36.8808439,
+        7.7492491
+      ]
+    },
+    {
+      "name": "Vox",
+      "kind": "amenity=fast_food",
+      "position": [
+        36.9053273,
+        7.7549029
+      ]
+    },
+    {
+      "name": "Vox cafeteria",
+      "kind": "amenity=cafe",
+      "position": [
+        36.9051664,
+        7.755046
+      ]
+    },
+    {
+      "name": "Zaouiat El Machaoui",
+      "kind": "amenity=restaurant",
+      "position": [
+        36.9349182,
+        7.7614757
+      ]
+    },
+    {
+      "name": "Zoom",
+      "kind": "amenity=cafe",
+      "position": [
+        36.9248313,
+        7.7618378
+      ]
+    },
+    {
+      "name": "belles vues d'air",
+      "kind": "tourism=viewpoint",
+      "position": [
+        36.9455976,
+        7.7695064
+      ]
+    },
+    {
+      "name": "café Zouhir",
+      "kind": "amenity=cafe",
+      "position": [
+        36.8979689,
+        7.7321538
+      ]
+    },
+    {
+      "name": "clinique bni mhafer",
+      "kind": "amenity=clinic",
+      "position": [
+        36.9143505,
+        7.7529658
+      ]
+    },
+    {
+      "name": "mosquée el salam",
+      "kind": "amenity=place_of_worship",
+      "position": [
+        36.892953,
+        7.748531
+      ]
+    },
+    {
+      "name": "mosquée ennour",
+      "kind": "amenity=place_of_worship",
+      "position": [
+        36.89232,
+        7.7410947
+      ]
+    },
+    {
+      "name": "pizza Radouane Fenghour",
+      "kind": "amenity=fast_food",
+      "position": [
+        36.8991445,
+        7.7429561
+      ]
+    },
+    {
+      "name": "École Moyen Max Marchand",
+      "kind": "amenity=school",
+      "position": [
+        36.8960362,
+        7.754565
+      ]
+    },
+    {
+      "name": "École primaire Abbas Moussa",
+      "kind": "amenity=school",
+      "position": [
+        36.8959442,
+        7.754003
+      ]
+    },
+    {
+      "name": "École primaire Kablouti Ammar",
+      "kind": "amenity=school",
+      "position": [
+        36.8954192,
+        7.7552854
+      ]
+    },
+    {
+      "name": "École élémentaire",
+      "kind": "amenity=school",
+      "position": [
+        36.9272444,
+        7.757385
+      ]
+    },
+    {
+      "name": "école primaire Sidi brahim",
+      "kind": "building=school",
+      "position": [
+        36.890896,
+        7.749197
+      ]
+    },
+    {
+      "name": "école primaire hippone",
+      "kind": "building=school",
+      "position": [
+        36.891646,
+        7.749619
+      ]
+    },
+    {
+      "name": "école primaire hippone",
+      "kind": "building=school",
+      "position": [
+        36.891897,
+        7.74963
+      ]
+    },
+    {
+      "name": "école primaire hippone",
+      "kind": "building=school",
+      "position": [
+        36.891761,
+        7.749835
+      ]
+    },
+    {
+      "name": "école primaire hippone",
+      "kind": "building=school",
+      "position": [
+        36.891855,
+        7.749886
+      ]
+    },
+    {
+      "name": "école primaire sidi brahim",
+      "kind": "building=school",
+      "position": [
+        36.890872,
+        7.749558
+      ]
+    },
+    {
+      "name": "المدرسة للمركزية للتكنولوجيا و الإعلام الآلي",
+      "kind": "amenity=school",
+      "position": [
+        36.8966888,
+        7.7564434
+      ]
+    },
+    {
+      "name": "حديقة الأطفال الحرية Jardin d'enfants",
+      "kind": "leisure=garden",
+      "position": [
+        36.90227,
+        7.755264
+      ]
+    },
+    {
+      "name": "حديقة الحطاب",
+      "kind": "leisure=garden",
+      "position": [
+        36.898893,
+        7.754602
+      ]
+    },
+    {
+      "name": "فندق الهنا",
+      "kind": "tourism=hotel",
+      "position": [
+        36.899712,
+        7.7636118
+      ]
+    },
+    {
+      "name": "متحف المجاهد",
+      "kind": "tourism=museum",
+      "position": [
+        36.9134242,
+        7.7426438
+      ]
+    },
+    {
+      "name": "مسجد الشيخ محمد المدني",
+      "kind": "amenity=place_of_worship",
+      "position": [
+        36.906011,
+        7.761177
+      ]
+    },
+    {
+      "name": "مسجد النصر",
+      "kind": "amenity=place_of_worship",
+      "position": [
+        36.908232,
+        7.770091
+      ]
+    },
+    {
+      "name": "مسجد زيغود يوسف",
+      "kind": "amenity=place_of_worship",
+      "position": [
+        36.909655,
+        7.770957
+      ]
+    },
+    {
+      "name": "مسجد سلمان الفارسي",
+      "kind": "amenity=place_of_worship",
+      "position": [
+        36.902942,
+        7.752545
+      ]
+    },
+    {
+      "name": "معهد التكوين المهني 08 ماي 1945",
+      "kind": "amenity=school",
+      "position": [
+        36.8894245,
+        7.7413261
+      ]
+    },
+    {
+      "name": "مكتب بريد",
+      "kind": "amenity=post_office",
+      "position": [
+        36.896106,
+        7.7306897
+      ]
+    }
+  ]
+}
