@@ -1,0 +1,19 @@
+/** Format du fichier public/world/annaba.json (produit par tools/build_world.py). */
+export interface WorldPlace { name: string; x: number; n: number }
+
+export interface WorldData {
+  meta: { buildings: number; buildings_height_estimated: number; roads: number; rect_m: number[] };
+  places: WorldPlace[];
+  /** Polygones de terre ferme : x, n, x, n... (mètres ; n = vers le nord). */
+  land: number[][];
+  areas: { k: string; p: number[] }[];
+  roads: { k: string; w: number; p: number[] }[];
+  rails: { p: number[] }[];
+  buildings: { h: number; p: number[]; n?: string }[];
+}
+
+export async function loadWorldData(): Promise<WorldData> {
+  const response = await fetch(`${import.meta.env.BASE_URL}world/annaba.json`);
+  if (!response.ok) throw new Error(`Carte introuvable (${response.status})`);
+  return (await response.json()) as WorldData;
+}

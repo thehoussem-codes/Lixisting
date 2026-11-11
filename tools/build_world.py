@@ -1,0 +1,361 @@
+"""
+Transforme les données OpenStreetMap brutes (data/osm/annaba_raw.json.gz)
+en un fichier léger que le jeu charge : public/world/annaba.json
+
+Usage : python tools/build_world.py
+Coordonnées de sortie : mètres, x vers l'est, n vers le nord,
+origine = gare d'Annaba. Rien n'est inventé : seules les hauteurs de
+bâtiments sans étiquette sont ESTIMÉES (comptées dans meta).
+"""
+import gzip
+import json
+import math
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+RAW = ROOT / "data" / "osm" / "annaba_raw.json.gz"
+OUT = ROOT / "public" / "world" / "annaba.json"
+
+LEVEL_HEIGHT = 3.0
+
+# Largeur de chaussée (m) par type de voie quand OSM ne précise rien.
+ROAD_WIDTH = {
+    "trunk": 14, "primary": 12, "secondary": 10, "tertiary": 8,
+    "trunk_link": 7, "primary_link": 6, "secondary_link": 6, "tertiary_link": 6,
+    "residential": 6, "unclassified": 6, "living_street": 5, "service": 4,
+    "pedestrian": 5, "track": 3, "footway": 2, "path": 1.5, "steps": 2,
+}
+# Repères vérifiés dans les données OSM, proposés comme points de téléportation.
+PLACES = ["Gare d´Annaba", "Le Jasmin", "Oued Kouba", "Hôtel Sabri", "Plage Ain Achir", "Phare de Cap de Garde"]
+
+
+def load():
+    with gzip.open(RAW, "rt", encoding="utf-8") as f:
+        return json.load(f)
+
+
+class Projection:
+    """Degrés -> mètres autour d'une origine (précis à quelques mètres sur la zone)."""
+
+    def __init__(self, lat0, lon0, lat_mid):
+        p = math.radians(lat_mid)
+        self.lat0, self.lon0 = lat0, lon0
+        self.m_lat = 111132.92 - 559.82 * math.cos(2 * p) + 1.175 * math.cos(4 * p)
+        self.m_lon = 111412.84 * math.cos(p) - 93.5 * math.cos(3 * p)
+
+    def __call__(self, lat, lon):
+        return ((lon - self.lon0) * self.m_lon, (lat - self.lat0) * self.m_lat)
+
+
+def flat(points):
+    out = []
+    for x, n in points:
+        out += [round(x, 1), round(n, 1)]
+    return out
+
+
+def simplify(points, tolerance):
+    """Douglas-Peucker : enlève les points qui ne changent pas la forme."""
+    if len(points) < 3:
+        return points
+    keep = [False] * len(points)
+    keep[0] = keep[-1] = True
+    stack = [(0, len(points) - 1)]
+    while stack:
+        a, b = stack.pop()
+        ax, ay = points[a]
+        bx, by = points[b]
+        dx, dy = bx - ax, by - ay
+        length = math.hypot(dx, dy) or 1e-9
+        worst, index = 0, -1
+        for i in range(a + 1, b):
+            d = abs((points[i][0] - ax) * dy - (points[i][1] - ay) * dx) / length
+            if d > worst:
+                worst, index = d, i
+        if worst > tolerance:
+            keep[index] = True
+            stack += [(a, index), (index, b)]
+    return [p for p, k in zip(points, keep) if k]
+
+
+def area(points):
+    s = 0
+    for i in range(len(points)):
+        x1, y1 = points[i]
+        x2, y2 = points[(i + 1) % len(points)]
+        s += x1 * y2 - x2 * y1
+    return s / 2
+
+
+# ---------------------------------------------------------------- trait de côte
+
+def stitch(ways):
+    """Assemble les morceaux de côte bout à bout (listes d'identifiants de nœuds)."""
+    chains = [list(w) for w in ways]
+    merged = True
+    while merged:
+        merged = False
+        for i, a in enumerate(chains):
+            if a[0] == a[-1]:
+                continue
+            for j, b in enumerate(chains):
+                if i != j and b[0] != b[-1] and a[-1] == b[0]:
+                    chains[i] = a + b[1:]
+                    del chains[j]
+                    merged = True
+                    break
+            if merged:
+                break
+    return chains
+
+
+def clip_to_rect(points, rect):
+    """Découpe une ligne au rectangle. Renvoie les morceaux intérieurs, dont
+    le premier et le dernier point sont posés sur le bord."""
+    x0, y0, x1, y1 = rect
+
+    def inside(p):
+        return x0 <= p[0] <= x1 and y0 <= p[1] <= y1
+
+    def crossing(p, q):  # p dedans, q dehors
+        best = 1.0
+        dx, dy = q[0] - p[0], q[1] - p[1]
+        for edge, d, start in ((x0, dx, p[0]), (x1, dx, p[0]), (y0, dy, p[1]), (y1, dy, p[1])):
+            if d != 0:
+                t = (edge - start) / d
+                if 0 <= t < best:
+                    best = t
+        return (min(max(p[0] + dx * best, x0), x1), min(max(p[1] + dy * best, y0), y1))
+
+    pieces, current = [], None
+    for i, p in enumerate(points):
+        if inside(p):
+            if current is None:
+                current = [crossing(p, points[i - 1])] if i > 0 else []
+            current.append(p)
+        elif current is not None:
+            current.append(crossing(points[i - 1], p))
+            pieces.append(current)
+            current = None
+    if current:
+        pieces.append(current)
+    return [p for p in pieces if len(p) >= 2]
+
+
+def boundary_t(p, rect):
+    """Position d'un point du bord, en tournant dans le sens anti-horaire depuis le coin sud-ouest."""
+    x0, y0, x1, y1 = rect
+    w, h = x1 - x0, y1 - y0
+    d = [abs(p[1] - y0), abs(p[0] - x1), abs(p[1] - y1), abs(p[0] - x0)]
+    side = d.index(min(d))
+    return [(p[0] - x0) / w, 1 + (p[1] - y0) / h, 2 + (x1 - p[0]) / w, 3 + (y1 - p[1]) / h][side]
+
+
+def land_rings(pieces, rect):
+    """La terre est à gauche de la côte (convention OSM) : on referme chaque
+    morceau en suivant le bord du rectangle dans le sens anti-horaire."""
+    x0, y0, x1, y1 = rect
+    corners = {0: (x0, y0), 1: (x1, y0), 2: (x1, y1), 3: (x0, y1)}
+    entries = [boundary_t(p[0], rect) for p in pieces]
+    exits = [boundary_t(p[-1], rect) for p in pieces]
+    used, rings = set(), []
+    for start in range(len(pieces)):
+        if start in used:
+            continue
+        ring, i = [], start
+        while True:
+            used.add(i)
+            ring += pieces[i]
+            t = exits[i]
+            nxt = min(range(len(pieces)), key=lambda j: (entries[j] - t) % 4)
+            gap = (entries[nxt] - t) % 4
+            c = math.floor(t) + 1
+            while c < t + gap:
+                ring.append(corners[c % 4])
+                c += 1
+            if nxt == start or nxt in used:
+                break
+            i = nxt
+        rings.append(ring)
+    return rings
+
+
+# ---------------------------------------------------------------- hauteurs
+
+def building_height(tags, footprint_area, way_id):
+    """Renvoie (hauteur en m, estimée ?)."""
+    try:
+        if "height" in tags:
+            return float(str(tags["height"]).replace("m", "").strip()), False
+        if "building:levels" in tags:
+            return max(1.0, float(tags["building:levels"])) * LEVEL_HEIGHT + 1, False
+    except ValueError:
+        pass
+    kind = tags.get("building", "yes")
+    if kind in ("house", "terrace", "garage", "garages", "shed", "hut", "roof", "greenhouse"):
+        levels = 2
+    elif kind in ("apartments", "hotel"):
+        levels = 6
+    elif kind in ("industrial", "warehouse", "retail", "stadium", "grandstand", "sports_hall"):
+        levels = 3
+    elif footprint_area < 120:
+        levels = 2
+    elif footprint_area < 400:
+        levels = 3
+    elif footprint_area < 1200:
+        levels = 5
+    else:
+        levels = 4
+    levels += way_id % 2  # petite variation stable, pour éviter des toits tous alignés
+    return levels * LEVEL_HEIGHT + 1, True
+
+
+def main():
+    osm = load()
+    elements = osm["elements"]
+    node_ll = {e["id"]: (e["lat"], e["lon"]) for e in elements if e["type"] == "node"}
+    ways = [e for e in elements if e["type"] == "way"]
+
+    gare = next(w for w in ways if w.get("tags", {}).get("building") == "train_station")
+    g = [node_ll[n] for n in gare["nodes"]]
+    lat0, lon0 = sum(p[0] for p in g) / len(g), sum(p[1] for p in g) / len(g)
+    south, west, north, east = 36.880, 7.730, 36.980, 7.800
+    project = Projection(lat0, lon0, (south + north) / 2)
+    xy = {i: project(*ll) for i, ll in node_ll.items()}
+    rx0, ry0 = project(south, west)
+    rx1, ry1 = project(north, east)
+    rect = (rx0, ry0, rx1, ry1)
+
+    def pts(way):
+        return [xy[n] for n in way["nodes"] if n in xy]
+
+    # --- terre et îlots
+    coast = stitch([w["nodes"] for w in ways if w.get("tags", {}).get("natural") == "coastline"])
+    pieces, islands = [], []
+    for chain in coast:
+        p = [xy[n] for n in chain]
+        if chain[0] == chain[-1]:
+            ring = simplify(p[:-1], 1.0)
+            if len(ring) >= 3:
+                islands.append(ring)
+        else:
+            pieces += clip_to_rect(p, rect)
+    land = [simplify(r, 1.0) for r in land_rings(pieces, rect)] + islands
+
+    # --- routes et voies ferrées
+    roads, rails, road_points = [], [], []
+    skipped = {}
+    for w in ways:
+        tags = w.get("tags", {})
+        kind = tags.get("highway")
+        p = pts(w)
+        if len(p) < 2:
+            continue
+        if kind in ROAD_WIDTH:
+            width = ROAD_WIDTH[kind]
+            try:
+                if "lanes" in tags and kind not in ("footway", "path", "steps"):
+                    width = max(width, float(tags["lanes"]) * 3.5)
+            except ValueError:
+                pass
+            for piece in clip_to_rect(p, rect):  # on coupe ce qui dépasse de la zone
+                roads.append({"k": kind, "w": width, "p": flat(simplify(piece, 0.3))})
+                if kind not in ("footway", "path", "steps", "trunk", "trunk_link"):
+                    road_points += piece
+        elif kind:
+            skipped[kind] = skipped.get(kind, 0) + 1
+        elif tags.get("railway") == "rail" and tags.get("tunnel") != "yes":
+            for piece in clip_to_rect(p, rect):
+                rails.append({"p": flat(simplify(piece, 0.3))})
+
+    # --- surfaces (plages, bois, pelouses...)
+    AREA_KIND = {
+        ("natural", "beach"): "beach", ("natural", "sand"): "beach",
+        ("natural", "wood"): "wood", ("landuse", "forest"): "wood",
+        ("natural", "scrub"): "scrub", ("natural", "bare_rock"): "rock",
+        ("landuse", "grass"): "grass", ("leisure", "park"): "grass", ("leisure", "garden"): "grass",
+        ("leisure", "pitch"): "pitch", ("landuse", "cemetery"): "grass",
+    }
+    areas = []
+    for w in ways:
+        tags = w.get("tags", {})
+        if w["nodes"][0] != w["nodes"][-1] or "building" in tags:
+            continue
+        for (key, value), kind in AREA_KIND.items():
+            if tags.get(key) == value:
+                p = simplify(pts(w)[:-1], 0.5)
+                if len(p) >= 3:
+                    areas.append({"k": kind, "p": flat(p)})
+                break
+
+    # --- bâtiments
+    buildings, estimated = [], 0
+    for w in ways:
+        tags = w.get("tags", {})
+        if "building" not in tags or w["nodes"][0] != w["nodes"][-1]:
+            continue
+        p = pts(w)[:-1]
+        if len(p) < 3:
+            continue
+        a = area(p)
+        cx, cy = sum(v[0] for v in p) / len(p), sum(v[1] for v in p) / len(p)
+        if abs(a) < 4 or not (rx0 <= cx <= rx1 and ry0 <= cy <= ry1):
+            continue
+        if a < 0:
+            p.reverse()  # toujours dans le sens anti-horaire
+        height, is_estimated = building_height(tags, abs(a), w["id"])
+        estimated += is_estimated
+        item = {"h": round(height, 1), "p": flat(p)}
+        if tags.get("name"):
+            item["n"] = tags.get("name:fr") or tags["name"]
+        buildings.append(item)
+
+    # --- points de téléportation : repère OSM -> point de rue le plus proche
+    def nearest_road(x, n):
+        return min(road_points, key=lambda q: (q[0] - x) ** 2 + (q[1] - n) ** 2)
+
+    places = []
+    for name in PLACES:
+        for e in elements:
+            tags = e.get("tags", {})
+            if (tags.get("name:fr") or tags.get("name")) != name:
+                continue
+            if e["type"] == "node":
+                c = xy[e["id"]]
+            elif e["type"] == "way":
+                q = pts(e)
+                c = (sum(v[0] for v in q) / len(q), sum(v[1] for v in q) / len(q))
+            else:
+                continue
+            r = nearest_road(*c)
+            places.append({"name": name.replace("´", "'"), "x": round(r[0], 1), "n": round(r[1], 1)})
+            break
+
+    world = {
+        "meta": {
+            "source": "OpenStreetMap contributors (ODbL)",
+            "extracted_at": osm.get("osm3s", {}).get("timestamp_osm_base"),
+            "origin_lat_lon": [round(lat0, 6), round(lon0, 6)],
+            "rect_m": [round(v, 1) for v in rect],
+            "buildings": len(buildings),
+            "buildings_height_estimated": estimated,
+            "roads": len(roads),
+            "roads_skipped_by_type": skipped,
+            "relief": "plat (le relief réel n'est pas encore intégré)",
+        },
+        "places": places,
+        "land": [flat(r) for r in land],
+        "areas": areas,
+        "roads": roads,
+        "rails": rails,
+        "buildings": buildings,
+    }
+    OUT.parent.mkdir(parents=True, exist_ok=True)
+    OUT.write_text(json.dumps(world, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    print(json.dumps(world["meta"], ensure_ascii=False, indent=2))
+    print("places:", places)
+    print("land rings:", [len(r) // 2 for r in world["land"]], "| size:", OUT.stat().st_size // 1024, "ko")
+
+
+if __name__ == "__main__":
+    main()
