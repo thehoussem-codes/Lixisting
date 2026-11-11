@@ -275,6 +275,43 @@ def build_trees(world, grid=None, grid_origin=None):
             else:
                 add("ficus", *point, 0.8, 1.15)
 
+    # 4. Le Cours de la Révolution : la promenade entre ses deux chaussées est couverte d'une voûte de ficus
+    #    (photos). OSM ne décrit pas les arbres : on plante des rangées régulières entre les deux voies réelles.
+    hall = world["meta"].get("town_hall")
+    if hall:
+        sides = []
+        for road in world["roads"]:
+            line = pairs(road["p"])
+            span = np.hypot(*(line[-1] - line[0]))
+            if road["k"] == "primary" and span > 300 and np.ptp(line[:, 0]) < 60 and np.abs(line[:, 0] - hall[0]).min() < 80 and abs(line[:, 1].mean() - hall[1]) < 200:
+                sides.append((road, line))
+        sides = sorted(sides, key=lambda item: -len(item[1]))[:2]
+        if len(sides) == 2:
+            (road_a, line_a), (road_b, line_b) = sides
+            # Un arbre tous les 7 m environ le long de la promenade.
+            steps = np.concatenate([[0], np.cumsum(np.hypot(*np.diff(line_a, axis=0).T))])
+            marks = np.arange(0, steps[-1], 7.0)
+            line_a = np.column_stack([np.interp(marks, steps, line_a[:, 0]), np.interp(marks, steps, line_a[:, 1])])
+            other = cKDTree(line_b)
+            planted = 0
+            for i in range(0, len(line_a)):
+                point = line_a[i]
+                gap, j = other.query(point)
+                across = (line_b[j] - point) / max(gap, 0.01)
+                if gap < 20 or gap > 70 or (i % 1):
+                    continue
+                inner_a, inner_b = road_a["w"] / 2 + 3.5, gap - road_b["w"] / 2 - 3.5
+                rows = np.linspace(inner_a, inner_b, 4)
+                for row, distance in enumerate(rows):
+                    spot = point + across * distance + rng.normal(0, 0.5, 2)
+                    if buildings.query(spot)[0] < 2 or roads.query(spot)[0] < 1.3:
+                        continue
+                    add("palm" if (row in (1, 2) and planted % 9 == 0) else "ficus", *spot, 1.15, 1.5)
+                    planted += 1
+            print("Cours de la Révolution :", planted, "arbres plantés")
+        else:
+            print("Cours de la Révolution : chaussées non identifiées (", len(sides), ")")
+
     counts = {k: len(v) // 3 for k, v in out.items()}
     TREES_OUT.write_text(json.dumps(out, separators=(",", ":")), encoding="utf-8")
     print("végétation :", counts, "total", sum(counts.values()))

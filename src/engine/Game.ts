@@ -21,6 +21,7 @@ import { MapView } from '../ui/MapView';
  * Si le jeu rame, ajouter ?res=0.6 à l'adresse pour alléger le calcul.
  */
 const RENDER_SCALE = Math.min(1, Math.max(0.3, Number(new URLSearchParams(window.location.search).get('res')) || 1));
+const DRONE = new URLSearchParams(window.location.search).get('drone')?.split(',').map(Number);
 const AUTO_SCALE = !new URLSearchParams(window.location.search).has('res');
 const ENTER_DISTANCE = 4.5;
 const VIEW_DISTANCE = 1400; // au-delà, tout est noyé dans le brouillard
@@ -296,6 +297,11 @@ export class Game {
     this.traffic?.update(dt, me.x, me.z, this.driving === null, this.cars, this.ground);
     const heading = this.driving ? this.driving.heading : this.player.object.rotation.y;
     this.map?.update(this.player.object.position.x, this.player.object.position.z, heading);
+    if (DRONE) { // vue aérienne de contrôle : ?drone=hauteur,cap
+      const target = this.player.object.position, heading = (DRONE[1] ?? 0) * Math.PI / 180;
+      this.camera.position.set(target.x - Math.sin(heading) * DRONE[0] * 0.9, target.y + DRONE[0], target.z + Math.cos(heading) * DRONE[0] * 0.9);
+      this.camera.lookAt(target);
+    }
     this.sky?.position.copy(this.camera.position);
     this.time += dt;
     this.water?.update(this.time, this.camera.position);

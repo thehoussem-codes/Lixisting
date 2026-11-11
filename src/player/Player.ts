@@ -9,6 +9,7 @@ const TURN_SPEED = 12;
 const JUMP_SPEED = 7;
 const GRAVITY = 20;
 const RADIUS = 0.35;
+const UP = new THREE.Vector3(0, 1, 0), AIM = new THREE.Vector3(), TURN = new THREE.Quaternion();
 const SWIM_SPEED = 2.2, SWIM_FAST = 3.4;
 const SWIM_DEPTH = -0.9;  // fond plus bas que ça : on n'a plus pied, on nage
 const SWIM_LEVEL = -1.3;  // hauteur des pieds en nageant (la tête reste hors de l'eau)
@@ -44,6 +45,9 @@ export class Player {
   private actions: Partial<Record<'idle' | 'walk' | 'run', THREE.AnimationAction>> = {};
   private current: THREE.AnimationAction | null = null;
   private blocks: THREE.Object3D[] = [];
+  private rest = new Map<string, { bone: THREE.Object3D; quaternion: THREE.Quaternion; position: THREE.Vector3; along: THREE.Vector3; parent: THREE.Quaternion }>();
+  private sideLeft = new THREE.Vector3(1, 0, 0);
+  private front = new THREE.Vector3(0, 0, 1);
   private armL: THREE.Group; private armR: THREE.Group;
   private legL: THREE.Group; private legR: THREE.Group;
 
@@ -68,6 +72,7 @@ export class Player {
     this.object.add(...this.blocks);
     this.shadow = createBlobShadow(1.1, 1.1);
     this.object.add(this.shadow);
+    this.object.rotation.order = 'YXZ'; // cap d'abord, puis inclinaison du corps (nage) dans son propre repère
   }
 
   /** Charge le personnage du catalogue de modèles. Sans fichier, on garde le personnage en blocs. */
@@ -91,9 +96,73 @@ export class Player {
       for (const block of this.blocks) block.visible = false;
       this.object.add(model);
       this.dress(model);
+      this.captureRestPose(model);
       this.play('idle', 0);
     } catch (error) {
       console.warn('Personnage 3D non chargé, personnage en blocs conservé.', error);
+    }
+  }
+
+  /** Mémorise la pose de repos du squelette (bras en croix), base des mouvements de nage. */
+  private captureRestPose(model: THREE.Object3D): void {
+    this.object.updateWorldMatrix(true, true);
+    const rootInverse = this.object.getWorldQuaternion(new THREE.Quaternion()).invert();
+    model.traverse((node) => {
+      if (!(node as THREE.Bone).isBone) return;
+      const child = node.children.find((c) => (c as THREE.Bone).isBone);
+      this.rest.set(node.name.replace(/^mixamorig:?/, ''), {
+        bone: node,
+        quaternion: node.quaternion.clone(),
+        position: node.position.clone(),
+        // Direction de l'os (vers son enfant) et orientation de son parent, dans le repère du personnage.
+        along: (child ? child.position.clone() : new THREE.Vector3(0, 1, 0)).normalize().applyQuaternion(node.quaternion),
+        parent: rootInverse.clone().multiply(node.parent!.getWorldQuaternion(new THREE.Quaternion())),
+      });
+    });
+    const arm = this.rest.get('LeftArm'), spine = this.rest.get('Spine');
+    if (!arm || !spine || !this.rest.get('RightArm') || !this.rest.get('LeftUpLeg') || !this.rest.get('RightUpLeg')) { this.rest.clear(); return; }
+    this.sideLeft.copy(arm.along).applyQuaternion(arm.parent).setY(0).normalize();
+    this.front.crossVectors(this.sideLeft, UP).normalize();
+  }
+
+  /** Oriente un os dans une direction donnée (repère du personnage), le reste du squelette étant au repos. */
+  private aim(name: string, x: number, y: number, z: number): void {
+    const entry = this.rest.get(name);
+    if (!entry) return;
+    AIM.set(0, 0, 0).addScaledVector(this.sideLeft, x).addScaledVector(UP, y).addScaledVector(this.front, z).normalize();
+    AIM.applyQuaternion(TURN.copy(entry.parent).invert());
+    entry.bone.quaternion.setFromUnitVectors(entry.along, AIM).multiply(entry.quaternion);
+  }
+
+  /**
+   * Nage, calculée sur le squelette (le modèle n'a pas d'animation de nage) :
+   * crawl en avançant (bras en moulinet alterné, battements de jambes), surplace à l'arrêt.
+   */
+  private swimPose(moving: boolean): void {
+    for (const entry of this.rest.values()) { entry.bone.quaternion.copy(entry.quaternion); entry.bone.position.copy(entry.position); }
+    const t = this.stride;
+    if (moving) {
+      for (const [side, name, phase] of [[1, 'Left', 0], [-1, 'Right', Math.PI]] as const) {
+        const a = t + phase;
+        // Le bras tourne autour de l'épaule : devant la tête, sous l'eau, le long du corps, retour par-dessus.
+        this.aim(`${name}Arm`, side * 0.28, Math.cos(a), Math.sin(a));
+        // Le coude plie pendant le retour hors de l'eau.
+        const bend = Math.max(0, -Math.sin(a)) * 0.9;
+        this.aim(`${name}ForeArm`, side * 0.28 * (1 - bend), Math.cos(a) + bend * 0.5, Math.sin(a) + bend * 0.9);
+        const kick = Math.sin(t * 2.4 + phase) * 0.38;
+        this.aim(`${name}UpLeg`, side * 0.08, -Math.cos(kick), Math.sin(kick));
+        this.aim(`${name}Leg`, side * 0.08, -Math.cos(kick * 0.4), Math.sin(kick * 0.4) - 0.12);
+      }
+      this.aim('Neck', 0, 0.75, -0.66); // la tête relevée, hors de l'eau
+    } else {
+      for (const [side, name, phase] of [[1, 'Left', 0], [-1, 'Right', Math.PI]] as const) {
+        const scull = Math.sin(t * 1.3) * 0.35;
+        this.aim(`${name}Arm`, side * 0.9, -0.15, 0.45 + scull);
+        this.aim(`${name}ForeArm`, side * 0.75, 0.05, 0.75 - scull);
+        const kick = Math.sin(t * 1.6 + phase) * 0.45;
+        this.aim(`${name}UpLeg`, side * 0.12, -Math.cos(kick), Math.sin(kick));
+        this.aim(`${name}Leg`, side * 0.1, -1, -0.25 - Math.max(0, kick));
+      }
     }
   }
 
@@ -187,9 +256,10 @@ export class Player {
     const floor = ground(position.x, position.z);
     if (this.swimming) {
       // Nage : le corps flotte à la surface, allongé.
-      position.y += (SWIM_LEVEL + 0.9 - position.y) * Math.min(1, 6 * dt);
+      // En avançant : allongé à la surface (crawl). À l'arrêt : presque debout, on fait du surplace.
+      position.y += ((moving ? SWIM_LEVEL + 0.9 : SWIM_LEVEL - 0.15) - position.y) * Math.min(1, 4 * dt);
       this.velocityY = 0; this.airborne = false;
-      this.object.rotation.x += (1.25 - this.object.rotation.x) * Math.min(1, 6 * dt);
+      this.object.rotation.x += ((moving ? 1.32 : 0.22) - this.object.rotation.x) * Math.min(1, 4 * dt);
     } else if (this.airborne) {
       this.velocityY -= GRAVITY * dt;
       position.y += this.velocityY * dt;
@@ -199,13 +269,13 @@ export class Player {
       if (input.isDown('Space')) { this.velocityY = JUMP_SPEED; this.airborne = true; }
     }
 
-    if (!this.swimming) this.object.rotation.x += (0 - this.object.rotation.x) * Math.min(1, 8 * dt);
+    if (!this.swimming) { this.object.rotation.x += (0 - this.object.rotation.x) * Math.min(1, 8 * dt); }
     this.shadow.position.y = 0.04 - Math.max(0, position.y - floor);
     this.shadow.visible = !this.swimming && floor > -0.2;
     // Animation des bras et des jambes.
     let swing = 0;
     if (this.swimming) {
-      this.stride += dt * (moving ? 7 : 2.5);
+      this.stride += dt * (moving ? (running ? 6.2 : 4.6) : 2.6);
       swing = Math.sin(this.stride) * 1.3; // brasse : grands mouvements
     } else if (this.airborne) {
       swing = 0.9; // en l'air : jambes et bras écartés
@@ -216,7 +286,9 @@ export class Player {
     } else {
       this.stride = 0;
     }
-    if (this.mixer) {
+    if (this.mixer && this.swimming && this.rest.size) {
+      this.swimPose(moving);
+    } else if (this.mixer) {
       this.play(!moving ? 'idle' : this.swimming || running ? 'run' : 'walk');
       // La cadence des pas suit la vitesse réelle (au ralenti dans l'eau).
       if (this.current) this.current.timeScale = this.swimming ? 0.6 : moving ? speed / (running ? RUN_SPEED : WALK_SPEED) : 1;

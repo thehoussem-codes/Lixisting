@@ -494,6 +494,53 @@ def main():
                         best = d
         return best
 
+    # Chaussées parallèles (deux sens séparés, contre-allées) : aucune ne doit déborder sur l'autre.
+    # On relève, pour chaque rue, l'écart latéral avec les chaussées voisines qui la longent.
+    lane_cells = {}
+    for index, road in enumerate(roads):
+        if road["k"] in ("footway", "path", "steps", "track", "pedestrian"):
+            continue
+        line = road["_line"]
+        for (ax, an), (bx, bn) in zip(line, line[1:]):
+            length = math.hypot(bx - ax, bn - an)
+            if length > 0.01:
+                lane_cells.setdefault((int(bx // 16), int(bn // 16)), []).append((bx, bn, (bx - ax) / length, (bn - an) / length, index))
+    twin_gap = {}
+    for index, road in enumerate(roads):
+        if road["k"] in ("footway", "path", "steps", "track", "pedestrian"):
+            continue
+        line, hits = road["_line"], []
+        for (ax, an), (bx, bn) in zip(line, line[1:]):
+            length = math.hypot(bx - ax, bn - an)
+            if length < 0.01:
+                continue
+            dx, dn = (bx - ax) / length, (bn - an) / length
+            best = None
+            for i in (-1, 0, 1):
+                for j in (-1, 0, 1):
+                    for ox, on, odx, odn, other in lane_cells.get((int(bx // 16) + i, int(bn // 16) + j), ()):
+                        if other == index or abs(dx * odx + dn * odn) < 0.92:
+                            continue
+                        along, across = (ox - bx) * dx + (on - bn) * dn, abs(-(ox - bx) * dn + (on - bn) * dx)
+                        if abs(along) < 6 and 2.5 < across < 14 and (best is None or across < best[0]):
+                            best = (across, other)
+            if best:
+                hits.append(best)
+        if len(hits) >= max(2, 0.3 * (len(line) - 1)):
+            hits.sort()
+            twin_gap[index] = hits[len(hits) // 5]
+    twins = 0
+    for index, (gap, other) in twin_gap.items():
+        road, mate = roads[index], roads[other]
+        if road["w"] / 2 + mate["w"] / 2 > gap:
+            share = gap * road["w"] / (road["w"] + mate["w"])
+            road["_twin"] = max(3.6, round(2 * share, 1))
+            twins += 1
+    for road in roads:
+        if "_twin" in road:
+            road["w"] = min(road["w"], road.pop("_twin"))
+    print("chaussées parallèles resserrées :", twins)
+
     narrowed = 0
     for road in roads:
         line = road.pop("_line")
