@@ -9,7 +9,8 @@ const BOOST_LOSS = 0.8;      // et se perd vite dès qu'on tourne ou qu'on lâch
 const MAX_REVERSE = 8;
 const ACCELERATION = 10;
 const BRAKING = 22;
-const DRAG = 1.2;            // ralentissement naturel quand on lâche l'accélérateur
+const DRAG = 3.5;            // frein moteur quand on lâche l'accélérateur (m/s²)
+const DRAG_SPEED = 0.12;     // + une part proportionnelle à la vitesse (résistance de l'air)
 const WHEELBASE = 2.6;
 const MAX_STEER = 0.55;      // angle maximal des roues (radians)
 const HALF_WIDTH = 0.9;
@@ -76,7 +77,7 @@ export class Car {
       const opposing = this.speed !== 0 && Math.sign(this.speed) !== gas;
       this.speed += gas * (opposing ? BRAKING : ACCELERATION) * dt;
     } else {
-      this.speed -= Math.sign(this.speed) * Math.min(Math.abs(this.speed), DRAG * dt);
+      this.speed -= Math.sign(this.speed) * Math.min(Math.abs(this.speed), (DRAG + DRAG_SPEED * Math.abs(this.speed)) * dt);
     }
     // Élan : il monte peu à peu tant qu'on accélère tout droit, et retombe sinon.
     if (gas > 0 && steer === 0 && this.speed > MAX_SPEED * 0.8) this.boost = Math.min(1, this.boost + BOOST_BUILD * dt);

@@ -8,6 +8,7 @@ import * as THREE from 'three';
 export class MeshBuilder {
   private positions: number[] = [];
   private colors: number[] = [];
+  private uvs: number[] = [];
   private indices: number[] = [];
 
   get isEmpty(): boolean {
@@ -15,8 +16,9 @@ export class MeshBuilder {
   }
 
   /** Ajoute un sommet, renvoie son numéro. */
-  vertex(x: number, y: number, z: number, color: THREE.Color, shade = 1): number {
+  vertex(x: number, y: number, z: number, color: THREE.Color, shade = 1, u = 0, v = 0): number {
     this.positions.push(x, y, z);
+    this.uvs.push(u, v);
     this.colors.push(color.r * shade, color.g * shade, color.b * shade);
     return this.positions.length / 3 - 1;
   }
@@ -78,6 +80,7 @@ export class MeshBuilder {
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(this.positions, 3));
     geometry.setAttribute('color', new THREE.Float32BufferAttribute(this.colors, 3));
+    geometry.setAttribute('uv', new THREE.Float32BufferAttribute(this.uvs, 2));
     geometry.setIndex(this.indices);
     geometry.computeVertexNormals();
     return geometry;

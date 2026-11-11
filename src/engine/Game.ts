@@ -6,6 +6,7 @@ import { Car } from '../vehicles/Car';
 import { buildAnnabaWorld } from '../world/AnnabaWorld';
 import type { Collider } from '../world/Collider';
 import { loadWorldData, type WorldPlace } from '../world/WorldData';
+import { MapView } from '../ui/MapView';
 
 /** Part de la résolution de l'écran réellement calculée (style rétro + fluidité). */
 const RENDER_SCALE = 0.6;
@@ -29,6 +30,7 @@ export class Game {
   private collider: Collider | null = null;
   private places: WorldPlace[] = [];
   private cars: Car[] = [];
+  private map: MapView | null = null;
   /** Voiture conduite en ce moment (null = à pied). */
   private driving: Car | null = null;
   /** Ce qui bloque le personnage à pied : bâtiments et voitures. */
@@ -65,6 +67,7 @@ export class Game {
     window.removeEventListener('resize', this.resize);
     window.removeEventListener('keydown', this.onKeyDown);
     this.input.dispose();
+    this.map?.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();
   }
@@ -76,6 +79,7 @@ export class Game {
       if (this.disposed) return;
       this.collider = buildAnnabaWorld(this.scene, data);
       this.places = data.places;
+      this.map = new MapView(data);
       this.events.onPlaces(data.places);
       // Une voiture garée à chaque repère, pour en avoir toujours une sous la main.
       data.places.forEach((place, i) => {
@@ -143,6 +147,7 @@ export class Game {
     if (e.repeat) return;
     if (e.code.startsWith('Digit')) this.goToPlace(Number(e.code.slice(5)) - 1);
     if (e.code === 'KeyF') this.toggleCar();
+    if (e.code === 'KeyM') this.map?.toggle();
   };
 
   private frame = () => {
@@ -162,6 +167,8 @@ export class Game {
       this.player.update(dt, this.input, this.cameraRig.yaw, this.obstacles);
       this.cameraRig.update(this.input, this.player.object.position, this.collider, dt);
     }
+    const heading = this.driving ? this.driving.heading : this.player.object.rotation.y;
+    this.map?.update(this.player.object.position.x, this.player.object.position.z, heading);
     this.renderer.render(this.scene, this.camera);
   };
 

@@ -7,7 +7,7 @@ export function Hud({ status, places }: { status: string; places: WorldPlace[] }
       <div className="hud">
         <div className="hud-title">LIXITING</div>
         <div className="hud-help">
-          Clic : capturer la souris · Souris : caméra · W A S D : marcher · Maj : courir · Espace : sauter · F : monter en voiture / descendre · Échap : libérer la souris
+          Clic : capturer la souris · Souris : caméra · W A S D : marcher · Maj : courir · Espace : sauter · F : monter en voiture / descendre · M : carte · Échap : libérer la souris
           <br />
           {status}
         </div>

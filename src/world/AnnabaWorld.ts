@@ -12,6 +12,39 @@ const AREA_COLORS: Record<string, number> = {
 const WALL_COLORS = [0xf3ead8, 0xe9d3ae, 0xf5f1e6, 0xd9c7a3, 0xe6b98c, 0xcfd8dc, 0xf0dcc0, 0xdfe6d0];
 const ROOF_COLORS = [0xb9b2a3, 0xa9a394, 0xb55d3f, 0xc2bcae];
 
+const WINDOW_WIDTH = 3.2;  // un motif de fenêtre tous les 3,2 m de mur
+const FLOOR_HEIGHT = 3;    // et un étage tous les 3 m
+
+/**
+ * Texture de façade dessinée par code : un mur clair avec une fenêtre.
+ * Elle est répétée sur tous les murs et teintée par la couleur du bâtiment.
+ * Façades GÉNÉRIQUES : elles ne reproduisent pas encore les vraies façades.
+ */
+function createFacadeTexture(): THREE.CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 64;
+  const ctx = canvas.getContext('2d')!;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, 64, 64);
+  ctx.fillStyle = '#d9d9d9';           // ligne de dalle entre deux étages
+  ctx.fillRect(0, 60, 64, 4);
+  ctx.fillStyle = '#9aa0a6';           // encadrement
+  ctx.fillRect(18, 12, 28, 36);
+  ctx.fillStyle = '#35506a';           // vitre
+  ctx.fillRect(21, 15, 22, 30);
+  ctx.fillStyle = '#5f7f9c';           // reflet
+  ctx.fillRect(21, 15, 22, 9);
+  ctx.fillStyle = '#9aa0a6';           // montant central
+  ctx.fillRect(31, 15, 2, 30);
+  ctx.fillStyle = '#b8b8b8';           // appui de fenêtre
+  ctx.fillRect(15, 48, 34, 3);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.magFilter = THREE.NearestFilter; // gros pixels nets : le rendu rétro
+  return texture;
+}
+
 function layer(color: number, offset: number): THREE.MeshLambertMaterial {
   // polygonOffset : évite le scintillement entre surfaces posées l'une sur l'autre.
   return new THREE.MeshLambertMaterial({
@@ -77,11 +110,14 @@ export function buildAnnabaWorld(scene: THREE.Scene, data: WorldData): Collider 
   // Bâtiments : murs + toit plat, regroupés par blocs pour n'afficher que ceux en vue.
   const collider = new Collider();
   const chunks = new Map<string, MeshBuilder>();
+  const roofChunks = new Map<string, MeshBuilder>();
   data.buildings.forEach((building, index) => {
     const p = building.p;
     const key = `${Math.floor(p[0] / CHUNK)},${Math.floor(p[1] / CHUNK)}`;
     let builder = chunks.get(key);
     if (!builder) { builder = new MeshBuilder(); chunks.set(key, builder); }
+    let roofBuilder = roofChunks.get(key);
+    if (!roofBuilder) { roofBuilder = new MeshBuilder(); roofChunks.set(key, roofBuilder); }
 
     const wall = new THREE.Color(WALL_COLORS[index % WALL_COLORS.length]);
     const roof = new THREE.Color(ROOF_COLORS[(index * 7) % ROOF_COLORS.length]);
@@ -91,18 +127,23 @@ export function buildAnnabaWorld(scene: THREE.Scene, data: WorldData): Collider 
       const j = (i + 1) % count;
       const ax = p[i * 2], az = -p[i * 2 + 1], bx = p[j * 2], bz = -p[j * 2 + 1];
       // Bas du mur assombri : donne du relief sans calcul d'ombres.
-      const a = builder.vertex(ax, 0, az, wall, 0.7);
-      const b = builder.vertex(bx, 0, bz, wall, 0.7);
-      const c = builder.vertex(bx, h, bz, wall);
-      const d = builder.vertex(ax, h, az, wall);
+      // Nombre entier de fenêtres par mur et d'étages par bâtiment : pas de fenêtre coupée.
+      const u = Math.round(Math.hypot(bx - ax, bz - az) / WINDOW_WIDTH);
+      const v = Math.max(1, Math.round(h / FLOOR_HEIGHT));
+      const a = builder.vertex(ax, 0, az, wall, 0.7, 0, 0);
+      const b = builder.vertex(bx, 0, bz, wall, 0.7, u, 0);
+      const c = builder.vertex(bx, h, bz, wall, 1, u, v);
+      const d = builder.vertex(ax, h, az, wall, 1, 0, v);
       builder.triangle(a, b, c);
       builder.triangle(a, c, d);
     }
-    builder.flatPolygon(p, h, roof);
+    roofBuilder.flatPolygon(p, h, roof);
     collider.addBuilding(p);
   });
-  const buildingMaterial = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
-  for (const builder of chunks.values()) add(builder, buildingMaterial);
+  const wallMaterial = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, map: createFacadeTexture() });
+  const roofMaterial = new THREE.MeshLambertMaterial({ vertexColors: true });
+  for (const builder of chunks.values()) add(builder, wallMaterial);
+  for (const builder of roofChunks.values()) add(builder, roofMaterial);
 
   return collider;
 }
