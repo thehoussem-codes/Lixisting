@@ -3,6 +3,7 @@ import { Input } from './Input';
 import { Player } from '../player/Player';
 import { ThirdPersonCamera } from '../player/ThirdPersonCamera';
 import { Car } from '../vehicles/Car';
+import { CAR_CATALOG } from '../vehicles/CarModels';
 import { Traffic } from '../vehicles/Traffic';
 import { buildAnnabaWorld } from '../world/AnnabaWorld';
 import type { Collider } from '../world/Collider';
@@ -13,7 +14,6 @@ import { MapView } from '../ui/MapView';
 
 /** Part de la résolution de l'écran réellement calculée (style rétro + fluidité). */
 const RENDER_SCALE = 0.6;
-const CAR_COLORS = [0xf2f2f2, 0xc0392b, 0x2c3e50, 0xd4ac0d, 0x7f8c8d, 0x1e8449];
 const ENTER_DISTANCE = 4.5;
 
 export interface GameEvents {
@@ -104,7 +104,8 @@ export class Game {
       this.events.onPlaces(data.places);
       // Une voiture garée à chaque repère, pour en avoir toujours une sous la main.
       data.places.forEach((place, i) => {
-        const car = new Car(CAR_COLORS[i % CAR_COLORS.length]);
+        const spec = CAR_CATALOG[i % CAR_CATALOG.length];
+        const car = new Car(spec, spec.colors[i % spec.colors.length]);
         // Garée contre le trottoir, dans le sens de la rue (emplacement calculé avec la carte).
         car.place(place.cx, -place.cn, place.ch);
         this.cars.push(car);
@@ -114,6 +115,17 @@ export class Game {
       // Adresse du type ...?at=x,n : démarre à ce point de la carte (mètres depuis la gare, n = nord).
       const at = new URLSearchParams(window.location.search).get('at')?.split(',').map(Number);
       if (at && at.length === 2 && at.every(Number.isFinite)) this.player.teleport(at[0], this.ground(at[0], -at[1]), -at[1]);
+      // Adresse ...?salon=1 : expose tout le catalogue de voitures devant le joueur (pour les comparer).
+      if (new URLSearchParams(window.location.search).has('salon')) {
+        const me = this.player.object.position;
+        CAR_CATALOG.forEach((spec, i) => {
+          const car = new Car(spec, spec.colors[0]);
+          const column = i % 5, row = Math.floor(i / 5);
+          car.place(me.x + (column - 2) * 3.4, me.z + 7 + row * 6.5, Math.PI + (row === 0 ? 0.6 : -2.4));
+          this.cars.push(car);
+          this.scene.add(car.object);
+        });
+      }
       const estimated = Math.round((100 * data.meta.buildings_height_estimated) / data.meta.buildings);
       this.events.onStatus(`${data.meta.buildings} bâtiments (hauteurs estimées : ${estimated} %) · ${data.meta.roads} tronçons de voies · ${treeCount} arbres · relief réel à 30 m`);
     } catch (error) {

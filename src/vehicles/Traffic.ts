@@ -1,5 +1,6 @@
 import type { WorldData } from '../world/WorldData';
 import { Car } from './Car';
+import { pickCar } from './CarModels';
 
 const COUNT = 24;            // voitures en circulation autour du joueur
 const CELL = 200;            // taille des cases servant à trouver des rues proches (m)
@@ -7,7 +8,6 @@ const SPAWN_MIN = 110;       // elles apparaissent assez loin pour ne pas surgir
 const DESPAWN = 480;
 const LANE_OFFSET = 1.7;     // on roule à droite de l'axe de la rue
 const PROBES = [3, 5, 7, 9]; // distances (m) devant le capot où l'on regarde si la voie est libre
-const COLORS = [0xf2f2f2, 0xd9d9d9, 0x9aa0a6, 0x2c3e50, 0x1b1b1b, 0xb03a2e, 0x1f618d, 0xd4ac0d, 0x7d6608, 0x196f3d];
 
 interface Edge { to: number; fast: boolean }
 interface Driver {
@@ -115,7 +115,8 @@ export class Traffic {
     const everyCar = [...others, ...this.cars];
     // On complète peu à peu l'effectif (une tentative par image, pour ne pas ralentir le jeu).
     if (this.drivers.length < COUNT) {
-      const car = new Car(COLORS[Math.floor(this.random() * COLORS.length)]);
+      const choice = pickCar(() => this.random());
+      const car = new Car(choice.spec, choice.color);
       const driver: Driver = { car, from: 0, to: 0, travelled: 0, length: 1, cruise: 8, lane: LANE_OFFSET, waiting: 0, passing: 0 };
       if (this.respawn(driver, px, pz, everyCar)) {
         this.drivers.push(driver);

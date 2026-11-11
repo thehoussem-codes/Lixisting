@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { Input } from '../engine/Input';
 import type { Collider } from '../world/Collider';
+import { createCarVisual, type CarSpec } from './CarModels';
 
 const MAX_SPEED = 32;        // m/s, environ 115 km/h
 const BOOST_SPEED = 14;      // bonus en ligne droite : jusqu'à environ 165 km/h
@@ -11,43 +12,30 @@ const ACCELERATION = 10;
 const BRAKING = 22;
 const DRAG = 5.5;            // frein moteur quand on lâche l'accélérateur (m/s²)
 const DRAG_SPEED = 0.18;     // + une part proportionnelle à la vitesse (résistance de l'air)
-const WHEELBASE = 2.6;
 const MAX_STEER = 0.55;      // angle maximal des roues (radians)
-const HALF_WIDTH = 0.9;
-const HALF_LENGTH = 2.1;
 
-/** Voiture provisoire en blocs, à conduite "arcade" (pas de simulation physique complète). */
+/** Une voiture du jeu, à conduite "arcade" (pas de simulation physique complète). Son apparence vient du catalogue. */
 export class Car {
-  readonly object = new THREE.Group();
+  readonly object: THREE.Group;
   /** Direction du capot (radians). L'avant de la voiture est du côté +Z. */
   heading = 0;
   speed = 0;
   /** 0 à 1 : élan accumulé en roulant droit, qui relève la vitesse maximale. */
   private boost = 0;
+  private wheels: THREE.Object3D[];
+  private halfLength: number;
+  private halfWidth: number;
+  private wheelbase: number;
+  private lastSettle = 0;
 
-  constructor(color: number) {
-    const paint = new THREE.MeshLambertMaterial({ color });
-    const body = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.6, 4.2), paint);
-    body.position.y = 0.62;
-    const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.55, 2.1), new THREE.MeshLambertMaterial({ color: 0x26323c }));
-    cabin.position.set(0, 1.18, -0.25);
-    const roof = new THREE.Mesh(new THREE.BoxGeometry(1.62, 0.06, 2.0), paint);
-    roof.position.set(0, 1.48, -0.25);
-    const lights = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.14, 0.05), new THREE.MeshBasicMaterial({ color: 0xfff3c4 }));
-    lights.position.set(0, 0.7, 2.11);
-    const rear = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.14, 0.05), new THREE.MeshBasicMaterial({ color: 0xc81e1e }));
-    rear.position.set(0, 0.7, -2.11);
-    this.object.add(body, cabin, roof, lights, rear);
+  constructor(readonly spec: CarSpec, color: number) {
+    const visual = createCarVisual(spec, color);
+    this.object = visual.group;
+    this.wheels = visual.wheels;
     this.object.rotation.order = 'YXZ'; // d'abord la direction, puis l'inclinaison sur la pente
-
-    const wheelGeometry = new THREE.CylinderGeometry(0.34, 0.34, 0.25, 10);
-    wheelGeometry.rotateZ(Math.PI / 2);
-    const tyre = new THREE.MeshLambertMaterial({ color: 0x1a1a1a });
-    for (const [x, z] of [[0.9, 1.35], [-0.9, 1.35], [0.9, -1.35], [-0.9, -1.35]]) {
-      const wheel = new THREE.Mesh(wheelGeometry, tyre);
-      wheel.position.set(x, 0.34, z);
-      this.object.add(wheel);
-    }
+    this.halfLength = spec.length / 2;
+    this.halfWidth = spec.width / 2;
+    this.wheelbase = (spec.axleFront - spec.axleRear) * spec.length;
   }
 
   place(x: number, z: number, heading = this.heading): void {
@@ -63,11 +51,16 @@ export class Car {
     const { x, z } = this.object.position;
     const fx = Math.sin(this.heading), fz = Math.cos(this.heading);
     const lx = fz, lz = -fx; // vecteur "à gauche" de la voiture
-    const front = ground(x + fx * HALF_LENGTH, z + fz * HALF_LENGTH), back = ground(x - fx * HALF_LENGTH, z - fz * HALF_LENGTH);
-    const left = ground(x + lx * HALF_WIDTH, z + lz * HALF_WIDTH), right = ground(x - lx * HALF_WIDTH, z - lz * HALF_WIDTH);
+    const front = ground(x + fx * this.halfLength, z + fz * this.halfLength), back = ground(x - fx * this.halfLength, z - fz * this.halfLength);
+    const left = ground(x + lx * this.halfWidth, z + lz * this.halfWidth), right = ground(x - lx * this.halfWidth, z - lz * this.halfWidth);
     this.object.position.y = (front + back + left + right) / 4;
-    this.object.rotation.x = -Math.atan2(front - back, HALF_LENGTH * 2);
-    this.object.rotation.z = Math.atan2(left - right, HALF_WIDTH * 2);
+    this.object.rotation.x = -Math.atan2(front - back, this.halfLength * 2);
+    this.object.rotation.z = Math.atan2(left - right, this.halfWidth * 2);
+    // Les roues tournent selon la vitesse.
+    const now = performance.now();
+    const dt = Math.min(0.05, (now - this.lastSettle) / 1000);
+    this.lastSettle = now;
+    for (const wheel of this.wheels) wheel.rotation.x += (this.speed * dt) / this.spec.wheelRadius;
   }
 
   /** Place directement la voiture (utilisé par la circulation automatique). */
@@ -88,8 +81,8 @@ export class Car {
     const a = [Math.sin(heading), Math.cos(heading)], b = [Math.sin(other.heading), Math.cos(other.heading)];
     // Les 4 axes à tester : avant et côté de chaque voiture.
     for (const [ux, uz] of [[a[0], a[1]], [-a[1], a[0]], [b[0], b[1]], [-b[1], b[0]]]) {
-      const reach = (f: number[]) => HALF_LENGTH * Math.abs(f[0] * ux + f[1] * uz) + HALF_WIDTH * Math.abs(-f[1] * ux + f[0] * uz);
-      if (Math.abs(dx * ux + dz * uz) > reach(a) + reach(b)) return false;
+      const reach = (car: Car, f: number[]) => car.halfLength * Math.abs(f[0] * ux + f[1] * uz) + car.halfWidth * Math.abs(-f[1] * ux + f[0] * uz);
+      if (Math.abs(dx * ux + dz * uz) > reach(this, a) + reach(other, b)) return false;
     }
     return true;
   }
@@ -98,7 +91,7 @@ export class Car {
   contains(x: number, z: number, margin = 0): boolean {
     const dx = x - this.object.position.x, dz = z - this.object.position.z;
     const sin = Math.sin(this.heading), cos = Math.cos(this.heading);
-    return Math.abs(dx * sin + dz * cos) < HALF_LENGTH + margin && Math.abs(-dx * cos + dz * sin) < HALF_WIDTH + margin;
+    return Math.abs(dx * sin + dz * cos) < this.halfLength + margin && Math.abs(-dx * cos + dz * sin) < this.halfWidth + margin;
   }
 
   /** Conduite : W accélère, S freine puis recule, A/D tournent, Espace = frein à main. */
@@ -136,7 +129,7 @@ export class Car {
   private move(dt: number, steer: number, collider: Collider | null, others: Car[]): void {
     // Plus on roule vite, moins les roues braquent (sinon la voiture est incontrôlable).
     const steerAngle = steer * MAX_STEER / (1 + Math.abs(this.speed) / 12);
-    const heading = this.heading - (this.speed / WHEELBASE) * Math.tan(steerAngle) * dt;
+    const heading = this.heading - (this.speed / this.wheelbase) * Math.tan(steerAngle) * dt;
     const fx = Math.sin(heading), fz = Math.cos(heading);
     const position = this.object.position;
     const x = position.x + fx * this.speed * dt;
@@ -168,8 +161,8 @@ export class Car {
 
   private hits(collider: Collider, x: number, z: number, fx: number, fz: number): boolean {
     const rx = -fz, rz = fx; // vecteur "à droite" de la voiture
-    for (const l of [HALF_LENGTH, 0, -HALF_LENGTH]) {
-      for (const w of [HALF_WIDTH, -HALF_WIDTH]) {
+    for (const l of [this.halfLength, 0, -this.halfLength]) {
+      for (const w of [this.halfWidth, -this.halfWidth]) {
         if (collider.inside(x + fx * l + rx * w, z + fz * l + rz * w)) return true;
       }
     }
