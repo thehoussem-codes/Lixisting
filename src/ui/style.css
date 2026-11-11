@@ -20,7 +20,14 @@ html, body, #root { margin: 0; height: 100%; overflow: hidden; background: #000;
   position: fixed; left: 16px; top: 16px; width: 180px; height: 180px;
   border: 3px solid #fff; border-radius: 6px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5); cursor: pointer;
 }
-.fullmap { position: fixed; inset: 0; width: 100%; height: 100%; display: none; cursor: pointer; }
+.fullmap { position: fixed; inset: 0; width: 100%; height: 100%; display: none; cursor: grab; z-index: 20; }
+.fullmap:active { cursor: grabbing; }
+.map-buttons { position: fixed; right: 16px; top: 16px; display: none; z-index: 21; }
+.map-buttons button {
+  display: block; width: 40px; height: 40px; margin-bottom: 6px; border: 2px solid #fff; border-radius: 6px;
+  background: rgba(20, 30, 40, 0.85); color: #fff; font-size: 20px; font-weight: bold; cursor: pointer;
+}
+.map-buttons button:hover { background: #2f6f9f; }
 
 .hud-places { font-size: 12px; }
 .hud-zone { left: auto; right: 16px; bottom: 36px; text-align: right; }

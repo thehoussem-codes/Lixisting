@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { Collider } from './Collider';
 import { MeshBuilder } from './MeshBuilder';
-import { FACADE_WIDTH, createFacadeTexture, type FacadeStyle } from './Textures';
+import { FACADE_WIDTH, createClockTexture, createFacadeTexture, createRailTexture, type FacadeStyle } from './Textures';
 import type { WorldData } from './WorldData';
 
 const CHUNK = 400;        // regroupement par blocs de 400 m
@@ -20,6 +20,8 @@ const LOOK: Record<string, { style: FacadeStyle; walls: number[]; roofs: number[
   public: { style: 'public', walls: [0xf2ead6, 0xefe2c4, 0xf7f2e6], roofs: [0xb0a898, 0xa9523a] },
   industrial: { style: 'industrial', walls: [0xb9c0c4, 0xa7b2b8, 0xc8c2b4, 0x9fb0c0], roofs: [0x8f989c, 0x9aa3a6] },
   mosque: { style: 'mosque', walls: [0xfbfaf4], roofs: [0xdedbd0] },
+  colonial: { style: 'colonial', walls: [0xfbf8ef, 0xf6f1e2, 0xfaf5e6, 0xf3efe6], roofs: [0xb9b2a3, 0xa9523a, 0xc2bcae] },
+  station: { style: 'station', walls: [0xf3ead6], roofs: [0xc9bfa8] },
 };
 const DOME = new THREE.Color(0x2f8a5b);
 const MINARET = new THREE.Color(0xf7f5ee);
@@ -29,6 +31,20 @@ function wallQuad(b: MeshBuilder, ax: number, az: number, bx: number, bz: number
   const a = b.vertex(ax, y0, az, color, shade0, 0, v0), c = b.vertex(bx, y0, bz, color, shade0, u, v0);
   const d = b.vertex(bx, y1, bz, color, shade1, u, v1), e = b.vertex(ax, y1, az, color, shade1, 0, v1);
   b.triangle(a, c, d); b.triangle(a, d, e);
+}
+
+const SLAB = new THREE.Color(0xd9d4c6), WHITE = new THREE.Color(0xffffff);
+type Point = [number, number, number];
+function roofPoint(x: number, y: number, z: number): Point { return [x, y, z]; }
+
+/** Dalle de balcon : dessus, dessous et chant, à partir de ses quatre coins. */
+function slab(b: MeshBuilder, a: Point, c: Point, d: Point, e: Point, thickness: number, color: THREE.Color): void {
+  for (const dy of [0, -thickness]) {
+    const v = [a, c, d, e].map(([x, y, z]) => b.vertex(x, y + dy, z, color, dy === 0 ? 1 : 0.7));
+    b.triangle(v[0], v[1], v[2]); b.triangle(v[0], v[2], v[3]);
+  }
+  const front = [b.vertex(e[0], e[1], e[2], color, 0.85), b.vertex(d[0], d[1], d[2], color, 0.85), b.vertex(d[0], d[1] - thickness, d[2], color, 0.8), b.vertex(e[0], e[1] - thickness, e[2], color, 0.8)];
+  b.triangle(front[0], front[1], front[2]); b.triangle(front[0], front[2], front[3]);
 }
 
 /** Boîte carrée verticale (minaret, lanterneau...). */
@@ -102,7 +118,8 @@ export function buildBuildings(scene: THREE.Scene, data: WorldData, ground: (x: 
     }
     const top = base + building.h;
     // Rez-de-chaussée distinct pour les immeubles : commerces le long des grandes rues, entrées ailleurs.
-    const tall = building.t === 'apartment' || building.t === 'tower' || building.t === 'hotel';
+    const colonial = building.t === 'colonial';
+    const tall = building.t === 'apartment' || building.t === 'tower' || building.t === 'hotel' || colonial;
     const hasGround = tall && building.h > 7;
     const shopWalls = new Set(building.s ?? []);
     const upperFrom = hasGround ? base + GROUND_FLOOR : base;
@@ -117,9 +134,23 @@ export function buildBuildings(scene: THREE.Scene, data: WorldData, ground: (x: 
       wallQuad(upper, ax, az, bx, bz, low - 1, base, wall, 0.6, 0.7, 0, 0, 0);
       if (hasGround) {
         // Commerces seulement sur les murs qui donnent sur une grande rue ; entrées ailleurs.
-        const groundStyle: FacadeStyle = shopWalls.has(i) ? 'shop' : 'ground';
+        const groundStyle: FacadeStyle = colonial ? (shopWalls.has(i) ? 'arcade' : 'ground') : shopWalls.has(i) ? 'shop' : 'ground';
         const u = Math.max(1, Math.round(length / FACADE_WIDTH[groundStyle]));
         wallQuad(builderIn(walls, `${groundStyle}|${cell}`), ax, az, bx, bz, base, upperFrom, wall, 0.8, 0.9, u, 0, 1);
+      }
+      // Centre colonial : balcons filants en saillie, avec garde-corps en fer forgé, au 1er et au 3e étage.
+      if (colonial && length > 4) {
+        const ox = -(bz - az) / length, oz = (bx - ax) / length; // vers l'extérieur du bâtiment
+        const rails = builderIn(walls, `rail|${cell}`);
+        for (const floor of [1, 3]) {
+          const y = upperFrom + (floor - 1) * FLOOR_HEIGHT;
+          if (y + 1.2 > top) continue;
+          const DEPTH = 0.7;
+          const a0 = roofPoint(ax, y, az), b0 = roofPoint(bx, y, bz);
+          const a1 = roofPoint(ax + ox * DEPTH, y, az + oz * DEPTH), b1 = roofPoint(bx + ox * DEPTH, y, bz + oz * DEPTH);
+          slab(builderIn(roofs, cell), a0, b0, b1, a1, 0.16, SLAB);
+          wallQuad(rails, a1[0], a1[2], b1[0], b1[2], y, y + 1.0, WHITE, 1, 1, Math.max(1, Math.round(length / 1.1)), 0, 1);
+        }
       }
       // Nombre entier de travées et d'étages : pas de fenêtre coupée.
       wallQuad(upper, ax, az, bx, bz, upperFrom, top, wall, hasGround ? 0.92 : 0.75, 1, Math.round(length / FACADE_WIDTH[look.style]), 0, floors);
@@ -136,6 +167,27 @@ export function buildBuildings(scene: THREE.Scene, data: WorldData, ground: (x: 
     } else {
       // Toit plat ; les murs dépassent pour former l'acrotère.
       roof.flatPolygon(p, building.t === 'industrial' ? top : top - PARAPET, roofColor);
+    }
+
+    if (building.t === 'station') {
+      // Tour-horloge de la gare, à l'angle le plus au nord du bâtiment (emplacement exact à confirmer).
+      let tx = cx, tz = cz, north = Infinity;
+      for (let i = 0; i < count; i++) if (-p[i * 2 + 1] < north) { north = -p[i * 2 + 1]; tx = p[i * 2]; tz = -p[i * 2 + 1]; }
+      tx += (cx - tx) * 0.12; tz += (cz - tz) * 0.12;
+      const stone = new THREE.Color(0xe9dcc0), cap = new THREE.Color(0xd9c9a6);
+      box(roof, tx, tz, 2.6, low - 1, base + 25, stone);
+      box(roof, tx, tz, 2.9, base + 25, base + 25.6, cap);
+      box(roof, tx, tz, 2.0, base + 25.6, base + 29, stone);
+      box(roof, tx, tz, 1.3, base + 29, base + 32, stone);
+      box(roof, tx, tz, 0.5, base + 32, base + 36, cap);
+      // Quatre cadrans, un par face.
+      const clock = new THREE.MeshBasicMaterial({ map: createClockTexture(), transparent: true });
+      for (let k = 0; k < 4; k++) {
+        const a = (k * Math.PI) / 2, face = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 3.6), clock);
+        face.position.set(tx + Math.sin(a) * 2.63, base + 21.5, tz + Math.cos(a) * 2.63);
+        face.rotation.y = a;
+        scene.add(face);
+      }
     }
 
     if (building.t === 'mosque') {
@@ -159,6 +211,11 @@ export function buildBuildings(scene: THREE.Scene, data: WorldData, ground: (x: 
   for (const [key, builder] of walls) {
     const style = key.split('|')[0] as FacadeStyle;
     let material = materials.get(style);
+    if (!material && key.startsWith('rail|')) {
+      // Garde-corps : texture à trous (on voit à travers les barreaux).
+      material = new THREE.MeshLambertMaterial({ map: createRailTexture(), alphaTest: 0.5, side: THREE.DoubleSide });
+      materials.set(style, material);
+    }
     if (!material) {
       material = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, map: createFacadeTexture(style) });
       materials.set(style, material);

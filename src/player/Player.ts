@@ -90,9 +90,47 @@ export class Player {
       }
       for (const block of this.blocks) block.visible = false;
       this.object.add(model);
+      this.dress(model);
       this.play('idle', 0);
     } catch (error) {
       console.warn('Personnage 3D non chargé, personnage en blocs conservé.', error);
+    }
+  }
+
+  /**
+   * Habille le mannequin : vêtements noirs, tête et mains couleur de peau, cheveux.
+   * Chaque point du modèle est coloré selon l'os qui le fait bouger (tête, cou, mains = peau).
+   */
+  private dress(model: THREE.Object3D): void {
+    const CLOTHES = new THREE.Color(0x18181c), SKIN = new THREE.Color(0xc98f68);
+    let head: THREE.Object3D | null = null;
+    model.traverse((child) => {
+      if (/Head$/i.test(child.name) && (child as THREE.Bone).isBone) head = child;
+      const mesh = child as THREE.SkinnedMesh;
+      if (!mesh.isSkinnedMesh) return;
+      const index = mesh.geometry.getAttribute('skinIndex'), weight = mesh.geometry.getAttribute('skinWeight');
+      const colors = new Float32Array(index.count * 3);
+      for (let i = 0; i < index.count; i++) {
+        // Os dominant de ce point.
+        let best = 0;
+        for (let k = 1; k < 4; k++) if (weight.getComponent(i, k) > weight.getComponent(i, best)) best = k;
+        const bone = mesh.skeleton.bones[index.getComponent(i, best)]?.name ?? '';
+        const color = /Head|Neck|Hand/i.test(bone) ? SKIN : CLOTHES;
+        colors[i * 3] = color.r; colors[i * 3 + 1] = color.g; colors[i * 3 + 2] = color.b;
+      }
+      mesh.geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+      mesh.material = new THREE.MeshLambertMaterial({ vertexColors: true });
+    });
+    // Cheveux : une calotte sombre fixée à l'os de la tête (elle suit donc tous les mouvements).
+    const bone = head as THREE.Object3D | null;
+    if (bone) {
+      this.object.updateWorldMatrix(true, true);
+      const top = bone.getWorldPosition(new THREE.Vector3());
+      const hair = new THREE.Mesh(new THREE.SphereGeometry(0.118, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.52), new THREE.MeshLambertMaterial({ color: 0x120d0a }));
+      hair.position.set(top.x, top.y + 0.105, top.z - 0.012);
+      hair.frustumCulled = false;
+      this.object.add(hair);
+      bone.attach(hair);
     }
   }
 

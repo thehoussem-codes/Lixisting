@@ -212,6 +212,10 @@ def build_trees(world, grid=None, grid_origin=None):
             continue
         per_tree, mix = mixes[area["k"]]
         ring = pairs(area["p"])
+        # Le Cours de la Révolution : une voûte continue de ficus, quelques palmiers (d'après les photos).
+        hall = world["meta"].get("town_hall")
+        if area["k"] == "grass" and hall and np.hypot(*(ring.mean(axis=0) - np.array(hall))) < 550:
+            per_tree, mix = 55, [("ficus", 0.88), ("palm", 0.12)]
         lo, hi = ring.min(axis=0), ring.max(axis=0)
         count = int((hi[0] - lo[0]) * (hi[1] - lo[1]) / per_tree)
         if count == 0:

@@ -240,7 +240,7 @@ def point_in_polygon(x, y, polygon):
 # Usage d'un bâtiment d'après ses étiquettes OSM (building=..., amenity=...).
 KIND_BY_BUILDING = {
     "mosque": "mosque", "school": "school", "university": "school", "college": "school",
-    "hospital": "hospital", "public": "public", "civic": "public", "train_station": "public",
+    "hospital": "hospital", "public": "public", "civic": "public", "train_station": "station",
     "industrial": "industrial", "warehouse": "industrial", "storage_tank": "industrial", "greenhouse": "industrial",
     "hotel": "hotel", "house": "house", "terrace": "house", "apartments": "apartment", "retail": "apartment",
 }
@@ -251,7 +251,10 @@ KIND_BY_AMENITY = {
     "community_centre": "public", "arts_centre": "public",
 }
 # Hauteur (m) retenue pour ces usages quand OSM ne donne pas le nombre d'étages.
-DEFAULT_HEIGHT = {"mosque": 9, "school": 10, "hospital": 14, "public": 13, "industrial": 8, "hotel": 22}
+DEFAULT_HEIGHT = {"mosque": 9, "school": 10, "hospital": 14, "public": 13, "industrial": 8, "hotel": 22, "station": 12}
+# Centre colonial : immeubles haussmanniens (pierre blanche, balcons filants en fer forgé, arcades),
+# d'après les photos du Cours de la Révolution. Zone = rayon autour de la mairie, qui donne sur le Cours.
+COLONIAL_RADIUS = 430
 
 
 def building_height(tags, footprint_area, way_id):
@@ -412,6 +415,10 @@ def main():
                 out.append(i)
         return out
 
+    mairie = next((e for e in elements if e.get("tags", {}).get("name") == "Mairie d'Annaba"), None)
+    if mairie is not None:
+        q = pts(mairie) if mairie["type"] == "way" else [xy[mairie["id"]]]
+        mairie = (sum(v[0] for v in q) / len(q), sum(v[1] for v in q) / len(q))
     buildings, estimated, kinds = [], 0, {}
     for w in ways:
         tags = w.get("tags", {})
@@ -449,12 +456,16 @@ def main():
                 kind = "house"
             else:
                 kind = "apartment"
+        if kind == "apartment" and mairie and math.hypot(cx - mairie[0], cy - mairie[1]) < COLONIAL_RADIUS:
+            kind = "colonial"
+            if is_estimated:
+                height = 16 + (w["id"] % 3) * 3   # 5 à 7 niveaux, comme sur les photos
         estimated += is_estimated
         kinds[kind] = kinds.get(kind, 0) + 1
         item = {"h": round(height, 1), "t": kind, "p": flat(p)}
         if sure:
             item["c"] = 1  # usage certain (étiqueté dans OSM), et non déduit de la taille
-        if kind == "apartment" and w["id"] % 2 == 0:
+        if kind == "colonial" or (kind == "apartment" and w["id"] % 2 == 0):
             walls = shop_walls(p)
             if walls:
                 item["s"] = walls  # murs à commerces : hypothèse (un immeuble sur deux, côté grande rue)
@@ -584,6 +595,7 @@ def main():
             "buildings": len(buildings),
             "buildings_height_estimated": estimated,
             "buildings_by_kind": kinds,
+            "town_hall": [round(mairie[0], 1), round(mairie[1], 1)] if mairie else None,
             "roads": len(roads),
             "roads_narrowed_to_fit_buildings": narrowed,
             "junctions": len(junctions) // 4, "roundabouts": len(roundabouts) // 3, "traffic_signals": len(signals) // 3,

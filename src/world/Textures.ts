@@ -22,11 +22,12 @@ function canvas(width: number, height: number): [HTMLCanvasElement, CanvasRender
   return [element, ctx];
 }
 
-export type FacadeStyle = 'apartment' | 'house' | 'tower' | 'school' | 'public' | 'industrial' | 'mosque' | 'shop' | 'ground';
+export type FacadeStyle = 'apartment' | 'house' | 'tower' | 'school' | 'public' | 'industrial' | 'mosque' | 'shop' | 'ground' | 'colonial' | 'arcade' | 'station';
 
 /** Largeur réelle (m) couverte par un motif : 4 travées pour les rez-de-chaussée, 1 sinon. */
 export const FACADE_WIDTH: Record<FacadeStyle, number> = {
   apartment: 3.2, house: 3.2, tower: 3.2, school: 4, public: 3.2, industrial: 3, mosque: 4, shop: 12.8, ground: 12.8,
+  colonial: 3, arcade: 3.4, station: 5,
 };
 
 export function createFacadeTexture(style: FacadeStyle): THREE.CanvasTexture {
@@ -75,6 +76,34 @@ export function createFacadeTexture(style: FacadeStyle): THREE.CanvasTexture {
       ctx.beginPath(); ctx.arc(32, 25, 6, Math.PI, 0); ctx.fill(); ctx.fillRect(26, 25, 12, 21);
       break;
     }
+    case 'colonial': // immeuble haussmannien du Cours : haute fenêtre à encadrement doré, persiennes, corniche
+      rect('#e9c66a', 0, 0, 64, 3); rect('#f4f0e4', 0, 3, 64, 2);                 // corniche dorée entre étages
+      rect('#e3bd55', 19, 9, 26, 3); rect('#e3bd55', 19, 9, 2, 46); rect('#e3bd55', 43, 9, 2, 46); // encadrement
+      rect('#dfe3e6', 21, 12, 22, 43);                                           // menuiserie claire
+      rect('#3a4f60', 23, 14, 8, 39); rect('#3a4f60', 33, 14, 8, 39);            // vitres
+      rect('#6f8798', 23, 14, 8, 8); rect('#6f8798', 33, 14, 8, 8);
+      rect('#e3bd55', 28, 4, 8, 5);                                              // clef sculptée au-dessus de la baie
+      rect('#d9d4c6', 0, 58, 64, 6);                                             // nez de dalle du balcon
+      break;
+    case 'arcade': // rez-de-chaussée à arcades : piliers de pierre, baies sombres en retrait
+      rect('#d9d2c0', 0, 0, 64, 7); rect('#c2baa6', 0, 7, 64, 2);
+      rect('#1f2529', 12, 14, 40, 50);
+      ctx.fillStyle = '#1f2529'; ctx.beginPath(); ctx.arc(32, 16, 20, Math.PI, 0); ctx.fill();
+      rect('#34424c', 16, 30, 32, 34); rect('#56493a', 20, 36, 10, 28); rect('#2f6f9f', 16, 26, 32, 5);
+      rect('#cfc7b3', 0, 9, 12, 55); rect('#cfc7b3', 52, 9, 12, 55);             // piliers
+      rect('#b8b09c', 0, 56, 12, 8); rect('#b8b09c', 52, 56, 12, 8);
+      break;
+    case 'station': { // gare : grande baie en arc à claustra blanc et vert
+      rect('#efe6d2', 0, 0, 64, 64);
+      ctx.fillStyle = '#f7f5ee'; ctx.beginPath(); ctx.arc(32, 26, 21, Math.PI, 0); ctx.fill(); ctx.fillRect(11, 26, 42, 34);
+      ctx.fillStyle = '#5c9a7a'; ctx.beginPath(); ctx.arc(32, 26, 18, Math.PI, 0); ctx.fill(); ctx.fillRect(14, 26, 36, 34);
+      ctx.fillStyle = '#f7f5ee';
+      for (let y = 10; y < 60; y += 5) ctx.fillRect(14, y, 36, 1);
+      for (let x = 16; x < 50; x += 5) ctx.fillRect(x, 8, 1, 52);
+      ctx.fillStyle = '#26333a'; ctx.fillRect(22, 34, 20, 26); ctx.fillStyle = '#f7f5ee'; ctx.fillRect(31, 34, 2, 26);
+      rect('#d8cdb4', 0, 60, 64, 4);
+      break;
+    }
     case 'shop': // 4 travées : vitrine avec enseigne, entrée d'immeuble, rideau baissé, vitrine à store
       rect('#e6e2d8', 0, 0, 256, 5);
       rect('#2f6f9f', 6, 8, 52, 9); rect('#e9eef2', 12, 11, 40, 3);
@@ -96,6 +125,35 @@ export function createFacadeTexture(style: FacadeStyle): THREE.CanvasTexture {
       rect('#cfc8b8', 0, 58, 256, 6);
       break;
   }
+  return finish(element);
+}
+
+/** Garde-corps en fer forgé : barreaux noirs sur fond transparent. */
+export function createRailTexture(): THREE.CanvasTexture {
+  const element = document.createElement('canvas');
+  element.width = 32; element.height = 32;
+  const ctx = element.getContext('2d')!;
+  ctx.fillStyle = '#1c1c1e';
+  ctx.fillRect(0, 0, 32, 3); ctx.fillRect(0, 27, 32, 3);
+  for (let x = 2; x < 32; x += 6) ctx.fillRect(x, 0, 2, 30);
+  ctx.beginPath(); ctx.strokeStyle = '#1c1c1e'; ctx.lineWidth = 1.5;
+  for (let x = 0; x < 32; x += 12) { ctx.moveTo(x, 20); ctx.quadraticCurveTo(x + 6, 6, x + 12, 20); }
+  ctx.stroke();
+  return finish(element);
+}
+
+/** Cadran d'horloge (tour de la gare). */
+export function createClockTexture(): THREE.CanvasTexture {
+  const element = document.createElement('canvas');
+  element.width = element.height = 64;
+  const ctx = element.getContext('2d')!;
+  ctx.fillStyle = '#2a2a2a'; ctx.beginPath(); ctx.arc(32, 32, 31, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#f4efe0'; ctx.beginPath(); ctx.arc(32, 32, 27, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#222';
+  for (let i = 0; i < 12; i++) { const a = (i / 12) * Math.PI * 2; ctx.fillRect(31 + Math.sin(a) * 23, 31 - Math.cos(a) * 23, 2, 2); }
+  ctx.strokeStyle = '#222'; ctx.lineCap = 'round';
+  ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(32, 32); ctx.lineTo(32 - 9, 32 - 9); ctx.stroke();   // 10 h
+  ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(32, 32); ctx.lineTo(32 + 14, 32 - 12); ctx.stroke();  // 10
   return finish(element);
 }
 
