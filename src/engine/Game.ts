@@ -25,7 +25,7 @@ export interface GameEvents {
   onStatus(text: string): void;
   onPlaces(places: WorldPlace[]): void;
   /** Quartier le plus proche et vitesse (km/h, null à pied), quelques fois par seconde. */
-  onHud(zone: string, speed: number | null): void;
+  onHud(zone: string, speed: number | null, fps: number): void;
 }
 
 /** Le moteur : crée la scène, fait tourner la boucle de jeu, nettoie à la fin. */
@@ -71,6 +71,8 @@ export class Game {
     window.addEventListener('keydown', this.onKeyDown);
     this.resize();
     void this.loadWorld();
+    // Vérifications automatiques : monter dans la voiture la plus proche, quelle que soit la distance.
+    (window as unknown as Record<string, unknown>).lixitingDrive = () => { this.toggleCar(Infinity); };
     // Petit accès de diagnostic, utilisé par les vérifications automatiques.
     (window as unknown as Record<string, unknown>).lixitingDebug = () => ({
       traffic: this.traffic?.cars.filter((c) => c.object.visible).length ?? 0,
@@ -187,7 +189,7 @@ export class Game {
   }
 
   /** Touche F : monter dans la voiture la plus proche, ou en descendre. */
-  private toggleCar(): void {
+  private toggleCar(reach = ENTER_DISTANCE): void {
     const position = this.player.object.position;
     if (this.driving) {
       const car = this.driving;
@@ -205,7 +207,7 @@ export class Game {
       return;
     }
     let nearest: Car | null = null;
-    let best = ENTER_DISTANCE;
+    let best = reach;
     for (const car of this.allCars()) {
       const d = car.object.position.distanceTo(position);
       if (d < best) { best = d; nearest = car; }
@@ -261,7 +263,7 @@ export class Game {
     this.hudTimer -= dt;
     if (this.hudTimer <= 0) {
       this.hudTimer = 0.25;
-      this.events.onHud(this.nearestPlace(), this.driving ? Math.abs(this.driving.speed) * 3.6 : null);
+      this.events.onHud(this.nearestPlace(), this.driving ? Math.abs(this.driving.speed) * 3.6 : null, Math.round(1 / this.frameTime));
     }
     this.renderer.render(this.scene, this.camera);
   };

@@ -37,3 +37,11 @@
 - 2026-11-11 : bâtiments différenciés par usage (maison à toit de tuiles, immeuble, tour, mosquée à coupole et minaret, école, hôpital, bâtiment public, entrepôt) ; 338 usages certains d'après OSM, les autres déduits de la taille ; commerces en rez-de-chaussée le long des grandes rues (hypothèse) ; bordures rouge et blanc (hypothèse de style) ; lampadaires génériques ; adresse ?at=x,n pour démarrer à un point précis.
 - 2026-11-11 : corrections : collisions exactes entre voitures (rectangles orientés) ; circulation qui contourne un obstacle immobile au lieu de s'empiler ; largeur des rues et des trottoirs réduite quand les bâtiments sont proches (373 rues) ; commerces seulement sur les murs donnant sur une grande rue, un immeuble sur deux ; voitures garées contre le trottoir.
 - 2026-11-11 : nouvelle direction artistique validée (niveau visé : Vice City, identité d'Annaba). Première étape : catalogue de véhicules (`src/vehicles/CarModels.ts`), 9 modèles à carrosserie arrondie générée par code, sans logos ; rendu en pleine résolution par défaut (`?res=0.6` pour alléger) ; `?salon=1` expose le catalogue.
+- 2026-11-11 : REFONTE PHYSIQUE, étape 1. Sauvegarde de l'état précédent : branche `sauvegarde-avant-physique`.
+  Nouvelle physique automobile sur mesure (`src/vehicles/physics/SuspensionPhysics.ts`, sans dépendance au moteur 3D,
+  remplaçable plus tard par Rapier) : gravité, 4 suspensions indépendantes, pentes, vol balistique, butées, transfert de poids,
+  adhérence par essieu, frein à main. Réglages par véhicule dans le catalogue (`handling`). Appliquée au véhicule du joueur et
+  aux véhicules percutés ; la circulation reste simplifiée. Retour à l'ancienne conduite : `?physique=arcade`.
+  Zone de test fictive : `?test=1`. Affichage du nombre d'images par seconde.
+  Mesures en simulation (berline de 1 192 kg) : 0 à 100 km/h en 6,9 s ; pointe 112 km/h ; côte à 15 % : 99 km/h ;
+  descente à 15 % sans accélérer : 47 km/h après 10 s ; tremplin de 3 m à 90 km/h : environ 3,4 m de haut et 30 à 40 m de portée.

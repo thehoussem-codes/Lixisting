@@ -1,9 +1,9 @@
 import type { WorldPlace } from '../world/WorldData';
 
-interface HudProps { status: string; places: WorldPlace[]; zone: string; speed: number | null }
+interface HudProps { status: string; places: WorldPlace[]; zone: string; speed: number | null; fps: number }
 
 /** Texte affiché par-dessus le jeu. */
-export function Hud({ status, places, zone, speed }: HudProps) {
+export function Hud({ status, places, zone, speed, fps }: HudProps) {
   return (
     <>
       <div className="hud">
@@ -11,7 +11,7 @@ export function Hud({ status, places, zone, speed }: HudProps) {
         <div className="hud-help">
           Clic : souris · W A S D : bouger · Maj : courir · Espace : sauter / frein à main · F : voiture · M : carte
           <br />
-          {status}
+          {status} · {fps} images/s
         </div>
       </div>
       {places.length > 0 && (
