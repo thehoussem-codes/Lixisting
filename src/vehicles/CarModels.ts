@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { assets } from '../assets/AssetLibrary';
 import type { Handling } from './physics/SuspensionPhysics';
 
 /**
@@ -27,6 +28,10 @@ export interface CarSpec {
   tallLights?: boolean;       // feux arrière verticaux (hayons)
   /** Réglages de conduite propres à ce modèle (le reste est déduit de ses dimensions). */
   handling?: Partial<Handling>;
+  /** Points de suspension imposés ([x, z] × 4), sinon déduits des essieux. */
+  wheelPoints?: [number, number][];
+  /** Boîte de collision imposée, sinon déduite des dimensions. */
+  collision?: { halfLength: number; halfWidth: number };
   colors: number[];
 }
 
@@ -263,17 +268,43 @@ function taxiSignMaterial(): THREE.Material {
   return taxiSign;
 }
 
+/**
+ * Applique le catalogue de modèles 3D au catalogue de véhicules : un véhicule existant
+ * reçoit le modèle et les réglages fournis ; une entrée avec "base" crée un nouveau véhicule.
+ * À appeler une fois, après le chargement du catalogue.
+ */
+export function applyVehicleAssets(): void {
+  for (const [id, asset] of assets.vehicles()) {
+    const index = CAR_CATALOG.findIndex((spec) => spec.id === id);
+    const base = index >= 0 ? CAR_CATALOG[index] : CAR_CATALOG.find((spec) => spec.id === asset.base);
+    if (!base) { console.warn(`Véhicule "${id}" : modèle de base "${asset.base}" introuvable.`); continue; }
+    const spec: CarSpec = {
+      ...base, id, label: asset.label ?? base.label,
+      length: asset.length ?? base.length, width: asset.width ?? base.width, height: asset.height ?? base.height,
+      wheelRadius: asset.wheelRadius ?? base.wheelRadius,
+      wheelPoints: asset.wheels ?? base.wheelPoints, collision: asset.collision ?? base.collision,
+      colors: asset.colors ?? base.colors, taxi: index >= 0 ? base.taxi : false,
+      handling: { ...base.handling, ...asset.handling, ...(asset.centerOfGravityHeight ? { cgHeight: asset.centerOfGravityHeight } : {}) },
+    };
+    if (index >= 0) CAR_CATALOG[index] = spec; else CAR_CATALOG.splice(CAR_CATALOG.length - 1, 0, spec); // le taxi reste en dernier
+  }
+}
+
 export interface CarVisual { group: THREE.Group; wheels: THREE.Object3D[] }
 
 /** Assemble une voiture du catalogue : caisse teintée, détails, quatre roues qui tournent. */
 export function createCarVisual(spec: CarSpec, color: number): CarVisual {
-  let geometry = geometryCache.get(spec.id);
-  if (!geometry) { geometry = buildGeometry(spec); geometryCache.set(spec.id, geometry); }
+  const asset = assets.vehicle(spec.id);
+  // Avec un modèle 3D fourni, la carrosserie calculée sert seulement en attendant le chargement.
+  const shape = asset?.base ? CAR_CATALOG.find((other) => other.id === asset.base) ?? spec : spec;
+  let geometry = geometryCache.get(shape.id);
+  if (!geometry) { geometry = buildGeometry(shape); geometryCache.set(shape.id, geometry); }
   let paint = paints.get(color);
   if (!paint) { paint = new THREE.MeshLambertMaterial({ color, vertexColors: true }); paints.set(color, paint); }
 
   const group = new THREE.Group();
-  group.add(new THREE.Mesh(geometry.body, paint), new THREE.Mesh(geometry.details, detailMaterial));
+  const builtIn = [new THREE.Mesh(geometry.body, paint), new THREE.Mesh(geometry.details, detailMaterial)];
+  group.add(...builtIn);
 
   const tyre = new THREE.CylinderGeometry(spec.wheelRadius, spec.wheelRadius, 0.2, 16);
   tyre.rotateZ(Math.PI / 2);
@@ -284,7 +315,9 @@ export function createCarVisual(spec: CarSpec, color: number): CarVisual {
     for (const side of [1, -1]) {
       const wheel = new THREE.Group();
       wheel.add(new THREE.Mesh(tyre, tyreMaterial), new THREE.Mesh(hub, hubMaterial));
-      wheel.position.set(side * ((spec.width / 2) * taper(axle) - 0.09), spec.wheelRadius, (axle - 0.5) * spec.length);
+      const point = spec.wheelPoints?.[wheels.length];
+      if (point) wheel.position.set(point[0], spec.wheelRadius, point[1]);
+      else wheel.position.set(side * ((spec.width / 2) * taper(axle) - 0.09), spec.wheelRadius, (axle - 0.5) * spec.length);
       group.add(wheel);
       wheels.push(wheel);
     }
@@ -296,6 +329,14 @@ export function createCarVisual(spec: CarSpec, color: number): CarVisual {
       if (direction < 0) sign.rotation.y = Math.PI;
       group.add(sign);
     }
+  }
+  if (asset) {
+    // Modèle 3D fourni : dès qu'il est chargé, il remplace la carrosserie calculée.
+    assets.instance(asset).then((model) => {
+      for (const mesh of builtIn) mesh.visible = false;
+      if (asset.keepWheels === false) for (const wheel of wheels) wheel.visible = false;
+      group.add(model);
+    }).catch((error) => console.warn(`Modèle du véhicule "${spec.id}" non chargé, carrosserie intégrée conservée.`, error));
   }
   return { group, wheels };
 }

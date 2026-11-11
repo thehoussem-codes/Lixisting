@@ -1,0 +1,5 @@
+# Modèles 3D téléchargés automatiquement : une ligne par fichier, "adresse  destination dans public/assets/".
+#
+# Personnage provisoire : mannequin articulé "X Bot" avec animations idle / walk / run.
+# Source : exemples officiels de three.js (modèle issu de Mixamo, Adobe). À remplacer par ton propre personnage.
+https://raw.githubusercontent.com/mrdoob/three.js/r170/examples/models/gltf/Xbot.glb models/character.glb

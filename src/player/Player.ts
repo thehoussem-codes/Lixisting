@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { assets } from '../assets/AssetLibrary';
 import type { Input } from '../engine/Input';
 import { createBlobShadow } from '../vehicles/Car';
 
@@ -38,6 +39,11 @@ export class Player {
   swimming = false;
   private stride = 0;
   private shadow: THREE.Mesh;
+  /** Personnage articulé (fichier GLB) : remplace les blocs dès qu'il est chargé. */
+  private mixer: THREE.AnimationMixer | null = null;
+  private actions: Partial<Record<'idle' | 'walk' | 'run', THREE.AnimationAction>> = {};
+  private current: THREE.AnimationAction | null = null;
+  private blocks: THREE.Object3D[] = [];
   private armL: THREE.Group; private armR: THREE.Group;
   private legL: THREE.Group; private legR: THREE.Group;
 
@@ -58,9 +64,45 @@ export class Player {
     this.legL = limb(0.2, 0.85, 0.2, PANTS); this.legL.position.set(0.13, 0.85, 0);
     this.legR = limb(0.2, 0.85, 0.2, PANTS); this.legR.position.set(-0.13, 0.85, 0);
 
-    this.object.add(torso, head, hair, face, this.armL, this.armR, this.legL, this.legR);
+    this.blocks = [torso, head, hair, face, this.armL, this.armR, this.legL, this.legR];
+    this.object.add(...this.blocks);
     this.shadow = createBlobShadow(1.1, 1.1);
     this.object.add(this.shadow);
+  }
+
+  /** Charge le personnage du catalogue de modèles. Sans fichier, on garde le personnage en blocs. */
+  async loadModel(): Promise<void> {
+    const asset = assets.catalog.character;
+    if (!asset) return;
+    try {
+      const gltf = await assets.load(asset.model);
+      const model = gltf.scene;
+      const size = new THREE.Box3().setFromObject(model).getSize(new THREE.Vector3());
+      model.scale.setScalar(asset.scale ?? (asset.height ?? 1.78) / (size.y || 1));
+      model.rotation.y = THREE.MathUtils.degToRad(asset.rotationY ?? 0);
+      if (asset.offset) model.position.set(asset.offset[0], asset.offset[1], asset.offset[2]);
+      // Un modèle animé bouge hors de sa boîte d'origine : on désactive le masquage automatique.
+      model.traverse((child) => { child.frustumCulled = false; });
+      this.mixer = new THREE.AnimationMixer(model);
+      for (const key of ['idle', 'walk', 'run'] as const) {
+        const clip = THREE.AnimationClip.findByName(gltf.animations, asset.animations?.[key] ?? key);
+        if (clip) this.actions[key] = this.mixer.clipAction(clip);
+      }
+      for (const block of this.blocks) block.visible = false;
+      this.object.add(model);
+      this.play('idle', 0);
+    } catch (error) {
+      console.warn('Personnage 3D non chargé, personnage en blocs conservé.', error);
+    }
+  }
+
+  /** Passe en fondu d'une animation à l'autre. */
+  private play(name: 'idle' | 'walk' | 'run', fade = 0.2): void {
+    const next = this.actions[name] ?? this.actions.idle;
+    if (!next || next === this.current) return;
+    next.reset().fadeIn(fade).play();
+    this.current?.fadeOut(fade);
+    this.current = next;
   }
 
   teleport(x: number, y: number, z: number): void {
@@ -135,6 +177,12 @@ export class Player {
       swing = Math.sin(this.stride) * (running ? 1.0 : 0.6);
     } else {
       this.stride = 0;
+    }
+    if (this.mixer) {
+      this.play(!moving ? 'idle' : this.swimming || running ? 'run' : 'walk');
+      // La cadence des pas suit la vitesse réelle (au ralenti dans l'eau).
+      if (this.current) this.current.timeScale = this.swimming ? 0.6 : moving ? speed / (running ? RUN_SPEED : WALK_SPEED) : 1;
+      this.mixer.update(dt);
     }
     this.legL.rotation.x = swing;  this.legR.rotation.x = -swing;
     this.armL.rotation.x = -swing; this.armR.rotation.x = swing;

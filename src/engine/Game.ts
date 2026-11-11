@@ -3,7 +3,8 @@ import { Input } from './Input';
 import { Player } from '../player/Player';
 import { ThirdPersonCamera } from '../player/ThirdPersonCamera';
 import { Car } from '../vehicles/Car';
-import { CAR_CATALOG } from '../vehicles/CarModels';
+import { CAR_CATALOG, applyVehicleAssets } from '../vehicles/CarModels';
+import { assets } from '../assets/AssetLibrary';
 import { Traffic } from '../vehicles/Traffic';
 import { buildAnnabaWorld } from '../world/AnnabaWorld';
 import { buildTestTrack } from '../world/TestTrack';
@@ -116,7 +117,7 @@ export class Game {
     this.ground = buildTestTrack(this.scene);
     CAR_CATALOG.forEach((spec, i) => {
       const car = new Car(spec, spec.colors[0]);
-      car.place((i - 4) * 3.2, 3.6, 0);
+      car.place((i - (CAR_CATALOG.length - 1) / 2) * 3.2, 3.6, 0);
       this.cars.push(car);
       this.scene.add(car.object);
     });
@@ -125,6 +126,10 @@ export class Game {
   }
 
   private async loadWorld(): Promise<void> {
+    // Catalogue de modèles 3D : véhicules et personnage fournis, s'il y en a.
+    await assets.init();
+    applyVehicleAssets();
+    void this.player.loadModel();
     if (new URLSearchParams(window.location.search).has('test')) { this.loadTestZone(); return; }
     try {
       this.events.onStatus('Chargement de la carte d\'Annaba...');

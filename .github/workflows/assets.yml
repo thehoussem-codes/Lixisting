@@ -1,0 +1,35 @@
+# Télécharge les modèles 3D libres listés dans tools/assets.txt et les enregistre dans public/assets/.
+name: Récupérer les modèles 3D
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - tools/assets.txt
+      - .github/workflows/assets.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Télécharger
+        run: |
+          grep -v '^#' tools/assets.txt | while read -r url target; do
+            [ -z "$url" ] && continue
+            mkdir -p "$(dirname "public/assets/$target")"
+            curl -fsSL "$url" -o "public/assets/$target"
+            ls -la "public/assets/$target"
+          done
+      - name: Enregistrer dans le dépôt
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/assets
+          git diff --cached --quiet || git commit -m "Add downloaded 3D models"
+          git pull --rebase
+          git push

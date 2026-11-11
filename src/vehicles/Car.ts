@@ -70,8 +70,8 @@ export class Car {
     this.object = visual.group;
     this.wheels = visual.wheels;
     this.object.rotation.order = 'YXZ'; // d'abord la direction, puis l'inclinaison sur la pente
-    this.halfLength = spec.length / 2;
-    this.halfWidth = spec.width / 2;
+    this.halfLength = spec.collision?.halfLength ?? spec.length / 2;
+    this.halfWidth = spec.collision?.halfWidth ?? spec.width / 2;
     this.wheelbase = (spec.axleFront - spec.axleRear) * spec.length;
     this.shadow = createBlobShadow(spec.width * 1.35, spec.length * 1.15);
     this.object.add(this.shadow);
