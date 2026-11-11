@@ -1,0 +1,22 @@
+{
+  "grid": "313 x 556 points, pas de 20 m",
+  "min_m": -10.3,
+  "max_m": 416.0,
+  "share_above_50m": 0.199,
+  "places_m": {
+    "Gare d'Annaba": 3.8,
+    "Cours de la Révolution (Mairie)": 15.4,
+    "Vieille Ville": 24.9,
+    "Citadelle (remparts)": 63.1,
+    "Plage Saint-Cloud": 3.5,
+    "Le Jasmin": 8.3,
+    "Oued Kouba": 7.8,
+    "Plage Chapuis": 7.4,
+    "Hôtel Sabri": 27.9,
+    "Plage Toche": 3.0,
+    "Bouna Beach": 7.3,
+    "Plage Ain Achir": 10.1,
+    "Phare du Cap de Garde": 103.8,
+    "Plage Le Vivier": 4.4
+  }
+}
