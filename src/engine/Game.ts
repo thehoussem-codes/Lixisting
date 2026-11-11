@@ -143,7 +143,7 @@ export class Game {
       // Blocs de décor (bâtiments, arbres, lampadaires) : on notera lesquels sont assez proches pour être affichés.
       this.scene.traverse((object) => {
         const mesh = object as THREE.Mesh;
-        if (!mesh.isMesh || mesh.parent !== this.scene) return;
+        if (!mesh.isMesh || mesh.parent !== this.scene || !mesh.frustumCulled) return; // ni la mer ni le ciel
         mesh.geometry.computeBoundingSphere();
         const sphere = mesh.geometry.boundingSphere;
         if (sphere && sphere.radius > 20 && sphere.radius < 700) this.chunks.push({ mesh, x: sphere.center.x, z: sphere.center.z, reach: sphere.radius + VIEW_DISTANCE });
