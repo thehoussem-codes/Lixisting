@@ -210,6 +210,35 @@ def land_rings(pieces, rect):
 
 # ---------------------------------------------------------------- hauteurs
 
+def point_in_polygon(x, y, polygon):
+    hit = False
+    j = len(polygon) - 1
+    for i in range(len(polygon)):
+        xi, yi = polygon[i]
+        xj, yj = polygon[j]
+        if (yi > y) != (yj > y) and x < (xj - xi) * (y - yi) / (yj - yi) + xi:
+            hit = not hit
+        j = i
+    return hit
+
+
+# Usage d'un bâtiment d'après ses étiquettes OSM (building=..., amenity=...).
+KIND_BY_BUILDING = {
+    "mosque": "mosque", "school": "school", "university": "school", "college": "school",
+    "hospital": "hospital", "public": "public", "civic": "public", "train_station": "public",
+    "industrial": "industrial", "warehouse": "industrial", "storage_tank": "industrial", "greenhouse": "industrial",
+    "hotel": "hotel", "house": "house", "terrace": "house", "apartments": "apartment", "retail": "apartment",
+}
+KIND_BY_AMENITY = {
+    "place_of_worship": "mosque", "school": "school", "college": "school", "university": "school",
+    "hospital": "hospital", "clinic": "hospital", "townhall": "public", "courthouse": "public",
+    "post_office": "public", "police": "public", "theatre": "public", "library": "public",
+    "community_centre": "public", "arts_centre": "public",
+}
+# Hauteur (m) retenue pour ces usages quand OSM ne donne pas le nombre d'étages.
+DEFAULT_HEIGHT = {"mosque": 9, "school": 10, "hospital": 14, "public": 13, "industrial": 8, "hotel": 22}
+
+
 def building_height(tags, footprint_area, way_id):
     """Renvoie (hauteur en m, estimée ?)."""
     try:
@@ -338,7 +367,26 @@ def main():
                 break
 
     # --- bâtiments
-    buildings, estimated = [], 0
+    # Équipements notés dans OSM comme simples points : on les rattache au bâtiment qui les contient.
+    amenity_points = [(xy[e["id"]], KIND_BY_AMENITY[e["tags"]["amenity"]]) for e in elements
+                      if e["type"] == "node" and e.get("tags", {}).get("amenity") in KIND_BY_AMENITY]
+    industrial_zones = [pts(w) for w in ways if w.get("tags", {}).get("landuse") in ("industrial", "harbour")
+                        and w["nodes"][0] == w["nodes"][-1]]
+    # Points des grandes rues, rangés par cases de 20 m : sert à repérer les immeubles à commerces.
+    main_cells = set()
+    for w in ways:
+        if w.get("tags", {}).get("highway") in ("primary", "secondary", "tertiary"):
+            for x, n in densify(pts(w), 8):
+                main_cells.add((int(x // 20), int(n // 20)))
+
+    def near_main_road(points):
+        for x, n in points:
+            cx, cn = int(x // 20), int(n // 20)
+            if any((cx + i, cn + j) in main_cells for i in (-1, 0, 1) for j in (-1, 0, 1)):
+                return True
+        return False
+
+    buildings, estimated, kinds = [], 0, {}
     for w in ways:
         tags = w.get("tags", {})
         if "building" not in tags or w["nodes"][0] != w["nodes"][-1]:
@@ -353,8 +401,35 @@ def main():
         if a < 0:
             p.reverse()  # toujours dans le sens anti-horaire
         height, is_estimated = building_height(tags, abs(a), w["id"])
+        # Usage : étiquettes du bâtiment, sinon équipement situé dedans, sinon zone, sinon taille.
+        kind = KIND_BY_AMENITY.get(tags.get("amenity")) or KIND_BY_BUILDING.get(tags["building"])
+        if tags.get("tourism") == "hotel":
+            kind = "hotel"
+        sure = kind is not None
+        if kind is None:
+            xs, ns = [v[0] for v in p], [v[1] for v in p]
+            for (qx, qn), k in amenity_points:
+                if min(xs) <= qx <= max(xs) and min(ns) <= qn <= max(ns) and point_in_polygon(qx, qn, p):
+                    kind, sure = k, True
+                    break
+        if kind is None and any(point_in_polygon(cx, cy, zone) for zone in industrial_zones):
+            kind, sure = "industrial", True
+        if is_estimated and kind in DEFAULT_HEIGHT:
+            height = DEFAULT_HEIGHT[kind]
+        if kind is None or kind == "apartment":
+            if height >= 28:
+                kind = "tower"
+            elif kind is None and abs(a) < 170 and height <= 10:
+                kind = "house"
+            else:
+                kind = "apartment"
         estimated += is_estimated
-        item = {"h": round(height, 1), "p": flat(p)}
+        kinds[kind] = kinds.get(kind, 0) + 1
+        item = {"h": round(height, 1), "t": kind, "p": flat(p)}
+        if sure:
+            item["c"] = 1  # usage certain (étiqueté dans OSM), et non déduit de la taille
+        if kind == "apartment" and near_main_road(p):
+            item["s"] = 1  # rez-de-chaussée commerçant : hypothèse, car le long d'une grande rue
         if tags.get("name"):
             item["n"] = tags.get("name:fr") or tags["name"]
         buildings.append(item)
@@ -395,6 +470,7 @@ def main():
             "rect_m": [round(v, 1) for v in rect],
             "buildings": len(buildings),
             "buildings_height_estimated": estimated,
+            "buildings_by_kind": kinds,
             "roads": len(roads),
             "roads_skipped_by_type": skipped,
             "relief": "Terrain Tiles (AWS Open Data), environ 30 m de précision",

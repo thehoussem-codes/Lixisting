@@ -1,0 +1,168 @@
+import * as THREE from 'three';
+import { Collider } from './Collider';
+import { MeshBuilder } from './MeshBuilder';
+import { FACADE_WIDTH, createFacadeTexture, type FacadeStyle } from './Textures';
+import type { WorldData } from './WorldData';
+
+const CHUNK = 400;        // regroupement par blocs de 400 m
+const FLOOR_HEIGHT = 3;
+const GROUND_FLOOR = 3.6; // hauteur du rez-de-chaussée (commerces, entrées)
+const PARAPET = 0.6;      // rebord du toit plat
+
+/** Apparence de chaque usage : texture des étages, couleurs de murs et de toit. */
+const LOOK: Record<string, { style: FacadeStyle; walls: number[]; roofs: number[] }> = {
+  apartment: { style: 'apartment', walls: [0xf3ead8, 0xe9d3ae, 0xf5f1e6, 0xd9c7a3, 0xf0dcc0, 0xe2ddd0, 0xead9b8], roofs: [0xb9b2a3, 0xa9a394, 0xc2bcae] },
+  house: { style: 'house', walls: [0xfaf5ea, 0xf3e2c0, 0xf7efe0, 0xe8c9a0, 0xf2d9b0, 0xffffff], roofs: [0xb55d3f, 0xc0694a, 0xa9523a, 0xbb6a48] },
+  tower: { style: 'tower', walls: [0xf4f1ea, 0xe9e4d8, 0xdfe6ea, 0xf0e6d2], roofs: [0x9a9c9e, 0xaeb0b2] },
+  hotel: { style: 'tower', walls: [0xf3ede0, 0xe8dccb], roofs: [0xa9a394] },
+  school: { style: 'school', walls: [0xf0dfb0, 0xecd9a8, 0xf3e6c2], roofs: [0xb8b0a0] },
+  hospital: { style: 'school', walls: [0xf4f6f2, 0xe6efe8], roofs: [0xb4b8b4] },
+  public: { style: 'public', walls: [0xf2ead6, 0xefe2c4, 0xf7f2e6], roofs: [0xb0a898, 0xa9523a] },
+  industrial: { style: 'industrial', walls: [0xb9c0c4, 0xa7b2b8, 0xc8c2b4, 0x9fb0c0], roofs: [0x8f989c, 0x9aa3a6] },
+  mosque: { style: 'mosque', walls: [0xfbfaf4], roofs: [0xdedbd0] },
+};
+const DOME = new THREE.Color(0x2f8a5b);
+const MINARET = new THREE.Color(0xf7f5ee);
+
+function wallQuad(b: MeshBuilder, ax: number, az: number, bx: number, bz: number, y0: number, y1: number,
+                  color: THREE.Color, shade0: number, shade1: number, u: number, v0: number, v1: number): void {
+  const a = b.vertex(ax, y0, az, color, shade0, 0, v0), c = b.vertex(bx, y0, bz, color, shade0, u, v0);
+  const d = b.vertex(bx, y1, bz, color, shade1, u, v1), e = b.vertex(ax, y1, az, color, shade1, 0, v1);
+  b.triangle(a, c, d); b.triangle(a, d, e);
+}
+
+/** Boîte carrée verticale (minaret, lanterneau...). */
+function box(b: MeshBuilder, x: number, z: number, half: number, y0: number, y1: number, color: THREE.Color): void {
+  const corners = [[x - half, z - half], [x + half, z - half], [x + half, z + half], [x - half, z + half]];
+  for (let i = 0; i < 4; i++) {
+    const [ax, az] = corners[i], [bx, bz] = corners[(i + 1) % 4];
+    wallQuad(b, ax, az, bx, bz, y0, y1, color, 0.8, 1, 0, 0, 0);
+  }
+  const top = corners.map(([cx, cz]) => b.vertex(cx, y1, cz, color, 0.95));
+  b.triangle(top[0], top[2], top[1]); b.triangle(top[0], top[3], top[2]);
+}
+
+function pyramid(b: MeshBuilder, x: number, z: number, half: number, y0: number, y1: number, color: THREE.Color): void {
+  const corners = [[x - half, z - half], [x + half, z - half], [x + half, z + half], [x - half, z + half]];
+  for (let i = 0; i < 4; i++) {
+    const [ax, az] = corners[i], [bx, bz] = corners[(i + 1) % 4];
+    b.triangle(b.vertex(ax, y0, az, color, 0.8), b.vertex(bx, y0, bz, color, 0.8), b.vertex(x, y1, z, color));
+  }
+}
+
+function dome(b: MeshBuilder, x: number, y: number, z: number, radius: number, color: THREE.Color): void {
+  const RINGS = 4, SEGMENTS = 10;
+  const rows: number[][] = [];
+  for (let r = 0; r <= RINGS; r++) {
+    const angle = (r / RINGS) * (Math.PI / 2), ringRadius = Math.cos(angle) * radius, height = Math.sin(angle) * radius;
+    const row: number[] = [];
+    for (let s = 0; s < SEGMENTS; s++) {
+      const a = (s / SEGMENTS) * Math.PI * 2;
+      row.push(b.vertex(x + Math.cos(a) * ringRadius, y + height, z + Math.sin(a) * ringRadius, color, 0.75 + 0.3 * (r / RINGS)));
+    }
+    rows.push(row);
+  }
+  for (let r = 0; r < RINGS; r++) {
+    for (let s = 0; s < SEGMENTS; s++) {
+      const t = (s + 1) % SEGMENTS;
+      b.triangle(rows[r][s], rows[r + 1][s], rows[r][t]);
+      b.triangle(rows[r][t], rows[r + 1][s], rows[r + 1][t]);
+    }
+  }
+}
+
+/**
+ * Génère tous les bâtiments. Position et forme au sol : réelles (OSM).
+ * Apparence : choisie selon l'usage du bâtiment (maison, immeuble, tour, mosquée,
+ * école, hôpital, bâtiment public, entrepôt), certain ou déduit de sa taille.
+ */
+export function buildBuildings(scene: THREE.Scene, data: WorldData, ground: (x: number, z: number) => number): Collider {
+  const collider = new Collider();
+  const walls = new Map<string, MeshBuilder>();
+  const roofs = new Map<string, MeshBuilder>();
+  const builderIn = (map: Map<string, MeshBuilder>, key: string): MeshBuilder => {
+    let builder = map.get(key);
+    if (!builder) { builder = new MeshBuilder(); map.set(key, builder); }
+    return builder;
+  };
+
+  data.buildings.forEach((building, index) => {
+    const p = building.p, count = p.length / 2;
+    const look = LOOK[building.t] ?? LOOK.apartment;
+    const cell = `${Math.floor(p[0] / CHUNK)},${Math.floor(p[1] / CHUNK)}`;
+    const wall = new THREE.Color(look.walls[index % look.walls.length]);
+    const roofColor = new THREE.Color(look.roofs[(index * 7) % look.roofs.length]);
+
+    // Sol le plus bas et le plus haut sous le bâtiment, centre et point le plus éloigné du centre.
+    let low = Infinity, base = -Infinity, cx = 0, cz = 0;
+    for (let i = 0; i < count; i++) {
+      const g = ground(p[i * 2], -p[i * 2 + 1]);
+      low = Math.min(low, g); base = Math.max(base, g);
+      cx += p[i * 2] / count; cz += -p[i * 2 + 1] / count;
+    }
+    const top = base + building.h;
+    // Rez-de-chaussée distinct pour les immeubles : commerces le long des grandes rues, entrées ailleurs.
+    const tall = building.t === 'apartment' || building.t === 'tower' || building.t === 'hotel';
+    const groundStyle: FacadeStyle | null = tall && building.h > 7 ? (building.s ? 'shop' : 'ground') : null;
+    const upperFrom = groundStyle ? base + GROUND_FLOOR : base;
+    const floors = Math.max(1, Math.round((top - upperFrom) / FLOOR_HEIGHT));
+    const upper = builderIn(walls, `${look.style}|${cell}`);
+    const lower = groundStyle ? builderIn(walls, `${groundStyle}|${cell}`) : null;
+
+    for (let i = 0; i < count; i++) {
+      const j = (i + 1) % count;
+      const ax = p[i * 2], az = -p[i * 2 + 1], bx = p[j * 2], bz = -p[j * 2 + 1];
+      const length = Math.hypot(bx - ax, bz - az);
+      // Soubassement uni, du point bas du terrain jusqu'au niveau du rez-de-chaussée.
+      wallQuad(upper, ax, az, bx, bz, low - 1, base, wall, 0.6, 0.7, 0, 0, 0);
+      if (lower && groundStyle) {
+        wallQuad(lower, ax, az, bx, bz, base, upperFrom, wall, 0.8, 0.9, Math.max(1, Math.round(length / FACADE_WIDTH[groundStyle])), 0, 1);
+      }
+      // Nombre entier de travées et d'étages : pas de fenêtre coupée.
+      wallQuad(upper, ax, az, bx, bz, upperFrom, top, wall, lower ? 0.92 : 0.75, 1, Math.round(length / FACADE_WIDTH[look.style]), 0, floors);
+    }
+
+    const roof = builderIn(roofs, cell);
+    if (building.t === 'house') {
+      // Toit de tuiles à pentes : chaque mur rejoint le faîte au centre.
+      const apex = roof.vertex(cx, top + 1.9, cz, roofColor, 1.05);
+      for (let i = 0; i < count; i++) {
+        const j = (i + 1) % count;
+        roof.triangle(roof.vertex(p[i * 2], top, -p[i * 2 + 1], roofColor, 0.82), roof.vertex(p[j * 2], top, -p[j * 2 + 1], roofColor, 0.82), apex);
+      }
+    } else {
+      // Toit plat ; les murs dépassent pour former l'acrotère.
+      roof.flatPolygon(p, building.t === 'industrial' ? top : top - PARAPET, roofColor);
+    }
+
+    if (building.t === 'mosque') {
+      // Coupole au centre et minaret carré à l'angle le plus éloigné : silhouette générique de mosquée maghrébine.
+      let far = 0, fx = cx, fz = cz;
+      for (let i = 0; i < count; i++) {
+        const d = Math.hypot(p[i * 2] - cx, -p[i * 2 + 1] - cz);
+        if (d > far) { far = d; fx = p[i * 2]; fz = -p[i * 2 + 1]; }
+      }
+      dome(roof, cx, top - PARAPET, cz, Math.min(7, Math.max(2.5, far * 0.4)), DOME);
+      const mx = fx + (cx - fx) * 0.18, mz = fz + (cz - fz) * 0.18, tip = top + 13;
+      box(roof, mx, mz, 1.3, low - 1, tip, MINARET);
+      box(roof, mx, mz, 1.8, tip, tip + 0.4, MINARET);
+      box(roof, mx, mz, 0.9, tip + 0.4, tip + 3.4, MINARET);
+      pyramid(roof, mx, mz, 1.0, tip + 3.4, tip + 5.2, DOME);
+    }
+    collider.addBuilding(p);
+  });
+
+  const materials = new Map<string, THREE.Material>();
+  for (const [key, builder] of walls) {
+    const style = key.split('|')[0] as FacadeStyle;
+    let material = materials.get(style);
+    if (!material) {
+      material = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, map: createFacadeTexture(style) });
+      materials.set(style, material);
+    }
+    if (!builder.isEmpty) scene.add(new THREE.Mesh(builder.build(), material));
+  }
+  const roofMaterial = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
+  for (const builder of roofs.values()) if (!builder.isEmpty) scene.add(new THREE.Mesh(builder.build(), roofMaterial));
+  return collider;
+}
