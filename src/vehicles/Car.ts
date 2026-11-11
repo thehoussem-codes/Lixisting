@@ -2,6 +2,13 @@ import * as THREE from 'three';
 import type { Input } from '../engine/Input';
 import type { Collider } from '../world/Collider';
 import { createCarVisual, type CarSpec } from './CarModels';
+import { SuspensionPhysics, defaultHandling, type Controls } from './physics/SuspensionPhysics';
+
+/**
+ * Ancienne conduite simplifiée, conservée comme solution de repli :
+ * ajouter ?physique=arcade à l'adresse du jeu pour y revenir.
+ */
+export const USE_ARCADE = new URLSearchParams(window.location.search).get('physique') === 'arcade';
 
 const MAX_SPEED = 32;        // m/s, environ 115 km/h
 const BOOST_SPEED = 14;      // bonus en ligne droite : jusqu'à environ 165 km/h
@@ -27,6 +34,9 @@ export class Car {
   private halfWidth: number;
   private wheelbase: number;
   private lastSettle = 0;
+  /** Simulation à quatre suspensions : créée quand la voiture est conduite ou percutée. */
+  private physics: SuspensionPhysics | null = null;
+  private restTime = 0;
 
   constructor(readonly spec: CarSpec, color: number) {
     const visual = createCarVisual(spec, color);
@@ -39,6 +49,7 @@ export class Car {
   }
 
   place(x: number, z: number, heading = this.heading): void {
+    this.dropPhysics();
     this.object.position.set(x, 0, z);
     this.heading = heading;
     this.object.rotation.y = heading;
@@ -48,6 +59,7 @@ export class Car {
 
   /** Pose la voiture sur le sol et l'incline selon la pente. */
   settle(ground: (x: number, z: number) => number): void {
+    if (this.physics) return; // la simulation gère déjà sa position
     const { x, z } = this.object.position;
     const fx = Math.sin(this.heading), fz = Math.cos(this.heading);
     const lx = fz, lz = -fx; // vecteur "à gauche" de la voiture
@@ -66,6 +78,7 @@ export class Car {
 
   /** Place directement la voiture (utilisé par la circulation automatique). */
   setPose(x: number, z: number, heading: number): void {
+    this.dropPhysics();
     this.object.position.x = x;
     this.object.position.z = z;
     this.heading = heading;
@@ -95,13 +108,80 @@ export class Car {
     return Math.abs(dx * sin + dz * cos) < this.halfLength + margin && Math.abs(-dx * cos + dz * sin) < this.halfWidth + margin;
   }
 
+  /** Télémétrie pour l'affichage et les tests. */
+  get telemetry(): { airborne: boolean; wheelsOnGround: number; pitch: number; roll: number; impact: number } {
+    const p = this.physics;
+    return p ? { airborne: p.airborne, wheelsOnGround: p.contact.filter(Boolean).length, pitch: p.pitch, roll: p.roll, impact: p.impact }
+      : { airborne: false, wheelsOnGround: 4, pitch: 0, roll: 0, impact: 0 };
+  }
+
+  /** Choc reçu : la voiture est poussée à cette vitesse vers l'avant. */
+  shove(speed: number): void {
+    this.speed = speed;
+    if (USE_ARCADE) return;
+    this.wake().setForwardSpeed(speed);
+    this.restTime = 0;
+  }
+
+  private dropPhysics(): void {
+    if (!this.physics) return;
+    this.physics = null;
+    for (const wheel of this.wheels) { wheel.position.y = this.spec.wheelRadius; wheel.rotation.y = 0; }
+  }
+
+  /** Démarre la simulation à partir de la position actuelle. */
+  private wake(): SuspensionPhysics {
+    if (!this.physics) {
+      this.physics = new SuspensionPhysics({
+        handling: { ...defaultHandling(this.spec.length, this.spec.width, this.spec.height), ...this.spec.handling },
+        wheels: this.wheels.map((wheel) => ({ x: wheel.position.x, z: wheel.position.z })),
+        wheelRadius: this.spec.wheelRadius,
+      });
+      const { x, y, z } = this.object.position;
+      this.physics.reset(x, y, z, this.heading, this.speed);
+    }
+    return this.physics;
+  }
+
+  private simulate(dt: number, controls: Controls, collider: Collider | null, others: Car[], ground: (x: number, z: number) => number): void {
+    const physics = this.wake();
+    physics.step(dt, controls, {
+      ground,
+      collides: (x, z, yaw) => {
+        const other = this.hitCar(others, x, z, yaw);
+        if (other) other.shove(physics.forwardSpeed * 0.5 * Math.cos(other.heading - yaw));
+        return other !== null || (collider !== null && this.hits(collider, x, z, Math.sin(yaw), Math.cos(yaw)));
+      },
+    });
+    this.object.position.set(physics.x, physics.y, physics.z);
+    this.heading = physics.yaw;
+    this.speed = physics.forwardSpeed;
+    this.object.rotation.set(-physics.pitch, physics.yaw, physics.roll);
+    // Roues : elles suivent le sol (débattement), braquent à l'avant et tournent.
+    this.wheels.forEach((wheel, i) => {
+      wheel.position.y = physics.attachHeight - physics.length[i];
+      wheel.rotation.order = 'YXZ';
+      if (i >= 2) wheel.rotation.y = -physics.steer;
+      wheel.rotation.x += (physics.forwardSpeed * dt) / this.spec.wheelRadius;
+    });
+  }
+
   /** Conduite : W accélère, S freine puis recule, A/D tournent, Espace = frein à main. */
-  drive(dt: number, input: Input, collider: Collider | null, others: Car[]): void {
+  drive(dt: number, input: Input, collider: Collider | null, others: Car[], ground: (x: number, z: number) => number): void {
     const gas = (input.isDown('KeyW') || input.isDown('ArrowUp') ? 1 : 0)
               - (input.isDown('KeyS') || input.isDown('ArrowDown') ? 1 : 0);
     const steer = (input.isDown('KeyD') || input.isDown('ArrowRight') ? 1 : 0)
                 - (input.isDown('KeyA') || input.isDown('ArrowLeft') ? 1 : 0);
 
+    if (!USE_ARCADE) {
+      // Élan : il monte peu à peu tant qu'on accélère tout droit, et retombe sinon.
+      const top = this.wake().setup.handling.maxSpeed;
+      if (gas > 0 && steer === 0 && this.speed > top * 0.8) this.boost = Math.min(1, this.boost + BOOST_BUILD * dt);
+      else this.boost = Math.max(0, this.boost - BOOST_LOSS * dt);
+      this.restTime = 0;
+      this.simulate(dt, { throttle: gas, steer, handbrake: input.isDown('Space'), speedLimit: top + BOOST_SPEED * this.boost }, collider, others, ground);
+      return;
+    }
     if (input.isDown('Space')) {
       this.speed -= Math.sign(this.speed) * Math.min(Math.abs(this.speed), BRAKING * 1.5 * dt);
     } else if (gas !== 0) {
@@ -120,7 +200,13 @@ export class Car {
   }
 
   /** Voiture sans conducteur : elle finit de rouler puis s'arrête. */
-  coast(dt: number, collider: Collider | null, others: Car[]): void {
+  coast(dt: number, collider: Collider | null, others: Car[], ground: (x: number, z: number) => number): void {
+    if (this.physics) {
+      // La simulation continue tant que la voiture bouge, puis se met en veille.
+      this.restTime = this.physics.isMoving ? 0 : this.restTime + dt;
+      if (this.restTime < 1) this.simulate(dt, { throttle: 0, steer: 0, handbrake: false, speedLimit: 30 }, collider, others, ground);
+      return;
+    }
     if (this.speed === 0) return;
     this.speed -= Math.sign(this.speed) * Math.min(Math.abs(this.speed), 6 * dt);
     this.boost = 0;
@@ -139,7 +225,7 @@ export class Car {
     const other = this.hitCar(others, x, z, heading);
     if (other || (collider && this.hits(collider, x, z, fx, fz))) {
       // La voiture percutée est poussée dans le sens du choc.
-      if (other) other.speed = this.speed * 0.5 * Math.cos(other.heading - heading);
+      if (other) other.shove(this.speed * 0.5 * Math.cos(other.heading - heading));
       this.speed *= -0.3; // choc : la voiture rebondit légèrement
       this.boost = 0;
       return;

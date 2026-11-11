@@ -6,6 +6,7 @@ import { Car } from '../vehicles/Car';
 import { CAR_CATALOG } from '../vehicles/CarModels';
 import { Traffic } from '../vehicles/Traffic';
 import { buildAnnabaWorld } from '../world/AnnabaWorld';
+import { buildTestTrack } from '../world/TestTrack';
 import type { Collider } from '../world/Collider';
 import { loadTerrain } from '../world/Terrain';
 import { buildTrees, loadTrees } from '../world/Trees';
@@ -45,6 +46,8 @@ export class Game {
   private traffic: Traffic | null = null;
   private sky: THREE.Mesh | null = null;
   private hudTimer = 0;
+  /** Durée moyenne d'une image (secondes), pour mesurer la fluidité. */
+  private frameTime = 1 / 60;
   /** Voiture conduite en ce moment (null = à pied). */
   private driving: Car | null = null;
   /** Ce qui bloque le personnage à pied : bâtiments et voitures. */
@@ -72,7 +75,9 @@ export class Game {
     (window as unknown as Record<string, unknown>).lixitingDebug = () => ({
       traffic: this.traffic?.cars.filter((c) => c.object.visible).length ?? 0,
       nearestTraffic: Math.min(...(this.traffic?.cars ?? []).map((c) => c.object.position.distanceTo(this.player.object.position))),
-      player: this.player.object.position.toArray().map((v) => Math.round(v)),
+      player: this.player.object.position.toArray().map((v) => Math.round(v * 10) / 10),
+      fps: Math.round(1 / this.frameTime),
+      car: this.driving ? { kmh: Math.round(this.driving.speed * 3.6), above: Math.round((this.driving.object.position.y - this.ground(this.driving.object.position.x, this.driving.object.position.z)) * 100) / 100, ...this.driving.telemetry } : null,
     });
   }
 
@@ -92,7 +97,21 @@ export class Game {
     this.renderer.domElement.remove();
   }
 
+  /** Zone d'essai de la physique (?test=1) : terrain fictif, toutes les voitures du catalogue alignées. */
+  private loadTestZone(): void {
+    this.ground = buildTestTrack(this.scene);
+    CAR_CATALOG.forEach((spec, i) => {
+      const car = new Car(spec, spec.colors[0]);
+      car.place((i - 4) * 3.2, 3.6, 0);
+      this.cars.push(car);
+      this.scene.add(car.object);
+    });
+    this.player.teleport(0, this.ground(0, 0), 0);
+    this.events.onStatus('ZONE DE TEST (terrain fictif) : tremplin droit devant, côte et falaise à gauche, bosses à droite');
+  }
+
   private async loadWorld(): Promise<void> {
+    if (new URLSearchParams(window.location.search).has('test')) { this.loadTestZone(); return; }
     try {
       this.events.onStatus('Chargement de la carte d\'Annaba...');
       const [data, terrain, trees] = await Promise.all([loadWorldData(), loadTerrain(), loadTrees()]);
@@ -213,15 +232,17 @@ export class Game {
   private frame = () => {
     this.frameId = requestAnimationFrame(this.frame);
     // dt plafonné : évite un "saut" du personnage après un onglet mis en pause.
-    const dt = Math.min(this.clock.getDelta(), 0.05);
+    const elapsed = this.clock.getDelta();
+    this.frameTime += (elapsed - this.frameTime) * 0.05;
+    const dt = Math.min(elapsed, 0.05);
 
     const everyCar = this.allCars();
     for (const car of this.cars) {
-      if (car !== this.driving) car.coast(dt, this.collider, everyCar);
+      if (car !== this.driving) car.coast(dt, this.collider, everyCar, this.ground);
     }
     if (this.driving) {
       const car = this.driving;
-      car.drive(dt, this.input, this.collider, everyCar);
+      car.drive(dt, this.input, this.collider, everyCar, this.ground);
       car.settle(this.ground);
       this.player.object.position.copy(car.object.position);
       // En roulant, la caméra revient d'elle-même derrière la voiture.

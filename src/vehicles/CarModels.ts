@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { Handling } from './physics/SuspensionPhysics';
 
 /**
  * Catalogue des véhicules et atelier de carrosserie.
@@ -24,6 +25,8 @@ export interface CarSpec {
   darkRoof?: boolean;
   taxi?: boolean;
   tallLights?: boolean;       // feux arrière verticaux (hayons)
+  /** Réglages de conduite propres à ce modèle (le reste est déduit de ses dimensions). */
+  handling?: Partial<Handling>;
   colors: number[];
 }
 
