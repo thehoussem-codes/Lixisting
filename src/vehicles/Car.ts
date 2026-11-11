@@ -30,16 +30,15 @@ export function createBlobShadow(width: number, length: number): THREE.Mesh {
 
 /**
  * Deux conduites :
- *  - "arcade" (par défaut) : direction et vitesse simples et faciles, comme dans les jeux de course
- *    arcade, mais la voiture n'est plus collée au sol : elle décolle sur les bosses, retombe,
- *    s'écrase sur ses suspensions à la réception et penche légèrement en virage et au freinage ;
+ *  - "arcade" (par défaut) : la conduite simple d'origine. Aucun dérapage, aucun effet des pentes :
+ *    sans appui sur les touches, la voiture freine seule puis reste immobile. Seule différence :
+ *    sur un vrai tremplin ou une falaise, elle décolle et retombe au lieu de rester collée au sol ;
  *  - "simulation" (?physique=simulation) : la physique complète à quatre suspensions, plus exigeante.
  */
 export const USE_ARCADE = new URLSearchParams(window.location.search).get('physique') !== 'simulation';
 
 const GRAVITY = 9.81;
-const TAKEOFF_GAP = 0.12;   // la voiture décolle si le sol se dérobe de plus de 12 cm sous sa trajectoire
-const SLOPE_EFFECT = 0.55;  // part de la gravité ressentie dans les côtes (1 = réaliste, 0 = aucune)
+const TAKEOFF_GAP = 0.3;    // la voiture ne décolle que si le sol se dérobe de plus de 30 cm sous sa trajectoire (vrais sauts)
 
 const MAX_SPEED = 32;        // m/s, environ 115 km/h
 const BOOST_SPEED = 14;      // bonus en ligne droite : jusqu'à environ 165 km/h
@@ -164,8 +163,8 @@ export class Car {
     let turn = this.heading - this.lastHeading;
     turn = Math.atan2(Math.sin(turn), Math.cos(turn)) / dt;
     this.lastSpeed = this.speed; this.lastHeading = this.heading;
-    const squat = Math.max(-0.045, Math.min(0.045, acceleration * 0.0035)); // se cabre à l'accélération, plonge au freinage
-    const lean = Math.max(-0.07, Math.min(0.07, this.speed * turn * 0.008));  // penche vers l'extérieur du virage
+    const squat = Math.max(-0.025, Math.min(0.025, acceleration * 0.002)); // se cabre à l'accélération, plonge au freinage
+    const lean = Math.max(-0.035, Math.min(0.035, this.speed * turn * 0.004)); // penche à peine vers l'extérieur du virage
     const targetX = this.airborne ? this.tiltX + 0.25 * dt : -slopePitch - squat; // en l'air, le nez pique doucement
     const targetZ = this.airborne ? this.tiltZ : slopeRoll + lean;
     const follow = Math.min(1, 9 * dt);
@@ -300,8 +299,6 @@ export class Car {
       this.move(dt, 0, collider, others);
       return;
     }
-    // Relief : une côte ralentit, une descente entraîne la voiture.
-    this.speed -= GRAVITY * Math.sin(this.slopePitch) * SLOPE_EFFECT * dt;
     // Dans l'eau profonde, le moteur cale et la voiture est freinée.
     const underwater = Car.waterLevel !== null && (this.baseY ?? 0) < Car.waterLevel - 0.9;
     if (underwater) this.speed -= this.speed * Math.min(1, 3 * dt);
