@@ -15,7 +15,7 @@ export interface WorldData {
 }
 
 export async function loadWorldData(): Promise<WorldData> {
-  const response = await fetch(`${import.meta.env.BASE_URL}world/annaba.json`);
+  const response = await fetch(`${import.meta.env.BASE_URL}world/annaba.json?v=${__BUILD_ID__}`);
   if (!response.ok) throw new Error(`Carte introuvable (${response.status})`);
   return (await response.json()) as WorldData;
 }

@@ -9,7 +9,7 @@ const PINE = [new THREE.Color(0x2f6b34), new THREE.Color(0x3d7a3a), new THREE.Co
 const PALM = [new THREE.Color(0x3f8a3c), new THREE.Color(0x56963f)];
 
 export async function loadTrees(): Promise<TreeData> {
-  const response = await fetch(`${import.meta.env.BASE_URL}world/trees.json`);
+  const response = await fetch(`${import.meta.env.BASE_URL}world/trees.json?v=${__BUILD_ID__}`);
   if (!response.ok) throw new Error(`Arbres introuvables (${response.status})`);
   return (await response.json()) as TreeData;
 }

@@ -88,7 +88,7 @@ export class Terrain {
 }
 
 export async function loadTerrain(): Promise<Terrain> {
-  const response = await fetch(`${import.meta.env.BASE_URL}world/terrain.bin`);
+  const response = await fetch(`${import.meta.env.BASE_URL}world/terrain.bin?v=${__BUILD_ID__}`);
   if (!response.ok) throw new Error(`Terrain introuvable (${response.status})`);
   return new Terrain(await response.arrayBuffer());
 }

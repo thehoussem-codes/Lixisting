@@ -64,6 +64,12 @@ export class Game {
     window.addEventListener('keydown', this.onKeyDown);
     this.resize();
     void this.loadWorld();
+    // Petit accès de diagnostic, utilisé par les vérifications automatiques.
+    (window as unknown as Record<string, unknown>).lixitingDebug = () => ({
+      traffic: this.traffic?.cars.filter((c) => c.object.visible).length ?? 0,
+      nearestTraffic: Math.min(...(this.traffic?.cars ?? []).map((c) => c.object.position.distanceTo(this.player.object.position))),
+      player: this.player.object.position.toArray().map((v) => Math.round(v)),
+    });
   }
 
   start(): void {
