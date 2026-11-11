@@ -3,6 +3,9 @@ import type { Input } from '../engine/Input';
 import type { Collider } from '../world/Collider';
 
 const MAX_SPEED = 32;        // m/s, environ 115 km/h
+const BOOST_SPEED = 14;      // bonus en ligne droite : jusqu'à environ 165 km/h
+const BOOST_BUILD = 0.12;    // le bonus met environ 8 secondes à se remplir
+const BOOST_LOSS = 0.8;      // et se perd vite dès qu'on tourne ou qu'on lâche
 const MAX_REVERSE = 8;
 const ACCELERATION = 10;
 const BRAKING = 22;
@@ -18,6 +21,8 @@ export class Car {
   /** Direction du capot (radians). L'avant de la voiture est du côté +Z. */
   heading = 0;
   speed = 0;
+  /** 0 à 1 : élan accumulé en roulant droit, qui relève la vitesse maximale. */
+  private boost = 0;
 
   constructor(color: number) {
     const paint = new THREE.MeshLambertMaterial({ color });
@@ -48,10 +53,18 @@ export class Car {
     this.heading = heading;
     this.object.rotation.y = heading;
     this.speed = 0;
+    this.boost = 0;
+  }
+
+  /** Ce point (vu du dessus) est-il sous la voiture ? */
+  contains(x: number, z: number, margin = 0): boolean {
+    const dx = x - this.object.position.x, dz = z - this.object.position.z;
+    const sin = Math.sin(this.heading), cos = Math.cos(this.heading);
+    return Math.abs(dx * sin + dz * cos) < HALF_LENGTH + margin && Math.abs(-dx * cos + dz * sin) < HALF_WIDTH + margin;
   }
 
   /** Conduite : W accélère, S freine puis recule, A/D tournent, Espace = frein à main. */
-  drive(dt: number, input: Input, collider: Collider | null): void {
+  drive(dt: number, input: Input, collider: Collider | null, others: Car[]): void {
     const gas = (input.isDown('KeyW') || input.isDown('ArrowUp') ? 1 : 0)
               - (input.isDown('KeyS') || input.isDown('ArrowDown') ? 1 : 0);
     const steer = (input.isDown('KeyD') || input.isDown('ArrowRight') ? 1 : 0)
@@ -65,18 +78,24 @@ export class Car {
     } else {
       this.speed -= Math.sign(this.speed) * Math.min(Math.abs(this.speed), DRAG * dt);
     }
-    this.speed = THREE.MathUtils.clamp(this.speed, -MAX_REVERSE, MAX_SPEED);
-    this.move(dt, steer, collider);
+    // Élan : il monte peu à peu tant qu'on accélère tout droit, et retombe sinon.
+    if (gas > 0 && steer === 0 && this.speed > MAX_SPEED * 0.8) this.boost = Math.min(1, this.boost + BOOST_BUILD * dt);
+    else this.boost = Math.max(0, this.boost - BOOST_LOSS * dt);
+    const limit = MAX_SPEED + BOOST_SPEED * this.boost;
+    if (this.speed > limit) this.speed = Math.max(limit, this.speed - BRAKING * 0.5 * dt);
+    this.speed = Math.max(this.speed, -MAX_REVERSE);
+    this.move(dt, steer, collider, others);
   }
 
   /** Voiture sans conducteur : elle finit de rouler puis s'arrête. */
-  coast(dt: number, collider: Collider | null): void {
+  coast(dt: number, collider: Collider | null, others: Car[]): void {
     if (this.speed === 0) return;
     this.speed -= Math.sign(this.speed) * Math.min(Math.abs(this.speed), 6 * dt);
-    this.move(dt, 0, collider);
+    this.boost = 0;
+    this.move(dt, 0, collider, others);
   }
 
-  private move(dt: number, steer: number, collider: Collider | null): void {
+  private move(dt: number, steer: number, collider: Collider | null, others: Car[]): void {
     // Plus on roule vite, moins les roues braquent (sinon la voiture est incontrôlable).
     const steerAngle = steer * MAX_STEER / (1 + Math.abs(this.speed) / 12);
     const heading = this.heading - (this.speed / WHEELBASE) * Math.tan(steerAngle) * dt;
@@ -85,14 +104,32 @@ export class Car {
     const x = position.x + fx * this.speed * dt;
     const z = position.z + fz * this.speed * dt;
 
-    if (collider && this.hits(collider, x, z, fx, fz)) {
+    const other = this.hitCar(others, x, z, fx, fz);
+    if (other || (collider && this.hits(collider, x, z, fx, fz))) {
+      // La voiture percutée est poussée dans le sens du choc.
+      if (other) other.speed = this.speed * 0.5 * Math.cos(other.heading - heading);
       this.speed *= -0.3; // choc : la voiture rebondit légèrement
+      this.boost = 0;
       return;
     }
     position.x = x;
     position.z = z;
     this.heading = heading;
     this.object.rotation.y = heading;
+  }
+
+  private hitCar(others: Car[], x: number, z: number, fx: number, fz: number): Car | null {
+    const rx = -fz, rz = fx;
+    for (const other of others) {
+      if (other === this) continue;
+      if (Math.abs(other.object.position.x - x) > 6 || Math.abs(other.object.position.z - z) > 6) continue;
+      for (const l of [HALF_LENGTH, 0, -HALF_LENGTH]) {
+        for (const w of [HALF_WIDTH, -HALF_WIDTH]) {
+          if (other.contains(x + fx * l + rx * w, z + fz * l + rz * w)) return other;
+        }
+      }
+    }
+    return null;
   }
 
   private hits(collider: Collider, x: number, z: number, fx: number, fz: number): boolean {

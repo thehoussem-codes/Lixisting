@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import type { Input } from '../engine/Input';
-import type { Collider } from '../world/Collider';
 
 const WALK_SPEED = 4.5; // mètres par seconde
 const RUN_SPEED = 10;
@@ -21,6 +20,9 @@ function limb(w: number, h: number, d: number, color: number): THREE.Group {
   pivot.add(mesh);
   return pivot;
 }
+
+/** Tout ce qui peut bloquer le personnage (bâtiments, voitures...). */
+export interface Obstacles { blocked(x: number, z: number, radius: number): boolean }
 
 /** Personnage provisoire en blocs, animé par code (marche, course, saut). */
 export class Player {
@@ -56,7 +58,7 @@ export class Player {
     this.velocityY = 0;
   }
 
-  update(dt: number, input: Input, cameraYaw: number, collider: Collider | null): void {
+  update(dt: number, input: Input, cameraYaw: number, collider: Obstacles | null): void {
     const position = this.object.position;
     const forward = (input.isDown('KeyW') || input.isDown('ArrowUp') ? 1 : 0)
                   - (input.isDown('KeyS') || input.isDown('ArrowDown') ? 1 : 0);

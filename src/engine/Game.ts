@@ -31,6 +31,11 @@ export class Game {
   private cars: Car[] = [];
   /** Voiture conduite en ce moment (null = à pied). */
   private driving: Car | null = null;
+  /** Ce qui bloque le personnage à pied : bâtiments et voitures. */
+  private obstacles = {
+    blocked: (x: number, z: number, radius: number): boolean =>
+      (this.collider?.blocked(x, z, radius) ?? false) || this.cars.some((car) => car.contains(x, z, radius)),
+  };
   private frameId = 0;
   private disposed = false;
 
@@ -94,8 +99,13 @@ export class Game {
   private goToPlace(index: number): void {
     const place = this.places[index];
     if (!place) return;
-    if (this.driving) this.driving.place(place.x, -place.n);
-    else this.player.teleport(place.x, -place.n);
+    // Seul le personnage se téléporte : s'il conduisait, la voiture reste sur place.
+    if (this.driving) {
+      this.driving.speed = 0;
+      this.driving = null;
+      this.player.object.visible = true;
+    }
+    this.player.teleport(place.x, -place.n);
   }
 
   /** Touche F : monter dans la voiture la plus proche, ou en descendre. */
@@ -140,16 +150,16 @@ export class Game {
     // dt plafonné : évite un "saut" du personnage après un onglet mis en pause.
     const dt = Math.min(this.clock.getDelta(), 0.05);
 
-    for (const car of this.cars) if (car !== this.driving) car.coast(dt, this.collider);
+    for (const car of this.cars) if (car !== this.driving) car.coast(dt, this.collider, this.cars);
     if (this.driving) {
       const car = this.driving;
-      car.drive(dt, this.input, this.collider);
+      car.drive(dt, this.input, this.collider, this.cars);
       this.player.object.position.copy(car.object.position);
       // En roulant, la caméra revient d'elle-même derrière la voiture.
       const follow = Math.abs(car.speed) > 2 ? car.heading + Math.PI : null;
       this.cameraRig.update(this.input, car.object.position, this.collider, dt, 9, follow);
     } else {
-      this.player.update(dt, this.input, this.cameraRig.yaw, this.collider);
+      this.player.update(dt, this.input, this.cameraRig.yaw, this.obstacles);
       this.cameraRig.update(this.input, this.player.object.position, this.collider, dt);
     }
     this.renderer.render(this.scene, this.camera);
