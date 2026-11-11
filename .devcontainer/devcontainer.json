@@ -1,0 +1,8 @@
+{
+  "name": "Lixiting",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:22",
+  "features": { "ghcr.io/devcontainers/features/python:1": {} },
+  "postCreateCommand": "npm install",
+  "forwardPorts": [5173],
+  "portsAttributes": { "5173": { "label": "Lixiting", "onAutoForward": "openBrowser" } }
+}
