@@ -14,10 +14,9 @@ export function Hud({ status, places }: { status: string; places: WorldPlace[] }
       </div>
       {places.length > 0 && (
         <div className="hud hud-places">
-          <div className="hud-places-title">Aller à (touches 1 à {places.length})</div>
-          {places.map((place, i) => (
-            <div key={place.name}>{i + 1} · {place.name}</div>
-          ))}
+          <div className="hud-places-title">Aller à</div>
+          <div>M : ouvrir la carte, puis cliquer sur un lieu</div>
+          <div>Touches 1 à 9 : les 9 premiers des {places.length} lieux</div>
         </div>
       )}
       <div className="hud hud-credit">Données cartographiques © contributeurs OpenStreetMap</div>

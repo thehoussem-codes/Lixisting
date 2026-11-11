@@ -79,7 +79,7 @@ export class Game {
       if (this.disposed) return;
       this.collider = buildAnnabaWorld(this.scene, data);
       this.places = data.places;
-      this.map = new MapView(data);
+      this.map = new MapView(data, (index) => this.goToPlace(index));
       this.events.onPlaces(data.places);
       // Une voiture garée à chaque repère, pour en avoir toujours une sous la main.
       data.places.forEach((place, i) => {

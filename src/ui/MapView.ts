@@ -19,8 +19,10 @@ export class MapView {
   private full = document.createElement('canvas');
   private x0: number; private n1: number;
   private isOpen = false;
+  /** Position à l'écran de chaque repère sur la grande carte (pour les clics). */
+  private placeDots: { x: number; y: number }[] = [];
 
-  constructor(private data: WorldData) {
+  constructor(private data: WorldData, private onPlace: (index: number) => void) {
     const [x0, n0, x1, n1] = data.meta.rect_m;
     this.x0 = x0; this.n1 = n1;
     this.base.width = Math.ceil((x1 - x0) * SCALE);
@@ -32,12 +34,21 @@ export class MapView {
     this.mini.title = 'Ouvrir la carte (M)';
     this.mini.addEventListener('click', this.toggle);
     this.full.className = 'fullmap';
-    this.full.addEventListener('click', this.toggle);
+    this.full.addEventListener('click', this.onFullClick);
     document.body.append(this.mini, this.full);
   }
 
+  /** Clic sur la grande carte : sur un repère on s'y rend, ailleurs on ferme. */
+  private onFullClick = (e: MouseEvent): void => {
+    const index = this.placeDots.findIndex((dot) => Math.hypot(dot.x - e.clientX, dot.y - e.clientY) < 16);
+    if (index >= 0) this.onPlace(index);
+    this.toggle();
+  };
+
   toggle = (): void => {
     this.isOpen = !this.isOpen;
+    // On libère la souris pour pouvoir cliquer sur la carte.
+    if (this.isOpen && document.pointerLockElement) document.exitPointerLock();
     this.full.style.display = this.isOpen ? 'block' : 'none';
   };
 
@@ -70,18 +81,20 @@ export class MapView {
 
     ctx.font = 'bold 13px "Trebuchet MS", Verdana, sans-serif';
     ctx.lineWidth = 3;
+    this.placeDots = [];
     this.data.places.forEach((place, i) => {
       const lx = ox + (place.x - this.x0) * SCALE * fit, ly = oy + (this.n1 - place.n) * SCALE * fit;
+      this.placeDots.push({ x: lx, y: ly });
       ctx.fillStyle = '#1b3a57';
-      ctx.beginPath(); ctx.arc(lx, ly, 4, 0, Math.PI * 2); ctx.fill();
-      const label = `${i + 1} · ${place.name}`;
+      ctx.beginPath(); ctx.arc(lx, ly, 6, 0, Math.PI * 2); ctx.fill();
+      const label = i < 9 ? `${i + 1} · ${place.name}` : place.name;
       ctx.strokeStyle = '#ffffff';
       ctx.strokeText(label, lx + 8, ly + 4);
       ctx.fillText(label, lx + 8, ly + 4);
     });
     this.drawMarker(ctx, ox + px * fit, oy + py * fit, heading, 9);
     ctx.fillStyle = '#ffffff';
-    ctx.fillText('Nord en haut · M ou clic pour fermer · © contributeurs OpenStreetMap', 16, h - 14);
+    ctx.fillText('Clique sur un lieu pour t\'y rendre · Nord en haut · M pour fermer · © contributeurs OpenStreetMap', 16, h - 14);
   }
 
   private drawMarker(ctx: CanvasRenderingContext2D, x: number, y: number, heading: number, size: number): void {

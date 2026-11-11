@@ -25,8 +25,26 @@ ROAD_WIDTH = {
     "residential": 6, "unclassified": 6, "living_street": 5, "service": 4,
     "pedestrian": 5, "track": 3, "footway": 2, "path": 1.5, "steps": 2,
 }
-# Repères vérifiés dans les données OSM, proposés comme points de téléportation.
-PLACES = ["Gare d´Annaba", "Le Jasmin", "Oued Kouba", "Hôtel Sabri", "Plage Ain Achir", "Phare de Cap de Garde"]
+# Repères de téléportation, du sud au nord : (nom affiché, nom dans OSM, origine du nom).
+# La POSITION vient toujours d'un objet OSM réel. Quand le nom affiché n'est pas celui
+# d'OSM, il a été rapproché des captures Google Maps du projet d'après l'emplacement
+# ("capture") : à confirmer sur place.
+PLACES = [
+    ("Gare d'Annaba", "Gare d´Annaba", "osm"),
+    ("Cours de la Révolution (Mairie)", "Mairie d'Annaba", "capture"),
+    ("Vieille Ville", "Rue hamitouche abdelghani", "capture"),
+    ("Citadelle (remparts)", "@citywalls", "capture"),
+    ("Plage Saint-Cloud", "شاطئ رشيد فلاح", "osm"),
+    ("Le Jasmin", "Le Jasmin", "osm"),
+    ("Oued Kouba", "Oued Kouba", "osm"),
+    ("Plage Chapuis", "Plage Chapuis", "osm"),
+    ("Hôtel Sabri", "Hôtel Sabri", "osm"),
+    ("Plage Toche", "Plage Refas Zahouen", "capture"),
+    ("Bouna Beach", "Plage du Belvédère", "capture"),
+    ("Plage Ain Achir", "Plage Ain Achir", "osm"),
+    ("Phare du Cap de Garde", "Phare de Cap de Garde", "osm"),
+    ("Plage Le Vivier", "@northmost_beach", "capture"),
+]
 
 
 def load():
@@ -314,22 +332,29 @@ def main():
     def nearest_road(x, n):
         return min(road_points, key=lambda q: (q[0] - x) ** 2 + (q[1] - n) ** 2)
 
+    def center(e):
+        if e["type"] == "node":
+            return xy[e["id"]]
+        q = pts(e)
+        return (sum(v[0] for v in q) / len(q), sum(v[1] for v in q) / len(q))
+
+    def find(osm_name):
+        candidates = [e for e in elements if e["type"] in ("node", "way") and e.get("tags")]
+        if osm_name == "@citywalls":
+            return next((e for e in candidates if e["tags"].get("historic") == "citywalls"), None)
+        if osm_name == "@northmost_beach":
+            beaches = [e for e in candidates if e["type"] == "way" and e["tags"].get("natural") == "beach"]
+            return max(beaches, key=lambda e: center(e)[1], default=None)
+        return next((e for e in candidates if osm_name in (e["tags"].get("name"), e["tags"].get("name:fr"))), None)
+
     places = []
-    for name in PLACES:
-        for e in elements:
-            tags = e.get("tags", {})
-            if (tags.get("name:fr") or tags.get("name")) != name:
-                continue
-            if e["type"] == "node":
-                c = xy[e["id"]]
-            elif e["type"] == "way":
-                q = pts(e)
-                c = (sum(v[0] for v in q) / len(q), sum(v[1] for v in q) / len(q))
-            else:
-                continue
-            r = nearest_road(*c)
-            places.append({"name": name.replace("´", "'"), "x": round(r[0], 1), "n": round(r[1], 1)})
-            break
+    for label, osm_name, origin in PLACES:
+        e = find(osm_name)
+        if e is None:
+            print("REPÈRE INTROUVABLE :", label)
+            continue
+        r = nearest_road(*center(e))
+        places.append({"name": label, "x": round(r[0], 1), "n": round(r[1], 1), "origin": origin})
 
     world = {
         "meta": {
