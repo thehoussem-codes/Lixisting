@@ -57,14 +57,14 @@ const fragmentShader = /* glsl */ `
     // Vue rasante : on voit surtout le reflet du ciel. Vue plongeante : la couleur de l'eau.
     float fresnel = pow(1.0 - max(dot(normal, view), 0.0), 3.0);
     vec3 water = mix(uDeep, uShallow, clamp(0.5 + 2.0 * (normal.x + normal.z), 0.0, 1.0));
-    vec3 color = mix(water, uSky, 0.15 + 0.65 * fresnel);
+    vec3 color = mix(water, uSky, 0.04 + 0.6 * fresnel);
     // Éclats de soleil.
     float glint = pow(max(dot(reflect(-normalize(uSun), normal), view), 0.0), 90.0);
     color += vec3(1.0, 0.95, 0.8) * glint * 0.9;
 
     float fog = smoothstep(uFogNear, uFogFar, distanceToEye);
     color = mix(color, uFogColor, fog);
-    gl_FragColor = vec4(color, mix(0.78, 1.0, max(fresnel, fog)));
+    gl_FragColor = vec4(color, mix(0.72, 1.0, max(fresnel, fog)));
     #include <colorspace_fragment>
   }
 `;
@@ -77,8 +77,8 @@ export class Water {
     const uniforms = {
       uTime: { value: 0 },
       uCenter: { value: new THREE.Vector3() },
-      uShallow: { value: new THREE.Color(0x2fa6b3) },
-      uDeep: { value: new THREE.Color(0x0b5f8c) },
+      uShallow: { value: new THREE.Color(0x1fb3c4) },
+      uDeep: { value: new THREE.Color(0x06528f) },
       uSky: { value: new THREE.Color(0xcfe8f2) },
       uSun: { value: new THREE.Vector3(400, 500, 150) },
       uFogColor: { value: new THREE.Color(fogColor) },
