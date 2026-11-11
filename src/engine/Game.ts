@@ -5,6 +5,7 @@ import { ThirdPersonCamera } from '../player/ThirdPersonCamera';
 import { Car } from '../vehicles/Car';
 import { buildAnnabaWorld } from '../world/AnnabaWorld';
 import type { Collider } from '../world/Collider';
+import { loadTerrain } from '../world/Terrain';
 import { loadWorldData, type WorldPlace } from '../world/WorldData';
 import { MapView } from '../ui/MapView';
 
@@ -28,6 +29,8 @@ export class Game {
   private player = new Player();
   private cameraRig: ThirdPersonCamera;
   private collider: Collider | null = null;
+  /** Hauteur du sol en un point (0 partout tant que le terrain n'est pas chargé). */
+  private ground: (x: number, z: number) => number = () => 0;
   private places: WorldPlace[] = [];
   private cars: Car[] = [];
   private map: MapView | null = null;
@@ -75,9 +78,10 @@ export class Game {
   private async loadWorld(): Promise<void> {
     try {
       this.events.onStatus('Chargement de la carte d\'Annaba...');
-      const data = await loadWorldData();
+      const [data, terrain] = await Promise.all([loadWorldData(), loadTerrain()]);
       if (this.disposed) return;
-      this.collider = buildAnnabaWorld(this.scene, data);
+      this.ground = terrain.heightAt;
+      this.collider = buildAnnabaWorld(this.scene, data, terrain);
       this.places = data.places;
       this.map = new MapView(data, (index) => this.goToPlace(index));
       this.events.onPlaces(data.places);
@@ -94,7 +98,7 @@ export class Game {
       });
       this.goToPlace(0);
       const estimated = Math.round((100 * data.meta.buildings_height_estimated) / data.meta.buildings);
-      this.events.onStatus(`${data.meta.buildings} bâtiments, ${data.meta.roads} tronçons de voies · hauteurs estimées : ${estimated} % · relief : plat pour l'instant`);
+      this.events.onStatus(`${data.meta.buildings} bâtiments, ${data.meta.roads} tronçons de voies · hauteurs estimées : ${estimated} % · relief réel (précision 30 m)`);
     } catch (error) {
       this.events.onStatus(`Erreur : ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -109,7 +113,7 @@ export class Game {
       this.driving = null;
       this.player.object.visible = true;
     }
-    this.player.teleport(place.x, -place.n);
+    this.player.teleport(place.x, this.ground(place.x, -place.n), -place.n);
   }
 
   /** Touche F : monter dans la voiture la plus proche, ou en descendre. */
@@ -123,7 +127,7 @@ export class Game {
       for (const side of [1.6, -1.6]) {
         const x = car.object.position.x + sideX * side, z = car.object.position.z + sideZ * side;
         if (this.collider?.blocked(x, z, 0.35)) continue;
-        this.player.teleport(x, z);
+        this.player.teleport(x, this.ground(x, z), z);
         this.player.object.visible = true;
         this.driving = null;
         return;
@@ -155,18 +159,22 @@ export class Game {
     // dt plafonné : évite un "saut" du personnage après un onglet mis en pause.
     const dt = Math.min(this.clock.getDelta(), 0.05);
 
-    for (const car of this.cars) if (car !== this.driving) car.coast(dt, this.collider, this.cars);
+    for (const car of this.cars) {
+      if (car !== this.driving) car.coast(dt, this.collider, this.cars);
+    }
     if (this.driving) {
       const car = this.driving;
       car.drive(dt, this.input, this.collider, this.cars);
+      car.settle(this.ground);
       this.player.object.position.copy(car.object.position);
       // En roulant, la caméra revient d'elle-même derrière la voiture.
       const follow = Math.abs(car.speed) > 2 ? car.heading + Math.PI : null;
-      this.cameraRig.update(this.input, car.object.position, this.collider, dt, 9, follow);
+      this.cameraRig.update(this.input, car.object.position, this.collider, dt, this.ground, 9, follow);
     } else {
-      this.player.update(dt, this.input, this.cameraRig.yaw, this.obstacles);
-      this.cameraRig.update(this.input, this.player.object.position, this.collider, dt);
+      this.player.update(dt, this.input, this.cameraRig.yaw, this.obstacles, this.ground);
+      this.cameraRig.update(this.input, this.player.object.position, this.collider, dt, this.ground);
     }
+    for (const car of this.cars) if (car !== this.driving) car.settle(this.ground);
     const heading = this.driving ? this.driving.heading : this.player.object.rotation.y;
     this.map?.update(this.player.object.position.x, this.player.object.position.z, heading);
     this.renderer.render(this.scene, this.camera);

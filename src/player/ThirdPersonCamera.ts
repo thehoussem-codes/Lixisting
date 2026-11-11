@@ -22,7 +22,7 @@ export class ThirdPersonCamera {
    * maxDistance : recul de la caméra (plus grand en voiture).
    * followYaw : si fourni, la caméra revient doucement derrière cette direction.
    */
-  update(input: Input, playerPosition: THREE.Vector3, collider: Collider | null, dt: number, maxDistance = 6.5, followYaw: number | null = null): void {
+  update(input: Input, playerPosition: THREE.Vector3, collider: Collider | null, dt: number, ground: (x: number, z: number) => number, maxDistance = 6.5, followYaw: number | null = null): void {
     const DISTANCE = maxDistance;
     const { dx, dy } = input.consumeMouse();
     if (followYaw !== null && dx === 0) {
@@ -54,11 +54,9 @@ export class ThirdPersonCamera {
     // Se rapproche tout de suite, s'éloigne en douceur.
     this.distance = wanted < this.distance ? wanted : this.distance + (wanted - this.distance) * 0.1;
 
-    this.camera.position.set(
-      this.target.x + dirX * this.distance,
-      Math.max(0.4, this.target.y + dirY * this.distance),
-      this.target.z + dirZ * this.distance,
-    );
+    const camX = this.target.x + dirX * this.distance, camZ = this.target.z + dirZ * this.distance;
+    // La caméra reste toujours au-dessus du sol, même au pied d'une colline.
+    this.camera.position.set(camX, Math.max(ground(camX, camZ) + 0.7, this.target.y + dirY * this.distance), camZ);
     this.camera.lookAt(this.target);
   }
 }

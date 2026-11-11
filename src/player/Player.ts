@@ -29,6 +29,7 @@ export class Player {
   readonly object = new THREE.Group();
   private move = new THREE.Vector3();
   private velocityY = 0;
+  private airborne = false;
   private stride = 0;
   private armL: THREE.Group; private armR: THREE.Group;
   private legL: THREE.Group; private legR: THREE.Group;
@@ -53,12 +54,13 @@ export class Player {
     this.object.add(torso, head, hair, face, this.armL, this.armR, this.legL, this.legR);
   }
 
-  teleport(x: number, z: number): void {
-    this.object.position.set(x, 0, z);
+  teleport(x: number, y: number, z: number): void {
+    this.object.position.set(x, y, z);
     this.velocityY = 0;
+    this.airborne = false;
   }
 
-  update(dt: number, input: Input, cameraYaw: number, collider: Obstacles | null): void {
+  update(dt: number, input: Input, cameraYaw: number, collider: Obstacles | null, ground: (x: number, z: number) => number): void {
     const position = this.object.position;
     const forward = (input.isDown('KeyW') || input.isDown('ArrowUp') ? 1 : 0)
                   - (input.isDown('KeyS') || input.isDown('ArrowDown') ? 1 : 0);
@@ -87,16 +89,20 @@ export class Player {
       this.object.rotation.y += diff * Math.min(1, TURN_SPEED * dt);
     }
 
-    // Saut et gravité (le sol est encore plat, à la hauteur 0).
-    const onGround = position.y <= 0;
-    if (onGround && input.isDown('Space')) this.velocityY = JUMP_SPEED;
-    this.velocityY -= GRAVITY * dt;
-    position.y += this.velocityY * dt;
-    if (position.y <= 0) { position.y = 0; this.velocityY = 0; }
+    // Saut et gravité : au sol, le personnage suit le relief ; en l'air, il retombe.
+    const floor = ground(position.x, position.z);
+    if (this.airborne) {
+      this.velocityY -= GRAVITY * dt;
+      position.y += this.velocityY * dt;
+      if (position.y <= floor) { position.y = floor; this.velocityY = 0; this.airborne = false; }
+    } else {
+      position.y = floor;
+      if (input.isDown('Space')) { this.velocityY = JUMP_SPEED; this.airborne = true; }
+    }
 
     // Animation des bras et des jambes.
     let swing = 0;
-    if (position.y > 0) {
+    if (this.airborne) {
       swing = 0.9; // en l'air : jambes et bras écartés
       this.stride = 0;
     } else if (moving) {

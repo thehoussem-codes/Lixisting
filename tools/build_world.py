@@ -72,6 +72,16 @@ def flat(points):
     return out
 
 
+def densify(points, step):
+    """Ajoute des points pour qu'aucun segment ne dépasse `step` mètres (les routes épousent le relief)."""
+    out = [points[0]]
+    for a, b in zip(points, points[1:]):
+        count = max(1, math.ceil(math.hypot(b[0] - a[0], b[1] - a[1]) / step))
+        for k in range(1, count + 1):
+            out.append((a[0] + (b[0] - a[0]) * k / count, a[1] + (b[1] - a[1]) * k / count))
+    return out
+
+
 def simplify(points, tolerance):
     """Douglas-Peucker : enlève les points qui ne changent pas la forme."""
     if len(points) < 3:
@@ -277,14 +287,14 @@ def main():
             except ValueError:
                 pass
             for piece in clip_to_rect(p, rect):  # on coupe ce qui dépasse de la zone
-                roads.append({"k": kind, "w": width, "p": flat(simplify(piece, 0.3))})
+                roads.append({"k": kind, "w": width, "p": flat(densify(simplify(piece, 0.3), 10))})
                 if kind not in ("footway", "path", "steps", "trunk", "trunk_link"):
                     road_points += piece
         elif kind:
             skipped[kind] = skipped.get(kind, 0) + 1
         elif tags.get("railway") == "rail" and tags.get("tunnel") != "yes":
             for piece in clip_to_rect(p, rect):
-                rails.append({"p": flat(simplify(piece, 0.3))})
+                rails.append({"p": flat(densify(simplify(piece, 0.3), 10))})
 
     # --- surfaces (plages, bois, pelouses...)
     AREA_KIND = {
@@ -366,7 +376,7 @@ def main():
             "buildings_height_estimated": estimated,
             "roads": len(roads),
             "roads_skipped_by_type": skipped,
-            "relief": "plat (le relief réel n'est pas encore intégré)",
+            "relief": "Terrain Tiles (AWS Open Data), environ 30 m de précision",
         },
         "places": places,
         "land": [flat(r) for r in land],

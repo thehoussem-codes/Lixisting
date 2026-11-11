@@ -38,6 +38,7 @@ export class Car {
     const rear = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.14, 0.05), new THREE.MeshBasicMaterial({ color: 0xc81e1e }));
     rear.position.set(0, 0.7, -2.11);
     this.object.add(body, cabin, roof, lights, rear);
+    this.object.rotation.order = 'YXZ'; // d'abord la direction, puis l'inclinaison sur la pente
 
     const wheelGeometry = new THREE.CylinderGeometry(0.34, 0.34, 0.25, 10);
     wheelGeometry.rotateZ(Math.PI / 2);
@@ -55,6 +56,18 @@ export class Car {
     this.object.rotation.y = heading;
     this.speed = 0;
     this.boost = 0;
+  }
+
+  /** Pose la voiture sur le sol et l'incline selon la pente. */
+  settle(ground: (x: number, z: number) => number): void {
+    const { x, z } = this.object.position;
+    const fx = Math.sin(this.heading), fz = Math.cos(this.heading);
+    const lx = fz, lz = -fx; // vecteur "à gauche" de la voiture
+    const front = ground(x + fx * HALF_LENGTH, z + fz * HALF_LENGTH), back = ground(x - fx * HALF_LENGTH, z - fz * HALF_LENGTH);
+    const left = ground(x + lx * HALF_WIDTH, z + lz * HALF_WIDTH), right = ground(x - lx * HALF_WIDTH, z - lz * HALF_WIDTH);
+    this.object.position.y = (front + back + left + right) / 4;
+    this.object.rotation.x = -Math.atan2(front - back, HALF_LENGTH * 2);
+    this.object.rotation.z = Math.atan2(left - right, HALF_WIDTH * 2);
   }
 
   /** Ce point (vu du dessus) est-il sous la voiture ? */

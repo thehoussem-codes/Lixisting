@@ -43,7 +43,7 @@ export class MeshBuilder {
   }
 
   /** Ruban de largeur donnée le long d'une ligne (routes, rails). */
-  ribbon(points: number[], width: number, y: number, color: THREE.Color): void {
+  ribbon(points: number[], width: number, y: number, color: THREE.Color, ground?: (x: number, z: number) => number): void {
     const count = points.length / 2;
     if (count < 2) return;
     const half = width / 2;
@@ -66,8 +66,10 @@ export class MeshBuilder {
       // Dans un virage serré on élargit un peu, sans dépasser 2x.
       const cos = Math.max(0.5, Math.abs(nx * -az + nz * ax));
       const offset = half / cos;
-      this.vertex(x + nx * offset, y, z + nz * offset, color);
-      this.vertex(x - nx * offset, y, z - nz * offset, color);
+      // Chaque bord du ruban est posé sur le sol (y = hauteur au-dessus du terrain).
+      const lx = x + nx * offset, lz = z + nz * offset, rx = x - nx * offset, rz = z - nz * offset;
+      this.vertex(lx, y + (ground ? ground(lx, lz) : 0), lz, color);
+      this.vertex(rx, y + (ground ? ground(rx, rz) : 0), rz, color);
     }
     for (let i = 0; i < count - 1; i++) {
       const a = base + i * 2;
