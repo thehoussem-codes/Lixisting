@@ -29,10 +29,17 @@ export function createBlobShadow(width: number, length: number): THREE.Mesh {
 }
 
 /**
- * Ancienne conduite simplifiée, conservée comme solution de repli :
- * ajouter ?physique=arcade à l'adresse du jeu pour y revenir.
+ * Deux conduites :
+ *  - "arcade" (par défaut) : direction et vitesse simples et faciles, comme dans les jeux de course
+ *    arcade, mais la voiture n'est plus collée au sol : elle décolle sur les bosses, retombe,
+ *    s'écrase sur ses suspensions à la réception et penche légèrement en virage et au freinage ;
+ *  - "simulation" (?physique=simulation) : la physique complète à quatre suspensions, plus exigeante.
  */
-export const USE_ARCADE = new URLSearchParams(window.location.search).get('physique') === 'arcade';
+export const USE_ARCADE = new URLSearchParams(window.location.search).get('physique') !== 'simulation';
+
+const GRAVITY = 9.81;
+const TAKEOFF_GAP = 0.12;   // la voiture décolle si le sol se dérobe de plus de 12 cm sous sa trajectoire
+const SLOPE_EFFECT = 0.55;  // part de la gravité ressentie dans les côtes (1 = réaliste, 0 = aucune)
 
 const MAX_SPEED = 32;        // m/s, environ 115 km/h
 const BOOST_SPEED = 14;      // bonus en ligne droite : jusqu'à environ 165 km/h
@@ -61,6 +68,17 @@ export class Car {
   /** Simulation à quatre suspensions : créée quand la voiture est conduite ou percutée. */
   private physics: SuspensionPhysics | null = null;
   private restTime = 0;
+  // --- Conduite arcade : mouvement vertical et attitudes de caisse
+  private baseY: number | null = null; // hauteur des roues (sans l'écrasement visuel)
+  private vy = 0;
+  private airborne = false;
+  private dip = 0;        // écrasement des suspensions après une réception (m)
+  private tiltX = 0;      // tangage affiché
+  private tiltZ = 0;      // roulis affiché
+  private slopePitch = 0; // pente du sol sous la voiture, dans le sens de la marche
+  private steerInput = 0;
+  private lastSpeed = 0;
+  private lastHeading = 0;
   /** Niveau de la mer pour toutes les voitures (null dans la zone de test). */
   static waterLevel: number | null = null;
   private shadow: THREE.Mesh;
@@ -79,6 +97,7 @@ export class Car {
 
   place(x: number, z: number, heading = this.heading): void {
     this.dropPhysics();
+    this.baseY = null;
     this.object.position.set(x, 0, z);
     this.heading = heading;
     this.object.rotation.y = heading;
@@ -86,28 +105,85 @@ export class Car {
     this.boost = 0;
   }
 
-  /** Pose la voiture sur le sol et l'incline selon la pente. */
-  settle(ground: (x: number, z: number) => number): void {
+  /**
+   * Pose la voiture sur le sol et l'incline selon la pente.
+   * dynamic = vrai pour les voitures du joueur : elles peuvent quitter le sol, retomber,
+   * s'écraser à la réception et pencher en virage. Sinon (circulation) : simple suivi du sol.
+   */
+  settle(ground: (x: number, z: number) => number, dynamic = false): void {
     if (this.physics) return; // la simulation gère déjà sa position
-    const { x, z } = this.object.position;
+    const position = this.object.position;
+    const { x, z } = position;
     const fx = Math.sin(this.heading), fz = Math.cos(this.heading);
     const lx = fz, lz = -fx; // vecteur "à gauche" de la voiture
     const front = ground(x + fx * this.halfLength, z + fz * this.halfLength), back = ground(x - fx * this.halfLength, z - fz * this.halfLength);
     const left = ground(x + lx * this.halfWidth, z + lz * this.halfWidth), right = ground(x - lx * this.halfWidth, z - lz * this.halfWidth);
-    // Hauteur : la plus haute entre la moyenne des quatre côtés et le sol sous le centre (évite de s'enfoncer sur une bosse).
-    this.object.position.y = Math.max((front + back + left + right) / 4, ground(x, z));
-    this.object.rotation.x = -Math.atan2(front - back, this.halfLength * 2);
-    this.object.rotation.z = Math.atan2(left - right, this.halfWidth * 2);
-    // Les roues tournent selon la vitesse.
+    // Sol : le plus haut entre la moyenne des quatre côtés et le point sous le centre (évite de s'enfoncer sur une bosse).
+    const floor = Math.max((front + back + left + right) / 4, ground(x, z));
+    const slopePitch = Math.atan2(front - back, this.halfLength * 2), slopeRoll = Math.atan2(left - right, this.halfWidth * 2);
     const now = performance.now();
     const dt = Math.min(0.05, (now - this.lastSettle) / 1000);
     this.lastSettle = now;
     for (const wheel of this.wheels) wheel.rotation.x += (this.speed * dt) / this.spec.wheelRadius;
+
+    if (!dynamic || dt <= 0 || this.baseY === null) {
+      this.baseY = floor; this.vy = 0; this.airborne = false; this.dip = 0;
+      this.tiltX = -slopePitch; this.tiltZ = slopeRoll; this.slopePitch = slopePitch;
+      this.lastSpeed = this.speed; this.lastHeading = this.heading;
+      position.y = floor;
+      this.object.rotation.x = this.tiltX; this.object.rotation.z = this.tiltZ;
+      return;
+    }
+
+    // --- Mouvement vertical
+    if (this.airborne) {
+      this.vy -= GRAVITY * dt;
+      this.baseY += this.vy * dt;
+      if (this.baseY <= floor) { // réception : les suspensions s'écrasent, sans rebond
+        this.dip = Math.min(0.24, -this.vy * 0.035);
+        this.baseY = floor; this.vy = 0; this.airborne = false;
+      }
+    } else {
+      // Où serait la voiture si elle continuait sur sa lancée, en chute libre ?
+      const ballistic = this.baseY + this.vy * dt - 0.5 * GRAVITY * dt * dt;
+      if (ballistic > floor + TAKEOFF_GAP) { // le sol se dérobe : elle décolle
+        this.airborne = true;
+        this.vy -= GRAVITY * dt;
+        this.baseY = ballistic;
+      } else {                               // elle suit le relief
+        this.vy = Math.max(-40, Math.min(40, (floor - this.baseY) / dt));
+        this.baseY = floor;
+      }
+    }
+    this.dip *= Math.exp(-7 * dt);
+    position.y = this.baseY - this.dip;
+    this.slopePitch = this.airborne ? 0 : slopePitch;
+
+    // --- Attitudes de caisse : discrètes, lissées
+    const acceleration = (this.speed - this.lastSpeed) / dt;
+    let turn = this.heading - this.lastHeading;
+    turn = Math.atan2(Math.sin(turn), Math.cos(turn)) / dt;
+    this.lastSpeed = this.speed; this.lastHeading = this.heading;
+    const squat = Math.max(-0.045, Math.min(0.045, acceleration * 0.0035)); // se cabre à l'accélération, plonge au freinage
+    const lean = Math.max(-0.07, Math.min(0.07, this.speed * turn * 0.008));  // penche vers l'extérieur du virage
+    const targetX = this.airborne ? this.tiltX + 0.25 * dt : -slopePitch - squat; // en l'air, le nez pique doucement
+    const targetZ = this.airborne ? this.tiltZ : slopeRoll + lean;
+    const follow = Math.min(1, 9 * dt);
+    this.tiltX += (targetX - this.tiltX) * follow;
+    this.tiltZ += (targetZ - this.tiltZ) * follow;
+    this.object.rotation.x = this.tiltX; this.object.rotation.z = this.tiltZ;
+    // Roues : elles restent au sol quand la caisse s'écrase, et les roues avant braquent.
+    this.wheels.forEach((wheel, i) => {
+      wheel.position.y = this.spec.wheelRadius + this.dip;
+      wheel.rotation.order = 'YXZ';
+      if (i >= 2) wheel.rotation.y += (-this.steerInput * 0.45 - wheel.rotation.y) * Math.min(1, 10 * dt);
+    });
   }
 
   /** Place directement la voiture (utilisé par la circulation automatique). */
   setPose(x: number, z: number, heading: number): void {
     this.dropPhysics();
+    this.baseY = null;
     this.object.position.x = x;
     this.object.position.z = z;
     this.heading = heading;
@@ -141,7 +217,8 @@ export class Car {
   get telemetry(): { airborne: boolean; wheelsOnGround: number; pitch: number; roll: number; impact: number; submerged: number } {
     const p = this.physics;
     return p ? { airborne: p.airborne, wheelsOnGround: p.contact.filter(Boolean).length, pitch: p.pitch, roll: p.roll, impact: p.impact, submerged: p.submerged }
-      : { airborne: false, wheelsOnGround: 4, pitch: 0, roll: 0, impact: 0, submerged: 0 };
+      : { airborne: this.airborne, wheelsOnGround: this.airborne ? 0 : 4, pitch: -this.tiltX, roll: this.tiltZ, impact: this.dip,
+          submerged: Math.max(0, Math.min(1, (-0.25 - (this.baseY ?? 0)) / 1.0)) };
   }
 
   /** Choc reçu : la voiture est poussée à cette vitesse vers l'avant. */
@@ -217,9 +294,20 @@ export class Car {
       this.simulate(dt, { throttle: gas, steer, handbrake: input.isDown('Space'), speedLimit: top + BOOST_SPEED * this.boost }, collider, others, ground);
       return;
     }
+    this.steerInput = steer;
+    if (this.airborne) {
+      // En l'air : ni moteur, ni freins, ni direction. La voiture garde son élan.
+      this.move(dt, 0, collider, others);
+      return;
+    }
+    // Relief : une côte ralentit, une descente entraîne la voiture.
+    this.speed -= GRAVITY * Math.sin(this.slopePitch) * SLOPE_EFFECT * dt;
+    // Dans l'eau profonde, le moteur cale et la voiture est freinée.
+    const underwater = Car.waterLevel !== null && (this.baseY ?? 0) < Car.waterLevel - 0.9;
+    if (underwater) this.speed -= this.speed * Math.min(1, 3 * dt);
     if (input.isDown('Space')) {
       this.speed -= Math.sign(this.speed) * Math.min(Math.abs(this.speed), BRAKING * 1.5 * dt);
-    } else if (gas !== 0) {
+    } else if (gas !== 0 && !underwater) {
       const opposing = this.speed !== 0 && Math.sign(this.speed) !== gas;
       this.speed += gas * (opposing ? BRAKING : ACCELERATION) * dt;
     } else {
@@ -242,8 +330,9 @@ export class Car {
       if (this.restTime < 1) this.simulate(dt, { throttle: 0, steer: 0, handbrake: false, speedLimit: 30 }, collider, others, ground);
       return;
     }
+    this.steerInput = 0;
     if (this.speed === 0) return;
-    this.speed -= Math.sign(this.speed) * Math.min(Math.abs(this.speed), 6 * dt);
+    if (!this.airborne) this.speed -= Math.sign(this.speed) * Math.min(Math.abs(this.speed), 6 * dt);
     this.boost = 0;
     this.move(dt, 0, collider, others);
   }

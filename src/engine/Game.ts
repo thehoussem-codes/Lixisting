@@ -277,7 +277,7 @@ export class Game {
     if (this.driving) {
       const car = this.driving;
       car.drive(dt, this.input, this.collider, everyCar, this.ground);
-      car.settle(this.ground);
+      car.settle(this.ground, true);
       this.player.object.position.copy(car.object.position);
       // En roulant, la caméra revient d'elle-même derrière la voiture.
       const follow = Math.abs(car.speed) > 2 ? car.heading + Math.PI : null;
@@ -286,7 +286,7 @@ export class Game {
       this.player.update(dt, this.input, this.cameraRig.yaw, this.obstacles, this.ground);
       this.cameraRig.update(this.input, this.player.object.position, this.collider, dt, this.ground);
     }
-    for (const car of this.cars) if (car !== this.driving) car.settle(this.ground);
+    for (const car of this.cars) if (car !== this.driving) car.settle(this.ground, true);
     const me = this.player.object.position;
     this.traffic?.update(dt, me.x, me.z, this.driving === null, this.cars, this.ground);
     const heading = this.driving ? this.driving.heading : this.player.object.rotation.y;
