@@ -55,3 +55,11 @@
   Personnage provisoire articulé et animé (mannequin « X Bot » des exemples three.js, issu de Mixamo) : à remplacer.
   Végétation : 19 144 plantes de 5 espèces (pin, palmier, ficus, cyprès, buisson dont lauriers-roses), dans les zones vertes OSM,
   sur les collines non bâties et en alignement le long des rues à trottoir (palmiers près de la mer). Emplacements plausibles, non relevés.
+- 2026-11-11 : conduite. La simulation à quatre suspensions a été jugée trop difficile à conduire : la conduite arcade redevient le
+  réglage par défaut, mais n'est plus collée au sol. Principe repris des jeux de course arcade : direction et vitesse simples,
+  mouvement vertical séparé (décollage quand le sol se dérobe de plus de 12 cm sous la trajectoire, chute libre, réception avec
+  écrasement des suspensions sans rebond), attitudes de caisse purement visuelles et lissées (cabrage, plongée, roulis), effet
+  modéré des pentes sur la vitesse (55 % de la gravité). Simulation complète conservée : `?physique=simulation`.
+  Essais dans le jeu : tremplin à 124 km/h, 4,2 m de haut, réception stable ; en ville, aucune perte de contact parasite.
+- 2026-11-11 : photos de référence d'Annaba (Wikimedia Commons, licences libres) dans la branche `references`, avec auteurs et
+  licences dans `references/credits.json`. Elles servent de modèles visuels et ne sont pas intégrées au jeu.
