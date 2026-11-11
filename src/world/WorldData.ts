@@ -10,6 +10,8 @@ export interface WorldData {
   roads: { k: string; w: number; p: number[] }[];
   rails: { p: number[] }[];
   buildings: { h: number; p: number[]; n?: string }[];
+  /** Réseau routier : nodes = x, n... ; edges = départ, arrivée, sens unique (0/1), axe rapide (0/1)... */
+  graph: { nodes: number[]; edges: number[] };
 }
 
 export async function loadWorldData(): Promise<WorldData> {

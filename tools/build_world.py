@@ -296,6 +296,27 @@ def main():
             for piece in clip_to_rect(p, rect):
                 rails.append({"p": flat(densify(simplify(piece, 0.3), 10))})
 
+    # --- graphe routier pour la circulation : points reliés, avec le sens de circulation
+    DRIVABLE = {"trunk", "primary", "secondary", "tertiary", "trunk_link", "primary_link",
+                "secondary_link", "tertiary_link", "residential", "unclassified", "living_street"}
+    graph_index, graph_nodes, graph_edges = {}, [], []
+    for w in ways:
+        tags = w.get("tags", {})
+        if tags.get("highway") not in DRIVABLE:
+            continue
+        oneway = tags.get("oneway")
+        one = 1 if oneway in ("yes", "-1") or tags.get("junction") == "roundabout" else 0
+        nodes = [n for n in w["nodes"] if n in xy and rx0 <= xy[n][0] <= rx1 and ry0 <= xy[n][1] <= ry1]
+        if oneway == "-1":
+            nodes.reverse()
+        fast = 1 if tags.get("highway") in ("trunk", "primary", "secondary") else 0
+        for a, b in zip(nodes, nodes[1:]):
+            for n in (a, b):
+                if n not in graph_index:
+                    graph_index[n] = len(graph_nodes) // 2
+                    graph_nodes += [round(xy[n][0], 1), round(xy[n][1], 1)]
+            graph_edges += [graph_index[a], graph_index[b], one, fast]
+
     # --- surfaces (plages, bois, pelouses...)
     AREA_KIND = {
         ("natural", "beach"): "beach", ("natural", "sand"): "beach",
@@ -383,6 +404,7 @@ def main():
         "areas": areas,
         "roads": roads,
         "rails": rails,
+        "graph": {"nodes": graph_nodes, "edges": graph_edges},
         "buildings": buildings,
     }
     OUT.parent.mkdir(parents=True, exist_ok=True)

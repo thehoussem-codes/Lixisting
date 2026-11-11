@@ -70,6 +70,14 @@ export class Car {
     this.object.rotation.z = Math.atan2(left - right, HALF_WIDTH * 2);
   }
 
+  /** Place directement la voiture (utilisé par la circulation automatique). */
+  setPose(x: number, z: number, heading: number): void {
+    this.object.position.x = x;
+    this.object.position.z = z;
+    this.heading = heading;
+    this.object.rotation.y = heading;
+  }
+
   /** Ce point (vu du dessus) est-il sous la voiture ? */
   contains(x: number, z: number, margin = 0): boolean {
     const dx = x - this.object.position.x, dz = z - this.object.position.z;
