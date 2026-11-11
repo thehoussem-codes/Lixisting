@@ -22,9 +22,7 @@ DEM = ROOT / "data" / "elevation" / "annaba_dem.json.gz"
 OUT = ROOT / "public" / "world" / "terrain.bin"
 TREES_OUT = ROOT / "public" / "world" / "trees.json"
 
-# Arbres : un arbre pour N m² selon le type de zone OSM, et l'espèce plantée.
-TREE_DENSITY = {"wood": (260, "pine"), "scrub": (1100, "pine"), "grass": (420, "mixed")}
-MAX_TREES = 9000
+
 
 STEP = 30.0          # espacement des points du terrain (m)
 COAST_STEP = 12.0    # espacement maximal des points le long de la côte (m)
@@ -172,25 +170,38 @@ def main():
         f.write(color_array.tobytes())
         f.write(indices.tobytes())
 
-    build_trees(world)
+    build_trees(world, grid, (x0, n0))
     print(f"terrain : {len(positions)} points, {len(indices)} triangles, grille {cols} x {rows}, "
           f"altitude max {grid.max():.0f} m, fichier {OUT.stat().st_size // 1024} ko")
     return points, triangles, heights, colors
 
 
-def build_trees(world):
-    """Place des arbres DANS les zones vertes réelles d'OSM (bois, garrigue, parcs).
-    L'emplacement exact de chaque arbre est tiré au hasard (toujours le même tirage) :
+def build_trees(world, grid=None, grid_origin=None):
+    """Végétation. Trois sources, de la plus sûre à la plus libre :
+    1. les zones vertes réelles d'OSM (bois, garrigue, parcs) : on y répartit des arbres ;
+    2. les collines non bâties (relief réel) : maquis clairsemé de pins, cyprès et buissons ;
+    3. les rues qui ont un trottoir assez large : arbres d'alignement, palmiers près de la mer.
+    L'emplacement exact de chaque arbre est tiré au hasard (tirage toujours identique) :
     c'est un décor plausible, pas un relevé arbre par arbre."""
     rng = np.random.default_rng(7)
     road_points = np.vstack([pairs(r["p"]) for r in world["roads"]])
     building_points = np.vstack([pairs(b["p"]) for b in world["buildings"]])
     roads, buildings = cKDTree(road_points), cKDTree(building_points)
-    out = {"pine": [], "palm": []}
+    land = [Polygon(pairs(r)) for r in world["land"] if len(r) >= 6]
+    coast = cKDTree(np.vstack([densify(pairs(r), 20) for r in world["land"] if len(r) >= 6]))
+    out = {"pine": [], "palm": [], "ficus": [], "cypress": [], "bush": []}
+
+    def add(kind, x, n, low=0.75, high=1.35):
+        out[kind] += [round(float(x), 1), round(float(n), 1), round(float(low + rng.random() * (high - low)), 2)]
+
+    # 1. Zones vertes OSM
+    mixes = {"wood": (170, [("pine", 0.6), ("cypress", 0.15), ("bush", 0.25)]),
+             "scrub": (260, [("bush", 0.7), ("pine", 0.3)]),
+             "grass": (330, [("palm", 0.3), ("ficus", 0.3), ("pine", 0.15), ("bush", 0.25)])}
     for area in world["areas"]:
-        if area["k"] not in TREE_DENSITY:
+        if area["k"] not in mixes:
             continue
-        per_tree, species = TREE_DENSITY[area["k"]]
+        per_tree, mix = mixes[area["k"]]
         ring = pairs(area["p"])
         lo, hi = ring.min(axis=0), ring.max(axis=0)
         count = int((hi[0] - lo[0]) * (hi[1] - lo[1]) / per_tree)
@@ -201,16 +212,55 @@ def build_trees(world):
         if len(candidates) == 0:
             continue
         candidates = candidates[(roads.query(candidates)[0] > 7) & (buildings.query(candidates)[0] > 5)]
-        for x, n in candidates:
-            kind = species if species != "mixed" else ("palm" if rng.random() < 0.5 else "pine")
-            out[kind] += [round(float(x), 1), round(float(n), 1), round(float(0.75 + rng.random() * 0.6), 2)]
-    total = (len(out["pine"]) + len(out["palm"])) // 3
-    if total > MAX_TREES:  # on éclaircit les pins si la limite est dépassée
-        keep = max(0, MAX_TREES - len(out["palm"]) // 3)
-        pines = np.array(out["pine"]).reshape(-1, 3)
-        out["pine"] = pines[rng.choice(len(pines), keep, replace=False)].ravel().tolist()
+        names, weights = [m[0] for m in mix], [m[1] for m in mix]
+        for (x, n), kind in zip(candidates, rng.choice(names, len(candidates), p=weights)):
+            add(kind, x, n)
+
+    # 2. Collines non bâties : maquis
+    if grid is not None:
+        gx0, gn0 = grid_origin
+        rows, cols = grid.shape
+        gx, gn = np.meshgrid(gx0 + np.arange(cols) * STEP, gn0 + np.arange(rows) * STEP)
+        nodes = np.column_stack([gx.ravel(), gn.ravel()])
+        nodes = nodes[grid.ravel() > 35] + (rng.random((int((grid > 35).sum()), 2)) - 0.5) * STEP
+        on_land = np.zeros(len(nodes), dtype=bool)
+        for polygon in land:
+            on_land |= polygon.contains_points(nodes)
+        wild = on_land & (buildings.query(nodes)[0] > 35) & (roads.query(nodes)[0] > 12)
+        for x, n in nodes[wild]:
+            add(rng.choice(["pine", "pine", "bush", "bush", "cypress"]), x, n)
+
+    # 3. Arbres d'alignement le long des rues à trottoir
+    side = 1
+    for road in world["roads"]:
+        width, walk = road["w"], road.get("sw", 0)
+        if walk < 1.5 or road["k"] not in ("primary", "secondary", "tertiary", "residential"):
+            continue
+        line = pairs(road["p"])
+        spacing = 14 if road["k"] != "residential" else 22
+        since = spacing / 2
+        for a, b in zip(line, line[1:]):
+            length = np.hypot(*(b - a))
+            since += length
+            if since < spacing or length < 0.01:
+                continue
+            since = 0
+            side = -side
+            offset = width / 2 + walk * 0.55
+            normal = np.array([-(b - a)[1], (b - a)[0]]) / length
+            point = b + normal * offset * side
+            # Pas dans un carrefour (une autre rue passe là) ni contre une façade.
+            if roads.query(point)[0] < offset * 0.85 or buildings.query(point)[0] < 1.6:
+                continue
+            near_sea = coast.query(point)[0] < 160
+            if near_sea and road["k"] != "residential":
+                add("palm", *point, 0.9, 1.3)
+            else:
+                add("ficus", *point, 0.8, 1.15)
+
+    counts = {k: len(v) // 3 for k, v in out.items()}
     TREES_OUT.write_text(json.dumps(out, separators=(",", ":")), encoding="utf-8")
-    print(f"arbres : {len(out['pine']) // 3} pins, {len(out['palm']) // 3} palmiers")
+    print("végétation :", counts, "total", sum(counts.values()))
 
 
 if __name__ == "__main__":

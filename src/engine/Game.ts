@@ -151,7 +151,7 @@ export class Game {
         if (!mesh.isMesh || mesh.parent !== this.scene || !mesh.frustumCulled) return; // ni la mer ni le ciel
         mesh.geometry.computeBoundingSphere();
         const sphere = mesh.geometry.boundingSphere;
-        if (sphere && sphere.radius > 20 && sphere.radius < 700) this.chunks.push({ mesh, x: sphere.center.x, z: sphere.center.z, reach: sphere.radius + VIEW_DISTANCE });
+        if (sphere && sphere.radius > 20 && sphere.radius < 700) this.chunks.push({ mesh, x: sphere.center.x, z: sphere.center.z, reach: sphere.radius + ((mesh.userData.viewDistance as number | undefined) ?? VIEW_DISTANCE) });
       });
       this.places = data.places;
       this.traffic = new Traffic(data, (car) => this.scene.add(car.object));
