@@ -7,6 +7,7 @@ import { CAR_CATALOG } from '../vehicles/CarModels';
 import { Traffic } from '../vehicles/Traffic';
 import { buildAnnabaWorld } from '../world/AnnabaWorld';
 import { buildTestTrack } from '../world/TestTrack';
+import type { Water } from '../world/Water';
 import type { Collider } from '../world/Collider';
 import { loadTerrain } from '../world/Terrain';
 import { buildTrees, loadTrees } from '../world/Trees';
@@ -18,7 +19,9 @@ import { MapView } from '../ui/MapView';
  * Si le jeu rame, ajouter ?res=0.6 à l'adresse pour alléger le calcul.
  */
 const RENDER_SCALE = Math.min(1, Math.max(0.3, Number(new URLSearchParams(window.location.search).get('res')) || 1));
+const AUTO_SCALE = !new URLSearchParams(window.location.search).has('res');
 const ENTER_DISTANCE = 4.5;
+const VIEW_DISTANCE = 1400; // au-delà, tout est noyé dans le brouillard
 const ROAD_SURFACE = 0.2;
 
 export interface GameEvents {
@@ -32,7 +35,7 @@ export interface GameEvents {
 export class Game {
   private renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
   private scene = new THREE.Scene();
-  private camera = new THREE.PerspectiveCamera(60, 1, 0.5, 2200);
+  private camera = new THREE.PerspectiveCamera(60, 1, 0.5, 7000);
   private clock = new THREE.Clock();
   private input: Input;
   private player = new Player();
@@ -45,7 +48,14 @@ export class Game {
   private map: MapView | null = null;
   private traffic: Traffic | null = null;
   private sky: THREE.Mesh | null = null;
+  private water: Water | null = null;
+  private time = 0;
+  /** Résolution de calcul actuelle (s'adapte à la fluidité, sauf si ?res= est fixé). */
+  private renderScale = RENDER_SCALE;
+  private scaleTimer = 2;
   private hudTimer = 0;
+  /** Blocs de décor masqués quand ils sont au-delà du brouillard (inutile de les dessiner). */
+  private chunks: { mesh: THREE.Mesh; x: number; z: number; reach: number }[] = [];
   /** Durée moyenne d'une image (secondes), pour mesurer la fluidité. */
   private frameTime = 1 / 60;
   /** Voiture conduite en ce moment (null = à pied). */
@@ -79,6 +89,8 @@ export class Game {
       nearestTraffic: Math.min(...(this.traffic?.cars ?? []).map((c) => c.object.position.distanceTo(this.player.object.position))),
       player: this.player.object.position.toArray().map((v) => Math.round(v * 10) / 10),
       fps: Math.round(1 / this.frameTime),
+      scale: this.renderScale,
+      swimming: this.player.swimming,
       car: this.driving ? { kmh: Math.round(this.driving.speed * 3.6), above: Math.round((this.driving.object.position.y - this.ground(this.driving.object.position.x, this.driving.object.position.z)) * 100) / 100, ...this.driving.telemetry } : null,
     });
   }
@@ -120,11 +132,22 @@ export class Game {
       if (this.disposed) return;
       // Personnage et voitures roulent sur la surface des rues, posée 20 cm au-dessus du terrain brut.
       // Sans ce décalage, les roues s'enfonçaient dans la chaussée.
-      this.ground = (x, z) => terrain.heightAt(x, z) + ROAD_SURFACE;
+      // En mer et sur la pente du rivage (sous 40 cm), pas de décalage : c'est le fond marin.
+      this.ground = (x, z) => { const h = terrain.heightAt(x, z); return h > 0.39 ? h + ROAD_SURFACE : h; };
+      Car.waterLevel = 0;
       const world = buildAnnabaWorld(this.scene, data, terrain);
       this.collider = world.collider;
       this.sky = world.sky;
+      this.water = world.water;
       const treeCount = buildTrees(this.scene, trees, terrain.heightAt);
+      // Blocs de décor (bâtiments, arbres, lampadaires) : on notera lesquels sont assez proches pour être affichés.
+      this.scene.traverse((object) => {
+        const mesh = object as THREE.Mesh;
+        if (!mesh.isMesh || mesh.parent !== this.scene) return;
+        mesh.geometry.computeBoundingSphere();
+        const sphere = mesh.geometry.boundingSphere;
+        if (sphere && sphere.radius > 20 && sphere.radius < 700) this.chunks.push({ mesh, x: sphere.center.x, z: sphere.center.z, reach: sphere.radius + VIEW_DISTANCE });
+      });
       this.places = data.places;
       this.traffic = new Traffic(data, (car) => this.scene.add(car.object));
       this.map = new MapView(data, (index) => this.goToPlace(index));
@@ -260,9 +283,22 @@ export class Game {
     const heading = this.driving ? this.driving.heading : this.player.object.rotation.y;
     this.map?.update(this.player.object.position.x, this.player.object.position.z, heading);
     this.sky?.position.copy(this.camera.position);
+    this.time += dt;
+    this.water?.update(this.time, this.camera.position);
+    // Résolution automatique : on allège le calcul si le jeu rame, on le raffine s'il a de la marge.
+    this.scaleTimer -= elapsed;
+    if (AUTO_SCALE && this.scaleTimer <= 0) {
+      this.scaleTimer = 1.5;
+      const fps = 1 / this.frameTime;
+      const wanted = fps < 33 ? this.renderScale - 0.1 : fps > 52 ? this.renderScale + 0.05 : this.renderScale;
+      const next = Math.min(1, Math.max(0.5, wanted));
+      if (next !== this.renderScale) { this.renderScale = next; this.resize(); }
+    }
     this.hudTimer -= dt;
     if (this.hudTimer <= 0) {
       this.hudTimer = 0.25;
+      const eye = this.camera.position;
+      for (const chunk of this.chunks) chunk.mesh.visible = Math.hypot(chunk.x - eye.x, chunk.z - eye.z) < chunk.reach;
       this.events.onHud(this.nearestPlace(), this.driving ? Math.abs(this.driving.speed) * 3.6 : null, Math.round(1 / this.frameTime));
     }
     this.renderer.render(this.scene, this.camera);
@@ -273,7 +309,7 @@ export class Game {
     const height = this.container.clientHeight;
     if (width === 0 || height === 0) return;
     // false : on ne touche pas à la taille CSS, le canvas est étiré par style.css.
-    this.renderer.setSize(Math.round(width * RENDER_SCALE), Math.round(height * RENDER_SCALE), false);
+    this.renderer.setSize(Math.round(width * this.renderScale), Math.round(height * this.renderScale), false);
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
   };

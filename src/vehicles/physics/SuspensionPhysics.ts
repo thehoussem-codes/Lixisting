@@ -48,6 +48,8 @@ export interface Controls {
 
 export interface Surroundings {
   ground(x: number, z: number): number;
+  /** Niveau de la mer (m), ou null s'il n'y a pas d'eau. */
+  waterLevel: number | null;
   /** La voiture placée ici toucherait-elle un mur ou un autre véhicule ? */
   collides(x: number, z: number, yaw: number): boolean;
 }
@@ -69,6 +71,8 @@ export class SuspensionPhysics {
   forwardSpeed = 0;
   /** Vrai quand aucune roue ne touche le sol. */
   airborne = false;
+  /** 0 = au sec, 1 = caisse entièrement sous l'eau. */
+  submerged = 0;
   /** Plus forte compression subie au dernier pas (pour détecter les réceptions brutales). */
   impact = 0;
 
@@ -173,7 +177,7 @@ export class SuspensionPhysics {
       drive = -Math.sign(forward) * p.brakeForce * 0.6;
     } else if (controls.throttle > 0) {
       drive = forward < -0.5 ? p.brakeForce
-        : controls.throttle * p.engineForce * Math.max(0, 1 - (forward / controls.speedLimit) ** 2);
+        : controls.throttle * p.engineForce * Math.max(0, 1 - (forward / controls.speedLimit) ** 4); // pleine poussée presque jusqu'à la pointe
     } else if (controls.throttle < 0) {
       drive = forward > 0.5 ? -p.brakeForce
         : controls.throttle * p.engineForce * 0.6 * Math.max(0, 1 - (forward / p.reverseSpeed) ** 2);
@@ -184,6 +188,9 @@ export class SuspensionPhysics {
       const engine = Math.max(0, 1 - Math.max(0, downhill) / 0.08);
       drive = -Math.sign(forward) * p.mass * Math.min((p.engineBrake + 0.18 * Math.abs(forward)) * engine, Math.abs(forward) / h);
     }
+    // Dans l'eau : le moteur se noie dès que la caisse est à moitié immergée.
+    this.submerged = world.waterLevel === null ? 0 : Math.max(0, Math.min(1, (world.waterLevel + 0.35 - this.y) / 1.1));
+    if (this.submerged > 0.5 && !controls.handbrake) drive = 0;
     // Les pneus ne transmettent pas plus que leur adhérence : rien du tout en l'air.
     const tractionLimit = p.grip * load;
     drive = Math.max(-tractionLimit, Math.min(tractionLimit, drive));
@@ -219,6 +226,16 @@ export class SuspensionPhysics {
     const pitchInertia = (p.mass * length * length) / 12, rollInertia = (p.mass * this.track * this.track) / 8;
     const yawInertia = p.mass * this.toFront * this.toRear * 1.1;
     this.vy += (lift / p.mass - GRAVITY) * h;
+    if (this.submerged > 0) {
+      // L'eau porte en partie la voiture (elle coule lentement) et la freine fortement.
+      const water = this.submerged;
+      this.vy += GRAVITY * 0.86 * water * h;
+      this.vy -= this.vy * Math.min(1, 3 * water * h);
+      const slow = Math.min(1, 2.2 * water * h);
+      this.vx -= this.vx * slow; this.vz -= this.vz * slow;
+      this.forwardSpeed -= this.forwardSpeed * slow;
+      this.yawRate -= this.yawRate * slow;
+    }
     this.pitchRate += ((pitchTorque + p.mass * tyreForward * p.cgHeight) / pitchInertia) * h;
     this.rollRate += ((rollTorque - p.mass * tyreSide * p.cgHeight) / rollInertia) * h;
     this.yawRate += (-(this.toFront * frontSide * cosSteer - this.toRear * rearSide) / yawInertia) * h;
@@ -248,11 +265,11 @@ export function defaultHandling(length: number, width: number, height: number): 
   const springRate = (mass * GRAVITY) / (4 * 0.09);          // 9 cm d'écrasement au repos
   return {
     mass,
-    engineForce: mass * 6.5,
-    brakeForce: mass * 11,
+    engineForce: mass * 10,   // même accélération qu'avant la refonte
+    brakeForce: mass * 14,
     maxSpeed: 32,
     reverseSpeed: 8,
-    grip: 1.15,
+    grip: 1.3,
     cornering: 9,
     steerMax: 0.55,
     springRate,
@@ -261,6 +278,6 @@ export function defaultHandling(length: number, width: number, height: number): 
     travel: 0.2,
     cgHeight: height * 0.36,
     engineBrake: 3.2,
-    airDrag: 0.42,
+    airDrag: 0.2,
   };
 }

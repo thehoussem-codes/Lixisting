@@ -29,7 +29,9 @@ MAX_TREES = 9000
 STEP = 30.0          # espacement des points du terrain (m)
 COAST_STEP = 12.0    # espacement maximal des points le long de la côte (m)
 MIN_HEIGHT = 0.4     # la terre reste toujours un peu au-dessus de la mer (niveau 0)
-SKIRT_BOTTOM = -3.0  # les bords de la terre descendent sous l'eau (falaises, quais)
+SEA_FLOOR = -2.6     # profondeur du fond marin près du rivage (m)
+SHORE_RUN = 24.0     # distance sur laquelle une plage descend jusqu'au fond (m)
+CLIFF_RUN = 7.0      # même chose au pied d'une côte rocheuse ou d'un quai
 
 COLORS = {  # couleurs du sol (rouge, vert, bleu de 0 à 1)
     "land": (0.74, 0.69, 0.53), "beach": (0.93, 0.85, 0.63), "wood": (0.24, 0.48, 0.23),
@@ -135,9 +137,22 @@ def main():
     for ring in coast:
         count = len(ring)
         top = np.arange(start, start + count)
-        bottom_positions = np.column_stack([ring[:, 0], np.full(count, SKIRT_BOTTOM), -ring[:, 1]])
+        # Fond marin : chaque point de la côte est prolongé vers le large, en pente douce
+        # devant une plage, en pente raide au pied d'une falaise ou d'un quai.
+        tangent = np.roll(ring, -1, axis=0) - np.roll(ring, 1, axis=0)
+        tangent /= np.maximum(np.linalg.norm(tangent, axis=1, keepdims=True), 1e-6)
+        doubled = np.sum(ring[:, 0] * np.roll(ring[:, 1], -1) - np.roll(ring[:, 0], -1) * ring[:, 1])
+        outward = np.column_stack([tangent[:, 1], -tangent[:, 0]]) * (1 if doubled > 0 else -1)
+        ring_heights = heights[start:start + count]
+        run = np.where(ring_heights < 2.5, SHORE_RUN, CLIFF_RUN)
+        # Sur le bord de la carte (qui n'est pas une vraie côte), le mur reste vertical.
+        on_edge = (np.abs(ring[:, 0] - x0) < 1) | (np.abs(ring[:, 0] - x1) < 1) | (np.abs(ring[:, 1] - n0) < 1) | (np.abs(ring[:, 1] - n1) < 1)
+        run[on_edge] = 0
+        sea = ring + outward * run[:, None]
+        bottom_positions = np.column_stack([sea[:, 0], np.full(count, SEA_FLOOR), -sea[:, 1]])
         positions.append(bottom_positions)
-        color_list.append(np.tile(np.array(COLORS["cliff"]) * 0.8, (count, 1)))
+        seabed = np.where((ring_heights < 2.5)[:, None], np.array([0.62, 0.58, 0.42]), np.array(COLORS["cliff"]) * 0.7)
+        color_list.append(seabed)
         bottom = np.arange(offset, offset + count)
         nxt = np.roll(np.arange(count), -1)
         index_list.append(np.column_stack([top, top[nxt], bottom[nxt]]))

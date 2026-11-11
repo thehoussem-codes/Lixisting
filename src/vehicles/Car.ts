@@ -4,6 +4,30 @@ import type { Collider } from '../world/Collider';
 import { createCarVisual, type CarSpec } from './CarModels';
 import { SuspensionPhysics, defaultHandling, type Controls } from './physics/SuspensionPhysics';
 
+let shadowTexture: THREE.Texture | null = null;
+
+/** Ombre portée simple : une tache sombre aux bords flous, posée sous l'objet. Presque gratuite à afficher. */
+export function createBlobShadow(width: number, length: number): THREE.Mesh {
+  if (!shadowTexture) {
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 64;
+    const ctx = canvas.getContext('2d')!;
+    const gradient = ctx.createRadialGradient(32, 32, 6, 32, 32, 32);
+    gradient.addColorStop(0, 'rgba(0,0,0,1)');
+    gradient.addColorStop(0.6, 'rgba(0,0,0,0.75)');
+    gradient.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, 64, 64);
+    shadowTexture = new THREE.CanvasTexture(canvas);
+  }
+  const material = new THREE.MeshBasicMaterial({ map: shadowTexture, transparent: true, opacity: 0.55, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -6, polygonOffsetUnits: -24 });
+  const shadow = new THREE.Mesh(new THREE.PlaneGeometry(width, length), material);
+  shadow.rotation.x = -Math.PI / 2;
+  shadow.position.y = 0.04;
+  shadow.renderOrder = 2;
+  return shadow;
+}
+
 /**
  * Ancienne conduite simplifiée, conservée comme solution de repli :
  * ajouter ?physique=arcade à l'adresse du jeu pour y revenir.
@@ -37,6 +61,9 @@ export class Car {
   /** Simulation à quatre suspensions : créée quand la voiture est conduite ou percutée. */
   private physics: SuspensionPhysics | null = null;
   private restTime = 0;
+  /** Niveau de la mer pour toutes les voitures (null dans la zone de test). */
+  static waterLevel: number | null = null;
+  private shadow: THREE.Mesh;
 
   constructor(readonly spec: CarSpec, color: number) {
     const visual = createCarVisual(spec, color);
@@ -46,6 +73,8 @@ export class Car {
     this.halfLength = spec.length / 2;
     this.halfWidth = spec.width / 2;
     this.wheelbase = (spec.axleFront - spec.axleRear) * spec.length;
+    this.shadow = createBlobShadow(spec.width * 1.35, spec.length * 1.15);
+    this.object.add(this.shadow);
   }
 
   place(x: number, z: number, heading = this.heading): void {
@@ -109,10 +138,10 @@ export class Car {
   }
 
   /** Télémétrie pour l'affichage et les tests. */
-  get telemetry(): { airborne: boolean; wheelsOnGround: number; pitch: number; roll: number; impact: number } {
+  get telemetry(): { airborne: boolean; wheelsOnGround: number; pitch: number; roll: number; impact: number; submerged: number } {
     const p = this.physics;
-    return p ? { airborne: p.airborne, wheelsOnGround: p.contact.filter(Boolean).length, pitch: p.pitch, roll: p.roll, impact: p.impact }
-      : { airborne: false, wheelsOnGround: 4, pitch: 0, roll: 0, impact: 0 };
+    return p ? { airborne: p.airborne, wheelsOnGround: p.contact.filter(Boolean).length, pitch: p.pitch, roll: p.roll, impact: p.impact, submerged: p.submerged }
+      : { airborne: false, wheelsOnGround: 4, pitch: 0, roll: 0, impact: 0, submerged: 0 };
   }
 
   /** Choc reçu : la voiture est poussée à cette vitesse vers l'avant. */
@@ -127,6 +156,7 @@ export class Car {
     if (!this.physics) return;
     this.physics = null;
     for (const wheel of this.wheels) { wheel.position.y = this.spec.wheelRadius; wheel.rotation.y = 0; }
+    this.shadow.position.y = 0.04;
   }
 
   /** Démarre la simulation à partir de la position actuelle. */
@@ -147,6 +177,7 @@ export class Car {
     const physics = this.wake();
     physics.step(dt, controls, {
       ground,
+      waterLevel: Car.waterLevel,
       collides: (x, z, yaw) => {
         const other = this.hitCar(others, x, z, yaw);
         if (other) other.shove(physics.forwardSpeed * 0.5 * Math.cos(other.heading - yaw));
@@ -157,6 +188,10 @@ export class Car {
     this.heading = physics.yaw;
     this.speed = physics.forwardSpeed;
     this.object.rotation.set(-physics.pitch, physics.yaw, physics.roll);
+    // Ombre : elle reste au sol quand la voiture décolle, et s'estompe avec la hauteur.
+    const above = Math.max(0, physics.y - ground(physics.x, physics.z));
+    this.shadow.position.y = 0.04 - above;
+    (this.shadow.material as THREE.MeshBasicMaterial).opacity = physics.submerged > 0.2 ? 0 : 0.55 / (1 + above * 0.6);
     // Roues : elles suivent le sol (débattement), braquent à l'avant et tournent.
     this.wheels.forEach((wheel, i) => {
       wheel.position.y = physics.attachHeight - physics.length[i];

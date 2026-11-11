@@ -1,5 +1,8 @@
 import * as THREE from 'three';
 
+/** Profondeur du fond marin au large (même valeur que dans tools/build_terrain.py). */
+export const SEA_FLOOR = -2.6;
+
 /**
  * Terrain en relief, lu depuis public/world/terrain.bin (produit par tools/build_terrain.py).
  * Il fournit le maillage à afficher et la hauteur du sol en n'importe quel point.
@@ -73,10 +76,11 @@ export class Terrain {
       const u = (px * v1z - v1x * pz) / det, v = (v0x * pz - px * v0z) / det;
       if (u >= -1e-4 && v >= -1e-4 && u + v <= 1.0001) return p[a + 1] + u * (p[b + 1] - p[a + 1]) + v * (p[c + 1] - p[a + 1]);
     }
-    return this.gridHeight(x, z); // hors de la terre ferme (en mer)
+    return SEA_FLOOR; // hors de la terre ferme : le fond marin
   };
 
-  private gridHeight(x: number, z: number): number {
+  /** Altitude brute de la grille à 30 m (conservée pour des usages futurs). */
+  gridHeight(x: number, z: number): number {
     const fx = Math.min(Math.max((x - this.x0) / this.step, 0), this.cols - 1.001);
     const fy = Math.min(Math.max((-z - this.n0) / this.step, 0), this.rows - 1.001);
     const ix = Math.floor(fx), iy = Math.floor(fy);

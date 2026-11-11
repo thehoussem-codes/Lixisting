@@ -4,9 +4,11 @@ import { MeshBuilder } from './MeshBuilder';
 import type { Terrain } from './Terrain';
 import { buildBuildings } from './Buildings';
 import { createPavementTexture, createRoadTexture } from './Textures';
+import { Water } from './Water';
 import type { WorldData } from './WorldData';
 
 const HORIZON = 0xbfe0ee;
+const FOG_NEAR = 260, FOG_FAR = 1400;
 const ZENITH = 0x3f8fd0;
 const CHUNK = 400;         // les bâtiments sont regroupés par blocs de 400 m
 
@@ -55,13 +57,14 @@ export interface World {
   collider: Collider;
   /** Le ciel doit rester centré sur la caméra. */
   sky: THREE.Mesh;
+  water: Water;
 }
 
 /** Construit Annaba à partir des données réelles. */
 export function buildAnnabaWorld(scene: THREE.Scene, data: WorldData, terrain: Terrain): World {
   const ground = terrain.heightAt;
   scene.background = new THREE.Color(HORIZON);
-  scene.fog = new THREE.Fog(HORIZON, 300, 1700);
+  scene.fog = new THREE.Fog(HORIZON, FOG_NEAR, FOG_FAR);
   scene.add(new THREE.HemisphereLight(0xffffff, 0xb8a888, 1.4));
   const sun = new THREE.DirectionalLight(0xfff0d0, 2.2);
   sun.position.set(400, 500, 150);
@@ -74,10 +77,8 @@ export function buildAnnabaWorld(scene: THREE.Scene, data: WorldData, terrain: T
     scene.add(new THREE.Mesh(builder.build(), material));
   };
 
-  // Mer : un grand plan au niveau 0 (la terre est toujours au-dessus).
-  const sea = new THREE.Mesh(new THREE.PlaneGeometry(40000, 40000), new THREE.MeshLambertMaterial({ color: 0x1a6f9c }));
-  sea.rotation.x = -Math.PI / 2;
-  scene.add(sea);
+  // Mer animée au niveau 0 ; le terrain descend en pente sous la surface le long du rivage.
+  const water = new Water(scene, HORIZON, FOG_NEAR, FOG_FAR);
 
   // Terre ferme en relief ; plages, bois et pelouses sont peints dans ses couleurs.
   scene.add(terrain.mesh);
@@ -135,5 +136,5 @@ export function buildAnnabaWorld(scene: THREE.Scene, data: WorldData, terrain: T
 
   const collider = buildBuildings(scene, data, ground);
 
-  return { collider, sky };
+  return { collider, sky, water };
 }
