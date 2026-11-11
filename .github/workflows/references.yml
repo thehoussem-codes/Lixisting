@@ -22,6 +22,7 @@ jobs:
         with:
           python-version: "3.12"
       - run: python tools/fetch_references.py
+        continue-on-error: true
       - name: Enregistrer dans la branche references
         run: |
           git config user.name "github-actions[bot]"
