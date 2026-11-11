@@ -75,7 +75,11 @@ export class Game {
       // Une voiture garée à chaque repère, pour en avoir toujours une sous la main.
       data.places.forEach((place, i) => {
         const car = new Car(CAR_COLORS[i % CAR_COLORS.length]);
-        car.place(place.x + 3, -place.n);
+        // Garée à 3 m du repère, du premier côté où il n'y a pas de bâtiment.
+        const spot = [[3, 0], [-3, 0], [0, 3], [0, -3]].find(
+          ([dx, dz]) => !this.collider?.blocked(place.x + dx, -place.n + dz, 2.2),
+        ) ?? [0, 0];
+        car.place(place.x + spot[0], -place.n + spot[1]);
         this.cars.push(car);
         this.scene.add(car.object);
       });
