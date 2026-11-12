@@ -105,3 +105,57 @@ Downloaded but not used yet: Plastered Wall, Sand 01, Cobblestone 04, Ground 029
 - Licence label for every "To confirm" row.
 - glTF downloads for the five Poly Haven models and the two Blender-only models.
 - A rendered preview of each candidate, so the Visual column can be filled from what the model really looks like.
+
+## F. Visual review from rendered previews (12 November, evening)
+
+Every uploaded model that could be opened was rendered on a neutral grey background with the same lighting,
+in three views (front, side, three-quarter), textures on. Sheets: `docs/asset-previews/sheet_1.jpg` to `sheet_4.jpg`.
+This section replaces the "not seen" entries of section A. Ranked by visual quality, then usefulness for Annaba.
+
+| Rank | Asset | Sheet | Visual (1-5) | What the render shows | Triangles | Optimisation potential | Annaba fit |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | Renault Master (Algerian) | 3 | 5 | Two Protection Civile ambulances, yellow with red-white chevrons and Arabic lettering; accurate, clean | 2,141,318 (two vehicles) | Medium: keep one vehicle, drop interior and underbody, then reduce; livery is in the texture so it should survive | 5 |
+| 2 | Skoda Rapid Spaceback | 3 | 5 | Two Gendarmerie Nationale cars, green and white with markings and light bars | 264,280 (two vehicles) | Good: one vehicle is about 130,000; a target of 8,000 to 12,000 looks reachable | 5 |
+| 3 | Algerian police car | 3 | 5 | Mercedes Vito police van, white with blue stripe and Arabic "police" lettering | 621,159 | Medium | 5 |
+| 4 | Algerian villa | 1 | 4 | Photo-scan of a real two-storey house: roller shutter, tiled ground floor, balustrade balcony, window grilles. Front is convincing; sides and back are blank | 148,420 | Good: flat walls reduce well; front detail lives in the texture | 5 |
+| 5 | Mosque JAMAA | 1 | 4 | Maghrebi mosque with a square minaret and crenellated roofline; no textures or colours | 152,014 | Good; needs materials made for it | 5 |
+| 6 | Italian balcony | 2 | 4 | Iron-railing balcony with shutters, clothes line and laundry on a wall section; the wall texture rendered oddly | 357,107 | Medium: thin railings and cloth are hard to reduce; could be baked to a flat railing texture | 5 |
+| 7 | Indian Scooter | 4 | 4 | Classic Vespa-type scooter, pale green with brown seat | 11,832 | Good | 4 |
+| 8 | Bus stop pack | 2 | 4 | Shelter with advert panel, bench, bin, mailbox, sign, ticket machine. Advert text is in English | 4,506 | None needed | 3 |
+| 9 | BRI vehicle | 3 | 4 | Black Mercedes G-Class with BRI lettering | 1,570,483 | Medium | 2 |
+| 10 | Naftal "sign" | 1 | 4 | It is an oil drum, blue and yellow with Naftal marking, not a sign | 1,276 | Only the 12 MB texture needs shrinking | 4 |
+| 11 | Casbah of Algiers house | 1 | 3 | Stacked whitewashed volumes with small grilled windows, arched door, roof terrace; rendered without its colours | 57,336 | Good | 3 |
+| 12 | Low-poly Building | 2 | 3 | Grey four-storey office block with a photo texture; reads as PS2-era | 818 | None needed | 2 |
+| 13 | Lowpoly Mediterranean House | 2 | 2 | A small diorama: white cubic houses on a sand base with a black disc | 256,614 | Poor value: heavy for what it shows | 2 |
+| 14 | Naftal station | 1 | 2 | A single fuel pump, grey, with a hose; proportions look stretched | 148,053 | Poor value | 3 |
+| 15 | Low Poly Balcony | 2 | 2 | A wooden porch with a green roof, not a Mediterranean balcony | 4,020 | None needed | 1 |
+
+Previews that are not usable yet:
+
+- **Generic passenger car pack** and **Retro PSX Male Pack** rendered almost black and far too small (a whole pack per image). Their textures were not picked up by the preview tool. They need a second render, one car and one character at a time.
+- **Dolomitized reef** and **Cala del Cuervo coast**: the FBX files could not be opened by the loader.
+- Still unopened because they are Blender files: the five Poly Haven models, the bearded man, the Algerian flag.
+- Not rendered yet: Algerian police Mercedes G63, Kenney kits (their own preview images were used).
+
+Note on brand marks: the four Algerian vehicles carry real manufacturer badges and official liveries. That is what makes them recognisable, and it is a choice for the project owner.
+
+## G. New candidates from the third search (not downloaded)
+
+| Asset | Download page | Licence | Triangles | Why it is listed |
+| --- | --- | --- | --- | --- |
+| Casbah of Algiers / House, AlgiersTheWhite | https://sketchfab.com/3d-models/casbah-of-algiers-house-a06278a7b05c4035bf108a6e6f072f79 | CC-BY-NC (confirmed) | 57.5k | Already uploaded; licence now known |
+| Low Poly Apartment Building, gluttonia | https://sketchfab.com/3d-models/low-poly-apartment-building-3a3ff43aadd64349abf306217fb199c3 | CC-BY | 2.1k | Based on a real apartment block, 4K textures |
+| Low Poly Apartment, Wardster | https://sketchfab.com/3d-models/low-poly-apartment-af9b702de4ed4eabafab877518613592 | Not shown | 1.3k | PS1-style small apartment block, 512 px atlas |
+| Pubg Building, ASAD MEHMOOD | https://sketchfab.com/3d-models/pubg-building-low-poly-building-d6dc7735c1ac47d58f6baff8fe66f749 | CC-BY | 13.3k | Three-storey block with interior |
+| Mediterranean Townhouse, Mrigua Mohamed | https://sketchfab.com/3d-models/mediterranean-townhouse-stylized-tier-i-e259f78f32ad4218bbd313e3e34df82b | Not shown | 1.5M | Spanish and North African influences, balconies, arches; tagged as created with AI; needs heavy reduction |
+| Game-Ready Roller Shutters, jellystuff | https://sketchfab.com/3d-models/game-ready-roller-shutters-fc5f2411ddea4fa19c882e9082f1e173 | Not shown | 176 | Roller shutters are on almost every Algerian shop front |
+| Storefront, David Malkasian | https://sketchfab.com/3d-models/storefront-447f7c5908fa4082a1ef8f1f807b750b | CC-BY | 5.3k | Textured shop front |
+| Simple Storefront Interior Pack, 99.Miles | https://sketchfab.com/3d-models/free-simple-storefront-interior-pack-348da01c195d46eca29e478e98aab16c | CC-BY | 4.8k | Shop interiors seen through windows, one 2K texture |
+| Low Poly Shop Front 1, Christians | https://sketchfab.com/3d-models/low-poly-shop-front-1-free-8222c5f561bc493a8399f355cc65e111 | CC-BY-NC | 152 | Very light shop front |
+| Low-Poly Cafe Asset Pack, uqi0033 | https://sketchfab.com/3d-models/low-poly-cafe-asset-pack-084c6df80168426b85803c46bc09f9c0 | CC-BY | 1.1k | Chairs, tables, plant pots for terraces |
+| Pine tree low-poly, Ricardo Sanchez | https://sketchfab.com/3d-models/pine-tree-low-poly-e72f2c31aac544e58b667c13ec718daf | CC-BY | 282 | Leaf texture with opacity map |
+| Pine Tree, Wenedi | https://sketchfab.com/3d-models/pine-tree-game-ready-dc3fbd9205cf4027a4455d1f415e0478 | CC-BY | 1.7k | Game-ready pine |
+| Stylized Pine Tree, 3Dev | https://sketchfab.com/3d-models/stylized-pine-tree-7f9f8c5232794dbfb6d73389445c889b | CC-BY-SA | 664 | 1024 px textures |
+
+Search gaps after three rounds: no Algerian apartment block (cité), no ficus, no Aleppo or stone pine by name
+(the pines above are northern conifers), no school or hospital, no Arabic or French shop signs.
