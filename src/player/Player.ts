@@ -95,13 +95,88 @@ export class Player {
       }
       for (const block of this.blocks) block.visible = false;
       this.object.add(model);
-      this.dress(model);
-      model.traverse((node) => { node.castShadow = true; });
       this.captureRestPose(model);
+      // Apparence choisie dans le catalogue : elle remplace le mannequin ; sinon on garde le mannequin habillé de noir.
+      // Le mannequin reste caché pendant que l'apparence se charge : on ne le voit jamais nu.
+      if (asset.skin) model.traverse((node) => { if ((node as THREE.SkinnedMesh).isSkinnedMesh) node.visible = false; });
+      const skinned = asset.skin ? await this.applySkin(model, asset.skin, asset.height ?? 1.78).catch((error) => { console.warn('Apparence du personnage non appliquée.', error); return false; }) : false;
+      if (!skinned) { model.traverse((node) => { node.visible = true; }); this.dress(model); }
+      model.traverse((node) => { node.castShadow = true; });
       this.play('idle', 0);
     } catch (error) {
       console.warn('Personnage 3D non chargé, personnage en blocs conservé.', error);
     }
+  }
+
+  /**
+   * Pose un modèle sans squelette sur le squelette animé : chaque sommet est rattaché aux os les plus proches.
+   * Le modèle est en « A » (bras vers le bas) : on met d'abord le squelette dans la même pose, puis on l'y attache.
+   */
+  private async applySkin(model: THREE.Object3D, skin: { model: string; arm?: [number, number] }, height: number): Promise<boolean> {
+    const gltf = await assets.load(skin.model);
+    let skeleton: THREE.Skeleton | null = null;
+    const old: THREE.SkinnedMesh[] = [];
+    model.traverse((node) => { const mesh = node as THREE.SkinnedMesh; if (mesh.isSkinnedMesh) { old.push(mesh); skeleton ??= mesh.skeleton; } });
+    if (!skeleton || !this.rest.size) return false;
+    const bones = (skeleton as THREE.Skeleton).bones;
+    for (const entry of this.rest.values()) { entry.bone.quaternion.copy(entry.quaternion); entry.bone.position.copy(entry.position); }
+    const [out, up] = skin.arm ?? [0.33, -0.94];
+    this.aim('LeftArm', out, up, 0); this.aim('RightArm', -out, up, 0);
+    this.object.updateWorldMatrix(true, true);
+    const toLocal = new THREE.Matrix4().copy(this.object.matrixWorld).invert();
+    const local = (bone: THREE.Object3D) => bone.getWorldPosition(new THREE.Vector3()).applyMatrix4(toLocal);
+    // Os utilisés, avec leur « épaisseur » : un os épais (buste, bassin) attire les sommets de plus loin.
+    const THICK: Record<string, number> = { Hips: 2.4, Spine: 2.8, Spine1: 2.8, Spine2: 2.6, Neck: 1.3, Head: 1.8, UpLeg: 1.35, Leg: 1.1, Foot: 1, ToeBase: 1, Shoulder: 1.2, Arm: 1, ForeArm: 1, Hand: 1 };
+    const segments: { index: number; a: THREE.Vector3; b: THREE.Vector3; thick: number; side: number }[] = [];
+    for (const [name, entry] of this.rest) {
+      const base = name.replace(/^(Left|Right)/, '');
+      if (!(base in THICK) || /Hand.+/.test(name)) continue;
+      const child = entry.bone.children.find((c) => (c as THREE.Bone).isBone);
+      const a = local(entry.bone), b = child ? local(child) : a.clone().addScaledVector(UP, 0.12);
+      segments.push({ index: bones.indexOf(entry.bone as THREE.Bone), a, b, thick: THICK[base], side: name.startsWith('Left') ? 1 : name.startsWith('Right') ? -1 : 0 });
+    }
+    const head = segments.find((s) => s.index === bones.indexOf(this.rest.get('Head')!.bone as THREE.Bone));
+    const bound = new THREE.Skeleton(bones); // la pose actuelle (en A) devient la pose d'attache
+    const point = new THREE.Vector3(), closest = new THREE.Vector3(), line = new THREE.Line3();
+    gltf.scene.updateWorldMatrix(true, true);
+    gltf.scene.traverse((node) => {
+      const source = node as THREE.Mesh;
+      if (!source.isMesh) return;
+      const geometry = source.geometry.clone().applyMatrix4(source.matrixWorld);
+      const position = geometry.attributes.position, count = position.count;
+      const indices = new Uint16Array(count * 4), weights = new Float32Array(count * 4);
+      const material = source.material as THREE.MeshBasicMaterial, isFace = /face|head/i.test(material.name);
+      for (let i = 0; i < count; i++) {
+        const x = position.getX(i), y = position.getY(i), z = position.getZ(i);
+        point.set(0, 0, 0).addScaledVector(this.sideLeft, x * height).addScaledVector(UP, y * height).addScaledVector(this.front, z * height);
+        position.setXYZ(i, point.x, point.y, point.z);
+        let first = -1, second = -1, d1 = Infinity, d2 = Infinity;
+        if (isFace && head) { first = head.index; d1 = 1; }
+        else for (const s of segments) {
+          if (s.side && s.side * x < -0.015) continue; // un bras gauche n'attire pas le côté droit
+          line.set(s.a, s.b).closestPointToPoint(point, true, closest);
+          const d = closest.distanceTo(point) / s.thick;
+          if (d < d1) { second = first; d2 = d1; first = s.index; d1 = d; } else if (d < d2) { second = s.index; d2 = d; }
+        }
+        // Deux os ne se partagent un sommet que s'ils se suivent (bras et avant-bras, cuisse et tibia...) : sinon une main colle à la cuisse.
+        const linked = second >= 0 && (bones[first].parent === bones[second] || bones[second].parent === bones[first]);
+        const blend = linked && d2 < d1 * 1.9 + 0.01 ? (1 / (d2 * d2 + 1e-5)) / (1 / (d1 * d1 + 1e-5) + 1 / (d2 * d2 + 1e-5)) : 0;
+        indices[i * 4] = first; weights[i * 4] = 1 - blend;
+        indices[i * 4 + 1] = Math.max(0, second); weights[i * 4 + 1] = blend;
+      }
+      geometry.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(indices, 4));
+      geometry.setAttribute('skinWeight', new THREE.Float32BufferAttribute(weights, 4));
+      geometry.computeVertexNormals();
+      const mesh = new THREE.SkinnedMesh(geometry, new THREE.MeshLambertMaterial({ map: material.map, side: THREE.DoubleSide }));
+      mesh.frustumCulled = false;
+      mesh.castShadow = true;
+      this.object.add(mesh);
+      mesh.updateMatrixWorld(true);
+      mesh.bind(bound);
+    });
+    for (const mesh of old) mesh.visible = false;
+    for (const entry of this.rest.values()) { entry.bone.quaternion.copy(entry.quaternion); entry.bone.position.copy(entry.position); }
+    return true;
   }
 
   /** Contrôle du modèle chargé : nombre de maillages et de triangles, taille, et l'animation avance-t-elle ? */

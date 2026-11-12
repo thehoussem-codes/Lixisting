@@ -27,6 +27,11 @@ export interface CharacterAsset extends ModelRef {
   height?: number;
   /** Nom des animations dans le fichier. */
   animations?: { idle?: string; walk?: string; run?: string };
+  /**
+   * Apparence : un modèle sans squelette (hauteur 1, pieds à y = 0, visage vers +Z) posé sur le squelette animé ci-dessus.
+   * arm : direction des bras du modèle au repos, [vers l'extérieur, vers le haut] (bras en A : environ [0.33, -0.94]).
+   */
+  skin?: { model: string; arm?: [number, number] };
 }
 
 export interface VehicleAsset extends ModelRef {

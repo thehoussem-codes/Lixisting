@@ -361,6 +361,7 @@ export class Game {
     if (DRONE) { // vue aérienne de contrôle : ?drone=hauteur,cap
       const target = this.player.object.position.clone(), heading = (DRONE[1] ?? 0) * Math.PI / 180;
       target.z += DRONE[2] ?? 0;
+      target.y += DRONE[3] ?? 0;
       this.camera.position.set(target.x - Math.sin(heading) * DRONE[0] * 0.9, target.y + DRONE[0], target.z + Math.cos(heading) * DRONE[0] * 0.9);
       this.camera.lookAt(target);
     }

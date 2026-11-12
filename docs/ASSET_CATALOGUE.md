@@ -214,3 +214,9 @@ three-quarter view and a close-up of the head, textures only, no lighting effect
 - Not integrated yet. File check: the FBX contains no bones, no skin data and no animations, so the character is a static
   mesh. Before it can replace the current player it needs a skeleton and skin weights, then the existing idle, walk and
   run animations retargeted onto it.
+
+### Player character integrated (12 November, by decision)
+
+Character 4 of the Retro PSX Male Pack is now the player. It is the only asset integrated from this library.
+The file had no skeleton, so it was attached to the skeleton and animations the game already used
+(each vertex follows its nearest bones). Source file: `public/assets/models/player.glb`; setting: `character.skin` in `catalog.json`.

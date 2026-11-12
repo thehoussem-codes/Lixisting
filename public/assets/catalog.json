@@ -8,6 +8,13 @@
       "idle": "idle",
       "walk": "walk",
       "run": "run"
+    },
+    "skin": {
+      "model": "models/player.glb",
+      "arm": [
+        0.33,
+        -0.94
+      ]
     }
   },
   "vehicles": {
