@@ -206,3 +206,11 @@ three-quarter view and a close-up of the head, textures only, no lighting effect
 - Characters 1 and 14 have a solid black head: their head texture is missing or was not matched by the preview tool.
 - The glare seen in the earlier sheet came from the preview lighting, not from the models.
 - Visual score revised to 4 for a PS1/PS2 look. Limits: hands and feet are very simple, and the pack has no rig or animations confirmed.
+
+### Decisions on the Retro PSX Male Pack (12 November)
+
+- All 23 characters are kept in the library (pedestrians later).
+- **Player character: character 4** (cream long-sleeved shirt, dark blue-grey trousers, dark hair), 466 triangles.
+- Not integrated yet. File check: the FBX contains no bones, no skin data and no animations, so the character is a static
+  mesh. Before it can replace the current player it needs a skeleton and skin weights, then the existing idle, walk and
+  run animations retargeted onto it.
