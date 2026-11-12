@@ -220,3 +220,10 @@ three-quarter view and a close-up of the head, textures only, no lighting effect
 Character 4 of the Retro PSX Male Pack is now the player. It is the only asset integrated from this library.
 The file had no skeleton, so it was attached to the skeleton and animations the game already used
 (each vertex follows its nearest bones). Source file: `public/assets/models/player.glb`; setting: `character.skin` in `catalog.json`.
+
+### Algerian vehicles integrated (12 November, by decision)
+
+Gendarmerie Skoda, Protection Civile ambulance, police van and BRI vehicle are in the game, liveries intact.
+Each was cut to one vehicle, reduced to 28,000 to 38,000 triangles, merged into 15 to 27 parts and given 512 px textures
+(3.6 to 4.2 MB per file, in `public/assets/models/vehicles/`). They are rare in traffic (`weight` 0.12 in `catalog.json`).
+Their wheels are part of the model and do not spin. Licences still to confirm.

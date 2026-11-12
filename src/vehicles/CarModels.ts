@@ -25,6 +25,8 @@ export interface CarSpec {
   trim: boolean;              // pare-chocs et baguettes latérales noirs (modèles anciens)
   darkRoof?: boolean;
   taxi?: boolean;
+  /** Fréquence dans la circulation (1 par défaut). */
+  weight?: number;
   /** Deux-roues : maxi-scooter ou cyclomoteur (silhouettes génériques, sans logo). */
   moto?: 'maxiscooter' | 'cyclomoteur';
   tallLights?: boolean;       // feux arrière verticaux (hayons)
@@ -396,7 +398,7 @@ export function applyVehicleAssets(): void {
       length: asset.length ?? base.length, width: asset.width ?? base.width, height: asset.height ?? base.height,
       wheelRadius: asset.wheelRadius ?? base.wheelRadius,
       wheelPoints: asset.wheels ?? base.wheelPoints, collision: asset.collision ?? base.collision,
-      colors: asset.colors ?? base.colors, taxi: index >= 0 ? base.taxi : false,
+      colors: asset.colors ?? base.colors, taxi: index >= 0 ? base.taxi : false, weight: asset.weight ?? (index >= 0 ? base.weight : 1),
       handling: { ...base.handling, ...asset.handling, ...(asset.centerOfGravityHeight ? { cgHeight: asset.centerOfGravityHeight } : {}) },
     };
     if (index >= 0) CAR_CATALOG[index] = spec; else CAR_CATALOG.splice(CAR_CATALOG.length - 1, 0, spec); // le taxi reste en dernier
@@ -482,12 +484,20 @@ export function createCarVisual(spec: CarSpec, color: number): CarVisual {
   return { group, wheels };
 }
 
+/** Tirage qui respecte la fréquence de chaque modèle (les véhicules de secours sont rares). */
+function weighted(specs: CarSpec[], roll: number): CarSpec {
+  const total = specs.reduce((sum, spec) => sum + (spec.weight ?? 1), 0);
+  let mark = roll * total;
+  for (const spec of specs) { mark -= spec.weight ?? 1; if (mark <= 0) return spec; }
+  return specs[specs.length - 1];
+}
+
 /** Tire au sort un modèle (un taxi de temps en temps) et une de ses couleurs. random : nombre entre 0 et 1. */
 export function pickCar(random: () => number): { spec: CarSpec; color: number } {
   const taxi = CAR_CATALOG[CAR_CATALOG.length - 1];
   const others = CAR_CATALOG.slice(0, -1);
   // Un véhicule sur dix est un deux-roues ; sinon un taxi de temps en temps.
   const spec = random() < 0.1 ? MOTO_CATALOG[Math.floor(random() * MOTO_CATALOG.length)]
-    : random() < 0.14 ? taxi : others[Math.floor(random() * others.length)];
+    : random() < 0.14 ? taxi : weighted(others, random());
   return { spec, color: spec.colors[Math.floor(random() * spec.colors.length)] };
 }

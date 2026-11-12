@@ -61,6 +61,70 @@
       "handling": {
         "maxSpeed": 34
       }
+    },
+    "gendarmerie": {
+      "enabled": true,
+      "base": "compacte",
+      "label": "Gendarmerie nationale",
+      "model": "models/vehicles/gendarmerie.glb",
+      "keepWheels": false,
+      "length": 4.3,
+      "width": 1.98,
+      "height": 1.64,
+      "wheelRadius": 0.31,
+      "weight": 0.12,
+      "collision": {
+        "halfLength": 2.15,
+        "halfWidth": 0.87
+      }
+    },
+    "ambulance": {
+      "enabled": true,
+      "base": "suv",
+      "label": "Protection civile",
+      "model": "models/vehicles/ambulance.glb",
+      "keepWheels": false,
+      "length": 5.5,
+      "width": 2.48,
+      "height": 2.7,
+      "wheelRadius": 0.36,
+      "weight": 0.12,
+      "collision": {
+        "halfLength": 2.75,
+        "halfWidth": 1.12
+      }
+    },
+    "police": {
+      "enabled": true,
+      "base": "suv",
+      "label": "Police",
+      "model": "models/vehicles/police.glb",
+      "keepWheels": false,
+      "length": 4.9,
+      "width": 2.2,
+      "height": 2.02,
+      "wheelRadius": 0.33,
+      "weight": 0.12,
+      "collision": {
+        "halfLength": 2.45,
+        "halfWidth": 0.98
+      }
+    },
+    "bri": {
+      "enabled": true,
+      "base": "suv",
+      "label": "BRI",
+      "model": "models/vehicles/bri.glb",
+      "keepWheels": false,
+      "length": 4.7,
+      "width": 2.24,
+      "height": 1.9,
+      "wheelRadius": 0.38,
+      "weight": 0.12,
+      "collision": {
+        "halfLength": 2.35,
+        "halfWidth": 1.0
+      }
     }
   },
   "props": {}

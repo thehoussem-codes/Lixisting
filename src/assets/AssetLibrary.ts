@@ -50,6 +50,8 @@ export interface VehicleAsset extends ModelRef {
   centerOfGravityHeight?: number;
   handling?: Partial<Handling>;
   colors?: number[];
+  /** Fréquence dans la circulation par rapport à une voiture ordinaire (1 par défaut ; 0.1 = dix fois plus rare). */
+  weight?: number;
   /**
    * Nom (ou morceau de nom) du matériau de carrosserie dans le fichier : lui seul prend la couleur du véhicule.
    * Sans indication, on cherche un matériau nommé body, paint, carrosserie ou carpaint.
