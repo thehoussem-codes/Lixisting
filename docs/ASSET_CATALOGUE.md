@@ -194,3 +194,15 @@ This is the simplest reduction method. A proper edge-collapse tool would do bett
 
 Still not found after four rounds: an Algerian apartment block (cité), a school on its own, ficus, Aleppo or stone pine,
 Arabic or French shop signs. Tunisian heritage collections exist on Sketchfab but most items are not downloadable.
+
+### Characters re-rendered from the front (flat lighting, head close-up)
+
+Sheets `sheet_9_characters_front.jpg` (characters 1 to 12) and `sheet_10_characters_front.jpg` (13 to 23): front view,
+three-quarter view and a close-up of the head, textures only, no lighting effects.
+
+- All 23 share one 466-triangle body; faces and clothes are photo-based textures.
+- Faces are realistic and varied: younger and older men, grey hair, beards, moustaches, different skin tones.
+- Clothing: shirts, plaid shirts, jackets, dark suits with ties, a leather jacket, two bare-chested, one in a balaclava.
+- Characters 1 and 14 have a solid black head: their head texture is missing or was not matched by the preview tool.
+- The glare seen in the earlier sheet came from the preview lighting, not from the models.
+- Visual score revised to 4 for a PS1/PS2 look. Limits: hands and feet are very simple, and the pack has no rig or animations confirmed.
