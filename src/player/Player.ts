@@ -195,8 +195,8 @@ export class Player {
     if (bone) {
       this.object.updateWorldMatrix(true, true);
       const top = bone.getWorldPosition(new THREE.Vector3());
-      const hair = new THREE.Mesh(new THREE.SphereGeometry(0.118, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.52), new THREE.MeshLambertMaterial({ color: 0x120d0a }));
-      hair.position.set(top.x, top.y + 0.105, top.z - 0.012);
+      const hair = new THREE.Mesh(new THREE.SphereGeometry(0.126, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.55), new THREE.MeshLambertMaterial({ color: 0x120d0a }));
+      hair.position.set(top.x, top.y + 0.1, top.z - 0.055);
       hair.frustumCulled = false;
       this.object.add(hair);
       bone.attach(hair);

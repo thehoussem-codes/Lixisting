@@ -119,6 +119,7 @@ export class Traffic {
     if (this.drivers.length < COUNT) {
       const choice = pickCar(() => this.random());
       const car = new Car(choice.spec, choice.color);
+      car.rider = true;
       const driver: Driver = { car, from: 0, to: 0, travelled: 0, length: 1, cruise: 8, lane: LANE_OFFSET, waiting: 0, passing: 0 };
       if (this.respawn(driver, px, pz, everyCar)) {
         this.drivers.push(driver);

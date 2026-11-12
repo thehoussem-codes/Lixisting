@@ -76,6 +76,12 @@ export class Car {
   private tiltZ = 0;      // roulis affiché
   private slopePitch = 0; // pente du sol sous la voiture, dans le sens de la marche
   private steerInput = 0;
+  private leanNode: THREE.Object3D | null;
+  private riderNode: THREE.Object3D | null;
+  private leanFrom = 0;
+
+  /** Deux-roues : affiche ou cache le conducteur assis dessus. */
+  set rider(shown: boolean) { if (this.riderNode) this.riderNode.visible = shown; }
   private lastSpeed = 0;
   private lastHeading = 0;
   /** Niveau de la mer pour toutes les voitures (null dans la zone de test). */
@@ -86,6 +92,8 @@ export class Car {
     const visual = createCarVisual(spec, color);
     this.object = visual.group;
     this.wheels = visual.wheels;
+    this.leanNode = visual.lean ?? null;
+    this.riderNode = visual.rider ?? null;
     this.object.rotation.order = 'YXZ'; // d'abord la direction, puis l'inclinaison sur la pente
     this.halfLength = spec.collision?.halfLength ?? spec.length / 2;
     this.halfWidth = spec.collision?.halfWidth ?? spec.width / 2;
@@ -124,6 +132,14 @@ export class Car {
     const dt = Math.min(0.05, (now - this.lastSettle) / 1000);
     this.lastSettle = now;
     for (const wheel of this.wheels) wheel.rotation.x += (this.speed * dt) / this.spec.wheelRadius;
+    if (this.leanNode && dt > 0) {
+      // Un deux-roues penche vers l'intérieur du virage, d'autant plus qu'il tourne vite.
+      let turn = this.heading - this.leanFrom;
+      turn = Math.atan2(Math.sin(turn), Math.cos(turn)) / dt;
+      this.leanFrom = this.heading;
+      const target = Math.max(-0.5, Math.min(0.5, -turn * Math.abs(this.speed) * 0.09));
+      this.leanNode.rotation.z += (target - this.leanNode.rotation.z) * Math.min(1, 6 * dt);
+    }
 
     if (!dynamic || dt <= 0 || this.baseY === null) {
       this.baseY = floor; this.vy = 0; this.airborne = false; this.dip = 0;

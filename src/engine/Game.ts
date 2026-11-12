@@ -3,7 +3,7 @@ import { Input } from './Input';
 import { Player } from '../player/Player';
 import { ThirdPersonCamera } from '../player/ThirdPersonCamera';
 import { Car } from '../vehicles/Car';
-import { CAR_CATALOG, applyVehicleAssets } from '../vehicles/CarModels';
+import { CAR_CATALOG, MOTO_CATALOG, applyVehicleAssets } from '../vehicles/CarModels';
 import { assets } from '../assets/AssetLibrary';
 import { Traffic } from '../vehicles/Traffic';
 import { TrafficLights } from '../world/TrafficLights';
@@ -175,6 +175,14 @@ export class Game {
         this.cars.push(car);
         this.scene.add(car.object);
       });
+      // Un deux-roues garé à côté de la voiture, un repère sur deux (maxi-scooter et cyclomoteur en alternance).
+      data.places.forEach((place, i) => {
+        if (i % 2) return;
+        const moto = new Car(MOTO_CATALOG[(i / 2) % MOTO_CATALOG.length], MOTO_CATALOG[(i / 2) % MOTO_CATALOG.length].colors[i % 4]);
+        moto.place(place.cx + Math.sin(place.ch) * 4.2, -place.cn + Math.cos(place.ch) * 4.2, place.ch);
+        this.cars.push(moto);
+        this.scene.add(moto.object);
+      });
       this.goToPlace(0);
       // Adresse du type ...?at=x,n : démarre à ce point de la carte (mètres depuis la gare, n = nord).
       const at = new URLSearchParams(window.location.search).get('at')?.split(',').map(Number);
@@ -182,10 +190,11 @@ export class Game {
       // Adresse ...?salon=1 : expose tout le catalogue de voitures devant le joueur (pour les comparer).
       if (new URLSearchParams(window.location.search).has('salon')) {
         const me = this.player.object.position;
-        CAR_CATALOG.forEach((spec, i) => {
+        [...CAR_CATALOG, ...MOTO_CATALOG].forEach((spec, i) => {
           const car = new Car(spec, spec.colors[0]);
           const column = i % 5, row = Math.floor(i / 5);
           car.place(me.x + (column - 2) * 3.1, me.z + 5 + row * 5.5, Math.PI + (row === 0 ? 0.7 : -2.5));
+          if (spec.moto) { car.place(me.x + (spec.moto === 'maxiscooter' ? -1.6 : 1.6), me.z - 2.6, Math.PI / 2 + 0.5); car.rider = spec.moto === 'cyclomoteur'; }
           this.cars.push(car);
           this.scene.add(car.object);
         });
@@ -238,6 +247,7 @@ export class Game {
         if (this.collider?.blocked(x, z, 0.35)) continue;
         this.player.teleport(x, this.ground(x, z), z);
         this.player.object.visible = true;
+        car.rider = false;
         this.driving = null;
         return;
       }
@@ -257,6 +267,7 @@ export class Game {
       }
       this.driving = nearest;
       this.player.object.visible = false;
+      if (this.driving) this.driving.rider = true;
     }
   }
 
@@ -298,7 +309,8 @@ export class Game {
     const heading = this.driving ? this.driving.heading : this.player.object.rotation.y;
     this.map?.update(this.player.object.position.x, this.player.object.position.z, heading);
     if (DRONE) { // vue aérienne de contrôle : ?drone=hauteur,cap
-      const target = this.player.object.position, heading = (DRONE[1] ?? 0) * Math.PI / 180;
+      const target = this.player.object.position.clone(), heading = (DRONE[1] ?? 0) * Math.PI / 180;
+      target.z += DRONE[2] ?? 0;
       this.camera.position.set(target.x - Math.sin(heading) * DRONE[0] * 0.9, target.y + DRONE[0], target.z + Math.cos(heading) * DRONE[0] * 0.9);
       this.camera.lookAt(target);
     }

@@ -25,6 +25,8 @@ export interface CarSpec {
   trim: boolean;              // pare-chocs et baguettes latérales noirs (modèles anciens)
   darkRoof?: boolean;
   taxi?: boolean;
+  /** Deux-roues : maxi-scooter ou cyclomoteur (silhouettes génériques, sans logo). */
+  moto?: 'maxiscooter' | 'cyclomoteur';
   tallLights?: boolean;       // feux arrière verticaux (hayons)
   /** Réglages de conduite propres à ce modèle (le reste est déduit de ses dimensions). */
   handling?: Partial<Handling>;
@@ -81,6 +83,14 @@ function interpolate(points: [number, number][], t: number): number {
   return points[points.length - 1][1];
 }
 
+/** Deux-roues présents dans la circulation (environ un véhicule sur dix). */
+export const MOTO_CATALOG: CarSpec[] = [
+  { id: 'maxiscooter', label: 'Maxi-scooter', moto: 'maxiscooter', length: 2.2, width: 0.78, height: 1.42, clearance: 0.14, wheelRadius: 0.29, axleRear: 0.14, axleFront: 0.86,
+    belt: [], roof: [], trim: false, colors: [0x1b1b1d, 0x3a3d42, 0xe9e7e0, 0x1f2a44] },
+  { id: 'cyclomoteur', label: 'Cyclomoteur', moto: 'cyclomoteur', length: 1.78, width: 0.62, height: 1.05, clearance: 0.12, wheelRadius: 0.3, axleRear: 0.17, axleFront: 0.83,
+    belt: [], roof: [], trim: false, colors: [0x2f55a4, 0xb3261e, 0xe8e4d8, 0xd9731a] },
+];
+
 /** Petit assembleur de géométrie avec normales fournies (pour des surfaces lisses). */
 class Shell {
   positions: number[] = []; normals: number[] = []; colors: number[] = []; indices: number[] = [];
@@ -113,6 +123,19 @@ class Shell {
     }
   }
 
+  /** Poutre inclinée dans le plan vertical de la moto : de (y0, z0) à (y1, z1), demi-largeur hx, demi-épaisseur hy, décalée de cx. */
+  beam(y0: number, z0: number, y1: number, z1: number, hx: number, hy: number, color: THREE.Color, cx = 0): void {
+    const along = new THREE.Vector3(0, (y1 - y0) / 2, (z1 - z0) / 2), unit = along.clone().normalize();
+    const up = new THREE.Vector3(0, unit.z, -unit.y), center = new THREE.Vector3(cx, (y0 + y1) / 2, (z0 + z1) / 2);
+    if (up.y < 0) up.negate();
+    const X = new THREE.Vector3(hx, 0, 0), Y = up.clone().multiplyScalar(hy);
+    for (const s of [1, -1]) {
+      this.plate(center.clone().addScaledVector(X, s), Y, along, new THREE.Vector3(s, 0, 0), color);
+      this.plate(center.clone().addScaledVector(Y, s), X, along, up.clone().multiplyScalar(s), color);
+      this.plate(center.clone().addScaledVector(along, s), X, Y, unit.clone().multiplyScalar(s), color);
+    }
+  }
+
   build(): THREE.BufferGeometry {
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(this.positions, 3));
@@ -132,7 +155,97 @@ function taper(t: number): number {
   return 1 - 0.1 * rear * rear - 0.16 * front * front;
 }
 
+const M_WHITE = new THREE.Color(0xffffff), M_DARK = new THREE.Color(0x1a1a1c), M_SEAT = new THREE.Color(0x121212), M_METAL = new THREE.Color(0xa9adb2),
+  M_GLASS = new THREE.Color(0x2c3b46), M_LIGHT = new THREE.Color(0xf3ecc8), M_RED = new THREE.Color(0xc0261c), M_PLATE = new THREE.Color(0xe8e8e0),
+  M_BROWN = new THREE.Color(0x3a2a20), M_SKIN = new THREE.Color(0xc98f68), M_JEAN = new THREE.Color(0x2d3f5e), M_JACKET = new THREE.Color(0x1c1c20), M_HELMET = new THREE.Color(0x2a2a2e), M_HAIR = new THREE.Color(0x1a120c);
+
+/** Carrosserie d'un deux-roues : la partie peinte (blanche, teintée par la peinture) et les détails. */
+function buildMoto(spec: CarSpec): CarGeometry {
+  const body = new Shell(), d = new Shell();
+  const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
+  if (spec.moto === 'maxiscooter') {
+    body.beam(0.62, -0.15, 0.80, -1.02, 0.19, 0.14, M_WHITE);          // coque arrière qui remonte
+    body.beam(0.44, 0.5, 1.0, 0.82, 0.25, 0.17, M_WHITE);              // tablier avant
+    body.box(V(0, 0.8, 0.95), 0.21, 0.17, 0.13, M_WHITE);              // nez
+    body.beam(0.5, 0.62, 0.62, 0.98, 0.075, 0.05, M_WHITE);            // garde-boue avant
+    d.beam(0.4, -0.6, 0.4, 0.5, 0.21, 0.13, M_DARK);                   // plancher et bas de caisse
+    d.beam(0.5, -0.1, 0.55, 0.45, 0.13, 0.1, M_DARK);                  // tunnel central
+    d.beam(0.83, 0.1, 0.8, -0.35, 0.18, 0.06, M_SEAT);                 // selle du pilote
+    d.beam(0.9, -0.38, 0.95, -0.85, 0.17, 0.06, M_SEAT);               // selle du passager, plus haute
+    d.beam(1.03, 0.85, 1.4, 0.66, 0.2, 0.012, M_GLASS);                // bulle
+    d.box(V(0, 1.07, 0.6), 0.36, 0.022, 0.022, M_DARK);                // guidon
+    for (const s of [1, -1]) {
+      d.box(V(s * 0.37, 1.07, 0.56), 0.03, 0.03, 0.07, M_DARK);        // poignées
+      d.beam(1.08, 0.6, 1.24, 0.56, 0.012, 0.012, M_DARK, s * 0.3);    // tiges de rétroviseurs
+      d.box(V(s * 0.33, 1.27, 0.55), 0.07, 0.04, 0.012, M_DARK);
+      d.box(V(s * 0.11, 0.84, 1.085), 0.07, 0.045, 0.01, M_LIGHT);     // double optique
+      d.beam(0.3, 0.76, 0.72, 0.68, 0.02, 0.03, M_METAL, s * 0.085);   // fourche
+      d.box(V(s * 0.12, 0.83, -1.1), 0.05, 0.03, 0.02, M_RED);         // feux arrière
+    }
+    d.beam(0.36, -0.2, 0.52, -1.0, 0.055, 0.06, M_METAL, -0.24);       // pot d'échappement
+    d.box(V(0, 0.62, -1.12), 0.09, 0.055, 0.008, M_PLATE);             // plaque
+    d.beam(0.3, -0.75, 0.42, -0.3, 0.06, 0.06, M_DARK);                // bras oscillant / moteur
+  } else {
+    body.beam(0.48, -0.5, 0.56, 0.28, 0.04, 0.055, M_WHITE);           // cadre en tôle
+    body.beam(0.52, 0.22, 0.9, 0.44, 0.065, 0.085, M_WHITE);           // réservoir le long de la colonne
+    body.beam(0.63, -0.42, 0.6, -0.86, 0.06, 0.012, M_WHITE);          // garde-boue arrière
+    body.beam(0.62, 0.42, 0.6, 0.78, 0.055, 0.012, M_WHITE);           // garde-boue avant
+    body.box(V(0, 0.42, -0.05), 0.075, 0.09, 0.2, M_WHITE);            // carters latéraux
+    d.beam(0.84, -0.5, 0.84, 0.04, 0.115, 0.045, M_BROWN);             // selle longue
+    d.beam(0.52, -0.22, 0.8, -0.26, 0.022, 0.022, M_METAL);            // tube de selle
+    d.box(V(0, 0.34, 0.08), 0.09, 0.09, 0.13, M_METAL);                // moteur
+    d.box(V(0, 0.3, 0.08), 0.17, 0.012, 0.03, M_DARK);                 // pédales
+    d.box(V(0, 0.99, 0.42), 0.29, 0.016, 0.016, M_METAL);              // guidon
+    d.box(V(0, 0.82, 0.58), 0.075, 0.075, 0.05, M_METAL);              // phare rond
+    d.box(V(0, 0.82, 0.635), 0.055, 0.055, 0.006, M_LIGHT);
+    d.beam(0.74, -0.5, 0.74, -0.88, 0.09, 0.01, M_METAL);              // porte-bagages
+    d.box(V(0, 0.66, -0.89), 0.035, 0.03, 0.012, M_RED);               // feu arrière
+    d.box(V(0, 0.52, -0.9), 0.07, 0.045, 0.006, M_PLATE);
+    d.beam(0.3, 0.1, 0.33, -0.62, 0.028, 0.028, M_METAL, -0.11);       // pot fin
+    for (const s of [1, -1]) {
+      d.box(V(s * 0.3, 0.99, 0.4), 0.025, 0.025, 0.05, M_DARK);        // poignées
+      d.beam(0.3, 0.59, 0.97, 0.45, 0.014, 0.02, M_METAL, s * 0.06);   // fourche
+      d.beam(0.32, -0.6, 0.72, -0.5, 0.014, 0.018, M_METAL, s * 0.09); // amortisseurs arrière
+    }
+  }
+  return { body: body.build(), details: d.build() };
+}
+
+/** Conducteur assis sur un deux-roues (silhouette simple). */
+function buildRider(spec: CarSpec): THREE.Object3D {
+  const s = new Shell(), scooter = spec.moto === 'maxiscooter';
+  const seatY = scooter ? 0.9 : 0.9, seatZ = scooter ? -0.08 : -0.2, barY = scooter ? 1.07 : 0.99, barZ = scooter ? 0.56 : 0.4;
+  const footY = scooter ? 0.56 : 0.34, footZ = scooter ? 0.38 : 0.1, shoulderY = seatY + 0.55, shoulderZ = seatZ + 0.12;
+  s.beam(seatY + 0.02, seatZ, shoulderY, shoulderZ, 0.19, 0.11, M_JACKET);                     // buste
+  for (const side of [1, -1]) {
+    s.beam(shoulderY - 0.05, shoulderZ, barY + 0.02, barZ - 0.02, 0.05, 0.05, M_JACKET, side * 0.25); // bras
+    s.box(new THREE.Vector3(side * (scooter ? 0.36 : 0.29), barY + 0.02, barZ), 0.04, 0.04, 0.05, M_SKIN);
+    s.beam(seatY + 0.02, seatZ + 0.02, footY + 0.42, footZ + 0.05, 0.075, 0.075, M_JEAN, side * 0.13); // cuisses
+    s.beam(footY + 0.42, footZ + 0.05, footY + 0.05, footZ - 0.02, 0.06, 0.06, M_JEAN, side * 0.14);   // tibias
+    s.box(new THREE.Vector3(side * 0.14, footY + 0.03, footZ + 0.06), 0.05, 0.035, 0.12, M_DARK);       // chaussures
+  }
+  const rider = new THREE.Group();
+  rider.add(new THREE.Mesh(s.build(), detailMaterial));
+  // Casque intégral sur le maxi-scooter ; tête nue sur le cyclomoteur.
+  const head = new THREE.Mesh(new THREE.SphereGeometry(scooter ? 0.15 : 0.115, 10, 8), new THREE.MeshLambertMaterial({ color: scooter ? M_HELMET : M_SKIN }));
+  head.position.set(0, shoulderY + (scooter ? 0.2 : 0.17), shoulderZ + 0.04);
+  rider.add(head);
+  if (scooter) {
+    const visor = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.07, 0.04), new THREE.MeshLambertMaterial({ color: 0x0b0f14 }));
+    visor.position.set(0, shoulderY + 0.22, shoulderZ + 0.17);
+    rider.add(visor);
+  } else {
+    const hair = new THREE.Mesh(new THREE.SphereGeometry(0.12, 10, 6, 0, Math.PI * 2, 0, Math.PI * 0.55), new THREE.MeshLambertMaterial({ color: M_HAIR }));
+    hair.position.set(0, shoulderY + 0.185, shoulderZ + 0.03);
+    rider.add(hair);
+  }
+  rider.name = 'rider';
+  rider.visible = false;
+  return rider;
+}
+
 function buildGeometry(spec: CarSpec): CarGeometry {
+  if (spec.moto) return buildMoto(spec);
   const { length: L, width: W, height: H } = spec;
   const g0 = spec.roof[0][0], g1 = spec.roof[spec.roof.length - 1][0];       // limites du vitrage
   const flat0 = spec.roof[1][0], flat1 = spec.roof[spec.roof.length - 2][0];  // partie plate du toit
@@ -290,7 +403,7 @@ export function applyVehicleAssets(): void {
   }
 }
 
-export interface CarVisual { group: THREE.Group; wheels: THREE.Object3D[] }
+export interface CarVisual { group: THREE.Group; wheels: THREE.Object3D[]; lean?: THREE.Object3D; rider?: THREE.Object3D }
 
 /** Assemble une voiture du catalogue : caisse teintée, détails, quatre roues qui tournent. */
 export function createCarVisual(spec: CarSpec, color: number): CarVisual {
@@ -301,6 +414,29 @@ export function createCarVisual(spec: CarSpec, color: number): CarVisual {
   if (!geometry) { geometry = buildGeometry(shape); geometryCache.set(shape.id, geometry); }
   let paint = paints.get(color);
   if (!paint) { paint = new THREE.MeshLambertMaterial({ color, vertexColors: true }); paints.set(color, paint); }
+
+  if (spec.moto) {
+    // Deux-roues : tout est placé dans un nœud qui penche en virage.
+    const group = new THREE.Group(), lean = new THREE.Group();
+    group.add(lean);
+    lean.add(new THREE.Mesh(geometry.body, paint), new THREE.Mesh(geometry.details, detailMaterial));
+    const thickness = spec.moto === 'maxiscooter' ? 0.14 : 0.07;
+    const tyre = new THREE.CylinderGeometry(spec.wheelRadius, spec.wheelRadius, thickness, 16);
+    tyre.rotateZ(Math.PI / 2);
+    const hub = new THREE.CylinderGeometry(spec.wheelRadius * (spec.moto === 'maxiscooter' ? 0.6 : 0.78), spec.wheelRadius * (spec.moto === 'maxiscooter' ? 0.6 : 0.78), thickness + 0.012, 12);
+    hub.rotateZ(Math.PI / 2);
+    const wheels: THREE.Object3D[] = [];
+    for (const axle of [spec.axleRear, spec.axleFront]) {
+      const wheel = new THREE.Group();
+      wheel.add(new THREE.Mesh(tyre, tyreMaterial), new THREE.Mesh(hub, hubMaterial));
+      wheel.position.set(0, spec.wheelRadius, (axle - 0.5) * spec.length);
+      lean.add(wheel);
+      wheels.push(wheel);
+    }
+    const rider = buildRider(spec);
+    lean.add(rider);
+    return { group, wheels, lean, rider };
+  }
 
   const group = new THREE.Group();
   const builtIn = [new THREE.Mesh(geometry.body, paint), new THREE.Mesh(geometry.details, detailMaterial)];
@@ -345,6 +481,8 @@ export function createCarVisual(spec: CarSpec, color: number): CarVisual {
 export function pickCar(random: () => number): { spec: CarSpec; color: number } {
   const taxi = CAR_CATALOG[CAR_CATALOG.length - 1];
   const others = CAR_CATALOG.slice(0, -1);
-  const spec = random() < 0.14 ? taxi : others[Math.floor(random() * others.length)];
+  // Un véhicule sur dix est un deux-roues ; sinon un taxi de temps en temps.
+  const spec = random() < 0.1 ? MOTO_CATALOG[Math.floor(random() * MOTO_CATALOG.length)]
+    : random() < 0.14 ? taxi : others[Math.floor(random() * others.length)];
   return { spec, color: spec.colors[Math.floor(random() * spec.colors.length)] };
 }
