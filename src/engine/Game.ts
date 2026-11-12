@@ -128,6 +128,13 @@ export class Game {
       this.cars.push(car);
       this.scene.add(car.object);
     });
+    // Les deux-roues, juste à côté du joueur (le maxi-scooter est le plus proche).
+    MOTO_CATALOG.forEach((spec, i) => {
+      const moto = new Car(spec, spec.colors[0]);
+      moto.place(i === 0 ? 1.2 : -2.4, -2.5, Math.PI);
+      this.cars.push(moto);
+      this.scene.add(moto.object);
+    });
     this.player.teleport(0, this.ground(0, 0), 0);
     this.events.onStatus('ZONE DE TEST (terrain fictif) : tremplin droit devant, côte et falaise à gauche, bosses à droite');
   }
@@ -194,7 +201,7 @@ export class Game {
           const car = new Car(spec, spec.colors[0]);
           const column = i % 5, row = Math.floor(i / 5);
           car.place(me.x + (column - 2) * 3.1, me.z + 5 + row * 5.5, Math.PI + (row === 0 ? 0.7 : -2.5));
-          if (spec.moto) { car.place(me.x + (spec.moto === 'maxiscooter' ? -1.6 : 1.6), me.z - 2.6, Math.PI / 2 + 0.5); car.rider = spec.moto === 'cyclomoteur'; }
+          if (spec.moto) { car.place(me.x + (spec.moto === 'maxiscooter' ? 1.6 : -1.6), me.z - 2.6, Math.PI / 2 + 0.5); car.rider = spec.moto === 'cyclomoteur'; }
           this.cars.push(car);
           this.scene.add(car.object);
         });

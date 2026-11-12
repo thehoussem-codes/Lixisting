@@ -79,9 +79,11 @@ export class Car {
   private leanNode: THREE.Object3D | null;
   private riderNode: THREE.Object3D | null;
   private leanFrom = 0;
+  private wheelieHeld = false;
+  private wheelie = 0; // angle de la roue arrière (radians)
 
   /** Deux-roues : affiche ou cache le conducteur assis dessus. */
-  set rider(shown: boolean) { if (this.riderNode) this.riderNode.visible = shown; }
+  set rider(shown: boolean) { if (this.riderNode) this.riderNode.visible = shown; if (!shown) this.wheelieHeld = false; }
   private lastSpeed = 0;
   private lastHeading = 0;
   /** Niveau de la mer pour toutes les voitures (null dans la zone de test). */
@@ -139,6 +141,12 @@ export class Car {
       this.leanFrom = this.heading;
       const target = Math.max(-0.5, Math.min(0.5, -turn * Math.abs(this.speed) * 0.09));
       this.leanNode.rotation.z += (target - this.leanNode.rotation.z) * Math.min(1, 6 * dt);
+      // Roue arrière : la moto pivote autour du point de contact de sa roue arrière.
+      const lift = this.wheelieHeld && Math.abs(this.speed) > 1.5 ? 0.78 : 0;
+      this.wheelie += (lift - this.wheelie) * Math.min(1, (lift ? 4 : 7) * dt);
+      const rear = (this.spec.axleRear - 0.5) * this.spec.length;
+      this.leanNode.rotation.x = -this.wheelie;
+      this.leanNode.position.set(0, -rear * Math.sin(this.wheelie), rear * (1 - Math.cos(this.wheelie)));
     }
 
     if (!dynamic || dt <= 0 || this.baseY === null) {
@@ -295,8 +303,10 @@ export class Car {
 
   /** Conduite : W accélère, S freine puis recule, A/D tournent, Espace = frein à main. */
   drive(dt: number, input: Input, collider: Collider | null, others: Car[], ground: (x: number, z: number) => number): void {
-    const gas = (input.isDown('KeyW') || input.isDown('ArrowUp') ? 1 : 0)
-              - (input.isDown('KeyS') || input.isDown('ArrowDown') ? 1 : 0);
+    const up = input.isDown('KeyW') || input.isDown('ArrowUp'), down = input.isDown('KeyS') || input.isDown('ArrowDown');
+    // Maxi-scooter : haut + bas en même temps = roue arrière (la moto continue d'avancer).
+    this.wheelieHeld = this.spec.moto === 'maxiscooter' && up && down && !this.airborne;
+    const gas = this.wheelieHeld ? 1 : (up ? 1 : 0) - (down ? 1 : 0);
     const steer = (input.isDown('KeyD') || input.isDown('ArrowRight') ? 1 : 0)
                 - (input.isDown('KeyA') || input.isDown('ArrowLeft') ? 1 : 0);
 
