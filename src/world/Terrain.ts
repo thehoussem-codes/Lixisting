@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { createGroundTexture } from './Textures';
 
 /** Profondeur du fond marin au large (même valeur que dans tools/build_terrain.py). */
 export const SEA_FLOOR = -2.6;
@@ -49,9 +50,13 @@ export class Terrain {
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
     geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    // Coordonnées de texture tirées de la position : un motif de sol tous les 14 m, partout.
+    const uv = new Float32Array((positions.length / 3) * 2);
+    for (let i = 0; i < positions.length / 3; i++) { uv[i * 2] = positions[i * 3] / 14; uv[i * 2 + 1] = positions[i * 3 + 2] / 14; }
+    geometry.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
     geometry.setIndex(new THREE.BufferAttribute(indices, 1));
     geometry.computeVertexNormals();
-    this.mesh = new THREE.Mesh(geometry, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }));
+    this.mesh = new THREE.Mesh(geometry, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, map: createGroundTexture() }));
   }
 
   private cellX(x: number): number {

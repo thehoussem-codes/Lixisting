@@ -3,14 +3,14 @@ import type { Collider } from './Collider';
 import { MeshBuilder } from './MeshBuilder';
 import type { Terrain } from './Terrain';
 import { buildBuildings } from './Buildings';
-import { createAsphaltTexture, createPavementTexture, createRoadTexture } from './Textures';
+import { createAsphaltTexture, createPavementTexture, createRoadTexture, createCloudTexture } from './Textures';
 import { addPlant } from './Trees';
 import { Water } from './Water';
 import type { WorldData } from './WorldData';
 
-const HORIZON = 0xbfe0ee;
+const HORIZON = 0xcfe3ea;
 const FOG_NEAR = 260, FOG_FAR = 1400;
-const ZENITH = 0x3f8fd0;
+const ZENITH = 0x2f7fcf;
 const CHUNK = 400;         // les bâtiments sont regroupés par blocs de 400 m
 
 const WITH_SIDEWALK = new Set(['primary', 'secondary', 'tertiary', 'residential', 'unclassified', 'living_street']);
@@ -34,6 +34,20 @@ function lampPost(b: MeshBuilder, x: number, y: number, z: number, pole: THREE.C
       b.triangle(v0, v1, v2); b.triangle(v0, v2, v3);
     }
   }
+}
+
+/** Disque du soleil et son halo. */
+function createSunTexture(): THREE.CanvasTexture {
+  const element = document.createElement('canvas');
+  element.width = element.height = 128;
+  const ctx = element.getContext('2d')!;
+  const halo = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+  halo.addColorStop(0, 'rgba(255,252,235,1)'); halo.addColorStop(0.12, 'rgba(255,246,210,0.95)');
+  halo.addColorStop(0.3, 'rgba(255,236,180,0.35)'); halo.addColorStop(1, 'rgba(255,230,170,0)');
+  ctx.fillStyle = halo; ctx.fillRect(0, 0, 128, 128);
+  const texture = new THREE.CanvasTexture(element);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
 }
 
 /** Dôme de ciel : bleu soutenu en haut, brume claire à l'horizon (même teinte que le brouillard). */
@@ -66,12 +80,23 @@ export function buildAnnabaWorld(scene: THREE.Scene, data: WorldData, terrain: T
   const ground = terrain.heightAt;
   scene.background = new THREE.Color(HORIZON);
   scene.fog = new THREE.Fog(HORIZON, FOG_NEAR, FOG_FAR);
-  scene.add(new THREE.HemisphereLight(0xffffff, 0xb8a888, 1.4));
-  const sun = new THREE.DirectionalLight(0xfff0d0, 2.2);
+  // Lumière méditerranéenne de fin d'après-midi : soleil chaud, ombres bleutées par le ciel.
+  scene.add(new THREE.HemisphereLight(0xd6e8ff, 0xa89878, 1.25));
+  const sun = new THREE.DirectionalLight(0xffe6b8, 2.5);
   sun.position.set(400, 500, 150);
   scene.add(sun);
   const sky = createSky();
   scene.add(sky);
+  // Soleil et nuages, accrochés au ciel (ils suivent la caméra avec lui).
+  const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: createSunTexture(), fog: false, depthWrite: false, transparent: true }));
+  glow.position.copy(sun.position).normalize().multiplyScalar(1700);
+  glow.scale.setScalar(520);
+  sky.add(glow);
+  const clouds = new THREE.Mesh(new THREE.PlaneGeometry(5200, 5200), new THREE.MeshBasicMaterial({ map: createCloudTexture(), transparent: true, opacity: 0.85, fog: false, depthWrite: false, side: THREE.DoubleSide }));
+  clouds.rotation.x = Math.PI / 2;
+  clouds.position.y = 620;
+  clouds.renderOrder = -1;
+  sky.add(clouds);
 
   const add = (builder: MeshBuilder, material: THREE.Material) => {
     if (builder.isEmpty) return;

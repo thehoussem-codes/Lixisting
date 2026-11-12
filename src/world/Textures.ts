@@ -125,6 +125,8 @@ export function createFacadeTexture(style: FacadeStyle): THREE.CanvasTexture {
       rect('#cfc8b8', 0, 58, 256, 6);
       break;
   }
+  // Patine : crépi irrégulier, coulures sombres sous les ouvertures, pied de mur sali. Un mur neuf et uni sonne faux.
+  weather(ctx, element.width, element.height, style === 'shop' || style === 'arcade' ? 0.5 : 1);
   return finish(element);
 }
 
@@ -185,6 +187,75 @@ export function createStoneWallTexture(): THREE.CanvasTexture {
     }
   }
   return finish(element);
+}
+
+/** Vieillit une façade : grain du crépi, coulures verticales et salissure au pied (intensité de 0 à 1). */
+function weather(ctx: CanvasRenderingContext2D, width: number, height: number, amount: number): void {
+  let seed = width * 31 + height * 17 + 5;
+  const random = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+  for (let i = 0; i < width * height * 0.35; i++) {
+    const shade = random() < 0.5 ? '0,0,0' : '255,255,255';
+    ctx.fillStyle = `rgba(${shade},${(0.02 + random() * 0.05) * amount})`;
+    ctx.fillRect(Math.floor(random() * width), Math.floor(random() * height), 1 + Math.floor(random() * 2), 1);
+  }
+  for (let i = 0; i < width / 9; i++) {
+    const x = Math.floor(random() * width), top = Math.floor(random() * height * 0.6), length = 6 + random() * 22;
+    const streak = ctx.createLinearGradient(0, top, 0, top + length);
+    streak.addColorStop(0, `rgba(60,50,40,${0.16 * amount})`); streak.addColorStop(1, 'rgba(60,50,40,0)');
+    ctx.fillStyle = streak; ctx.fillRect(x, top, 1 + Math.floor(random() * 2), length);
+  }
+  return;
+}
+
+/** Sol naturel : terre, graviers et touffes, en gris clair (la couleur vient du terrain lui-même). */
+export function createGroundTexture(): THREE.CanvasTexture {
+  const element = document.createElement('canvas');
+  element.width = element.height = 256;
+  const ctx = element.getContext('2d')!;
+  let seed = 23;
+  const random = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+  ctx.fillStyle = '#e4e4e4'; ctx.fillRect(0, 0, 256, 256);
+  // Grandes taches douces (sol plus ou moins tassé), dessinées aussi de l'autre côté des bords pour un raccord invisible.
+  for (let i = 0; i < 46; i++) {
+    const x = random() * 256, y = random() * 256, r = 14 + random() * 34, dark = random() < 0.55;
+    for (const [ox, oy] of [[0, 0], [256, 0], [-256, 0], [0, 256], [0, -256]]) {
+      const spot = ctx.createRadialGradient(x + ox, y + oy, 0, x + ox, y + oy, r);
+      spot.addColorStop(0, dark ? 'rgba(120,112,100,0.15)' : 'rgba(255,255,250,0.2)'); spot.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = spot; ctx.fillRect(x + ox - r, y + oy - r, r * 2, r * 2);
+    }
+  }
+  // Graviers et brindilles.
+  for (let i = 0; i < 5200; i++) {
+    const g = 150 + Math.floor(random() * 105);
+    ctx.fillStyle = `rgba(${g},${g - 4},${g - 12},${0.25 + random() * 0.45})`;
+    ctx.fillRect(Math.floor(random() * 256), Math.floor(random() * 256), 1 + Math.floor(random() * 2), 1 + Math.floor(random() * 2));
+  }
+  for (let i = 0; i < 260; i++) {
+    ctx.fillStyle = `rgba(95,88,78,${0.18 + random() * 0.2})`;
+    ctx.fillRect(Math.floor(random() * 256), Math.floor(random() * 256), 2 + Math.floor(random() * 3), 2 + Math.floor(random() * 2));
+  }
+  return finish(element);
+}
+
+/** Nuages : amas blancs à bords flous sur fond transparent. */
+export function createCloudTexture(): THREE.CanvasTexture {
+  const element = document.createElement('canvas');
+  element.width = element.height = 512;
+  const ctx = element.getContext('2d')!;
+  let seed = 41;
+  const random = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+  for (let c = 0; c < 15; c++) {
+    const cx = 40 + random() * 432, cy = 40 + random() * 432, size = 26 + random() * 46;
+    for (let k = 0; k < 16; k++) {
+      const x = cx + (random() - 0.5) * size * 3.4, y = cy + (random() - 0.5) * size * 0.9, r = size * (0.35 + random() * 0.6);
+      const puff = ctx.createRadialGradient(x, y, 0, x, y, r);
+      puff.addColorStop(0, 'rgba(255,255,255,0.5)'); puff.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = puff; ctx.fillRect(x - r, y - r, r * 2, r * 2);
+    }
+  }
+  const texture = new THREE.CanvasTexture(element);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
 }
 
 /** Garde-corps en fer forgé : barreaux noirs sur fond transparent. */
