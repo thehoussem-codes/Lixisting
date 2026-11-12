@@ -9,10 +9,9 @@ export function Hud({ status, places, zone, speed, fps, location, detail }: HudP
       <div className="hud">
         <div className="hud-title">LIXITING</div>
         <div className="hud-help">
-          Clic : souris · W A S D : bouger · Maj : courir · Espace : sauter / frein à main · F : voiture · M : carte · I : fiche du lieu
+          Clic : souris · W A S D : bouger · Maj : courir · Espace : sauter / frein à main · F : voiture · M : carte
           <br />
-          {status} · {fps} images/s · version de {new Date(Number(__BUILD_ID__)).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
-          {location && (<><br /><span className="hud-location">{location}</span></>)}
+          {status} · {fps} images/s · version de {new Date(Number(__BUILD_ID__)).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}{location && ` · ${location}`}
         </div>
       </div>
       {places.length > 0 && (

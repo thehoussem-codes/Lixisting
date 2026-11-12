@@ -120,8 +120,8 @@ export class Locations {
 
   /** Ligne courte pour le bas de l'écran (visible sur chaque capture). */
   line(fix: LocationFix): string {
-    return `LIEU : ${fix.name} · QUARTIER : ${fix.district} · ID : ${fix.id} · POSITION : X ${fix.x.toFixed(1)} | Y ${fix.y.toFixed(1)} | Z ${fix.z.toFixed(1)}`
-      + ` · ALTITUDE : ${Math.round(fix.y)} m · ${fix.lat.toFixed(5)}° N, ${fix.lon.toFixed(5)}° E`;
+    // Une seule référence, celle qu'on colle telle quelle dans n'importe quelle application de cartes.
+    return `${fix.lat.toFixed(5)}, ${fix.lon.toFixed(5)}`;
   }
 
   /** Fiche complète du lieu, à copier-coller. */
