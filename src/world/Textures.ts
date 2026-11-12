@@ -13,10 +13,36 @@ function finish(canvas: HTMLCanvasElement): THREE.CanvasTexture {
   return texture;
 }
 
-function canvas(width: number, height: number): [HTMLCanvasElement, CanvasRenderingContext2D] {
+/** Photos de matières (asphalte, crépi, dallage...) chargées au démarrage : voir public/assets/textures/CREDITS.md. */
+const photos = new Map<string, HTMLImageElement>();
+const PHOTO_NAMES = ['ground', 'asphalt', 'asphalt_old', 'pavement', 'pavers', 'plaster', 'plaster_old', 'stone_wall'];
+
+/** Charge les photos de matières. Une photo absente n'empêche rien : le dessin calculé prend sa place. */
+export async function loadPhotoTextures(): Promise<void> {
+  await Promise.all(PHOTO_NAMES.map((name) => new Promise<void>((resolve) => {
+    const image = new Image();
+    image.onload = () => { photos.set(name, image); resolve(); };
+    image.onerror = () => resolve();
+    image.src = `${import.meta.env.BASE_URL}assets/textures/${name}.jpg?v=${__BUILD_ID__}`;
+  })));
+}
+
+/** Pose une photo de matière dans un rectangle du dessin. Renvoie faux si la photo n'est pas disponible. */
+function photo(ctx: CanvasRenderingContext2D, name: string, x: number, y: number, w: number, h: number, alpha = 1): boolean {
+  const image = photos.get(name);
+  if (!image) return false;
+  ctx.globalAlpha = alpha;
+  ctx.drawImage(image, x, y, w, h);
+  ctx.globalAlpha = 1;
+  return true;
+}
+
+/** Toile de dessin. detail : nombre de points réels par unité de dessin (les photos demandent plus de finesse). */
+function canvas(width: number, height: number, detail = 1): [HTMLCanvasElement, CanvasRenderingContext2D] {
   const element = document.createElement('canvas');
-  element.width = width; element.height = height;
+  element.width = width * detail; element.height = height * detail;
   const ctx = element.getContext('2d')!;
+  ctx.scale(detail, detail);
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, width, height);
   return [element, ctx];
@@ -32,7 +58,10 @@ export const FACADE_WIDTH: Record<FacadeStyle, number> = {
 
 export function createFacadeTexture(style: FacadeStyle): THREE.CanvasTexture {
   const wide = style === 'shop' || style === 'ground';
-  const [element, ctx] = canvas(wide ? 256 : 64, 64);
+  const width = wide ? 256 : 64, detail = photos.size ? 4 : 1;
+  const [element, ctx] = canvas(width, 64, detail);
+  // Fond de crépi photographié (les cités ont un crépi plus fatigué), sous les fenêtres dessinées.
+  for (let x = 0; x < width; x += 64) photo(ctx, style === 'apartment' || style === 'industrial' ? 'plaster_old' : 'plaster', x, 0, 64, 64, 0.75);
   const rect = (color: string, x: number, y: number, w: number, h: number) => { ctx.fillStyle = color; ctx.fillRect(x, y, w, h); };
   switch (style) {
     case 'apartment': // fenêtre + balcon à garde-corps
@@ -126,7 +155,7 @@ export function createFacadeTexture(style: FacadeStyle): THREE.CanvasTexture {
       break;
   }
   // Patine : crépi irrégulier, coulures sombres sous les ouvertures, pied de mur sali. Un mur neuf et uni sonne faux.
-  weather(ctx, element.width, element.height, style === 'shop' || style === 'arcade' ? 0.5 : 1);
+  weather(ctx, width, 64, (style === 'shop' || style === 'arcade' ? 0.5 : 1) * (photos.size ? 0.5 : 1));
   return finish(element);
 }
 
@@ -175,6 +204,11 @@ export function createStoneWallTexture(): THREE.CanvasTexture {
   const element = document.createElement('canvas');
   element.width = element.height = 128;
   const ctx = element.getContext('2d')!;
+  if (photos.has('stone_wall')) {
+    element.width = element.height = 512;
+    photo(ctx, 'stone_wall', 0, 0, 512, 512);
+    return finish(element);
+  }
   let seed = 11;
   const random = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
   ctx.fillStyle = '#8f8674'; ctx.fillRect(0, 0, 128, 128);
@@ -214,6 +248,11 @@ export function createGroundTexture(): THREE.CanvasTexture {
   const ctx = element.getContext('2d')!;
   let seed = 23;
   const random = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+  if (photos.has('ground')) {
+    element.width = element.height = 512;
+    photo(ctx, 'ground', 0, 0, 512, 512);
+    return finish(element);
+  }
   ctx.fillStyle = '#e4e4e4'; ctx.fillRect(0, 0, 256, 256);
   // Grandes taches douces (sol plus ou moins tassé), dessinées aussi de l'autre côté des bords pour un raccord invisible.
   for (let i = 0; i < 46; i++) {
@@ -300,8 +339,9 @@ function asphalt(ctx: CanvasRenderingContext2D, width: number, height: number, b
 
 /** Enrobé nu des carrefours. */
 export function createAsphaltTexture(): THREE.CanvasTexture {
-  const [element, ctx] = canvas(64, 64);
-  asphalt(ctx, 64, 64, '#47484e', 53);
+  const [element, ctx] = canvas(64, 64, photos.size ? 4 : 1);
+  if (!photo(ctx, 'asphalt', 0, 0, 64, 64)) asphalt(ctx, 64, 64, '#47484e', 53);
+  else { ctx.fillStyle = 'rgba(30,31,36,0.35)'; ctx.fillRect(0, 0, 64, 64); }
   return finish(element);
 }
 
@@ -311,8 +351,10 @@ export function createAsphaltTexture(): THREE.CanvasTexture {
  * Les grands axes ont aussi des lignes de rive et une ligne centrale discontinue.
  */
 export function createRoadTexture(major: boolean, painted = false): THREE.CanvasTexture {
-  const [element, ctx] = canvas(64, 128);
-  asphalt(ctx, 64, 128, major ? '#43444a' : '#4b4c52', major ? 11 : 29);
+  const [element, ctx] = canvas(64, 128, photos.size ? 4 : 1);
+  const surface = major ? 'asphalt' : 'asphalt_old';
+  if (photo(ctx, surface, 0, 0, 64, 64) && photo(ctx, surface, 0, 64, 64, 64)) { ctx.fillStyle = major ? 'rgba(30,31,36,0.38)' : 'rgba(40,40,44,0.3)'; ctx.fillRect(0, 0, 64, 128); }
+  else asphalt(ctx, 64, 128, major ? '#43444a' : '#4b4c52', major ? 11 : 29);
   for (let y = 0; y < 128; y += 16) {
     ctx.fillStyle = painted ? ((y / 16) % 2 === 0 ? '#c23b2e' : '#ecebe4') : ((y / 16) % 2 === 0 ? '#b4b1a9' : '#aaa79f');
     ctx.fillRect(0, y, 2, 16); ctx.fillRect(62, y, 2, 16);
@@ -329,7 +371,8 @@ export function createRoadTexture(major: boolean, painted = false): THREE.Canvas
 
 /** Trottoir. Ordinaire : dalles de béton gris. Soigné (avenues, places) : pavage bicolore. */
 export function createPavementTexture(fine = false): THREE.CanvasTexture {
-  const [element, ctx] = canvas(32, 32);
+  const [element, ctx] = canvas(32, 32, photos.size ? 8 : 1);
+  if (photo(ctx, fine ? 'pavers' : 'pavement', 0, 0, 32, 32)) return finish(element);
   if (fine) {
     for (let y = 0; y < 4; y++) for (let x = 0; x < 4; x++) {
       ctx.fillStyle = (x + y) % 2 === 0 ? '#cfc6b4' : '#b9ad98';

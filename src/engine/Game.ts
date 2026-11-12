@@ -14,6 +14,7 @@ import type { Collider } from '../world/Collider';
 import { loadTerrain } from '../world/Terrain';
 import { buildTrees, loadTrees } from '../world/Trees';
 import { buildWalls } from '../world/Walls';
+import { loadPhotoTextures } from '../world/Textures';
 import { Locations } from '../world/Locations';
 import { loadWorldData, type WorldPlace } from '../world/WorldData';
 import { MapView } from '../ui/MapView';
@@ -161,6 +162,7 @@ export class Game {
     if (new URLSearchParams(window.location.search).has('test')) { this.loadTestZone(); return; }
     try {
       this.events.onStatus('Chargement de la carte d\'Annaba...');
+      await loadPhotoTextures(); // avant tout le reste : le terrain et les rues s'en servent pour leurs matières
       const [data, terrain, trees] = await Promise.all([loadWorldData(), loadTerrain(), loadTrees()]);
       if (this.disposed) return;
       // Personnage et voitures roulent sur la surface des rues, posée 20 cm au-dessus du terrain brut.
