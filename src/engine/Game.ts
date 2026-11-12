@@ -13,6 +13,7 @@ import type { Water } from '../world/Water';
 import type { Collider } from '../world/Collider';
 import { loadTerrain } from '../world/Terrain';
 import { buildTrees, loadTrees } from '../world/Trees';
+import { buildWalls } from '../world/Walls';
 import { loadWorldData, type WorldPlace } from '../world/WorldData';
 import { MapView } from '../ui/MapView';
 
@@ -164,6 +165,7 @@ export class Game {
       this.sky = world.sky;
       this.water = world.water;
       const treeCount = buildTrees(this.scene, trees, terrain.heightAt);
+      buildWalls(this.scene, trees.wall, this.collider);
       // Blocs de décor (bâtiments, arbres, lampadaires) : on notera lesquels sont assez proches pour être affichés.
       this.scene.traverse((object) => {
         const mesh = object as THREE.Mesh;

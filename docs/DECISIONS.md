@@ -72,3 +72,11 @@
   palmes à folioles. Les emplacements restent ceux des données réelles.
 - **Immeubles** : balcons superposés, édicules, citernes et paraboles sur les toits-terrasses (détails indicatifs).
 - **Modèles** : personnage ramené de 49 000 à 13 000 triangles (`tools/optimize_character.py`).
+
+## Rues taillées dans le relief (12 novembre)
+
+Le relief à 30 m ne décrit que la colline, pas la tranchée d'une rue : la chaussée grimpait donc dessus.
+Dans les zones listées dans `GRADING_ZONES` (`tools/build_terrain.py`), les grandes rues reçoivent un profil en long
+adouci (pente maximale 3,5 %, on entaille sans jamais remblayer), le terrain est entaillé à leur passage et un mur de
+soutènement en pierre retient le talus dès qu'il dépasse 1,2 m. Le terrain autour garde son altitude réelle.
+Première zone : rue du 24 Février 1956 (nord du Cours). Hauteur exacte des murs : déduite du relief, à confirmer par photos.

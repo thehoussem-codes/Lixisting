@@ -168,6 +168,25 @@ export function createFoliageTexture(): THREE.CanvasTexture {
   return texture;
 }
 
+/** Mur de soutènement en pierre de taille : assises régulières, joints sombres, pierres de teintes voisines. */
+export function createStoneWallTexture(): THREE.CanvasTexture {
+  const element = document.createElement('canvas');
+  element.width = element.height = 128;
+  const ctx = element.getContext('2d')!;
+  let seed = 11;
+  const random = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+  ctx.fillStyle = '#8f8674'; ctx.fillRect(0, 0, 128, 128);
+  for (let row = 0; row < 8; row++) {
+    for (let x = -((row % 2) * 16); x < 128; x += 32) {
+      const g = 205 + Math.round(random() * 40);
+      ctx.fillStyle = `rgb(${g},${g - 6},${g - 22})`;
+      ctx.fillRect(x + 1, row * 16 + 1, 30, 14);
+      ctx.fillStyle = 'rgba(0,0,0,0.07)'; ctx.fillRect(x + 1, row * 16 + 11, 30, 4);
+    }
+  }
+  return finish(element);
+}
+
 /** Garde-corps en fer forgé : barreaux noirs sur fond transparent. */
 export function createRailTexture(): THREE.CanvasTexture {
   const element = document.createElement('canvas');

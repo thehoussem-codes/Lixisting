@@ -29,6 +29,13 @@ COAST_STEP = 12.0    # espacement maximal des points le long de la côte (m)
 MIN_HEIGHT = 0.4     # la terre reste toujours un peu au-dessus de la mer (niveau 0)
 SEA_FLOOR = -2.6     # profondeur du fond marin près du rivage (m)
 SHORE_RUN = 24.0     # distance sur laquelle une plage descend jusqu'au fond (m)
+# Rues taillées dans le relief : (x, n, rayon). Dans ces zones, les grandes rues gardent une pente douce,
+# le terrain est entaillé à leur passage et un mur de soutènement retient le talus.
+# Le relief à 30 m ne connaît que la colline, pas la tranchée de la rue : sans cela la chaussée grimperait dessus.
+GRADING_ZONES = [(155.0, 880.0, 170.0)]   # rue du 24 Février 1956, au nord du Cours de la Révolution
+MAX_GRADE = 0.035                          # pente maximale d'une rue taillée (3,5 %)
+WALLS = []                                 # murs de soutènement produits : x0, n0, x1, n1, bas0, haut0, bas1, haut1
+
 CLIFF_RUN = 7.0      # même chose au pied d'une côte rocheuse ou d'un quai
 
 COLORS = {  # couleurs du sol (rouge, vert, bleu de 0 à 1)
@@ -96,7 +103,47 @@ def main():
     far_from_coast = cKDTree(coast_points).query(interior)[0] > COAST_STEP * 0.8
     interior = interior[inside & far_from_coast]
 
-    points = np.vstack([coast_points, interior])
+    # --- rues taillées dans la colline : profil en long adouci, plate-forme et crête de talus ajoutées au maillage
+    graded_points, graded_heights = [], []
+    for road in world["roads"]:
+        line = pairs(road["p"])
+        if road["k"] not in ("trunk", "primary", "secondary", "tertiary"):
+            continue
+        # La rue doit être en majorité dans la zone : une rue qui ne fait que l'effleurer n'est pas modifiée.
+        if not any((np.hypot(line[:, 0] - zx, line[:, 1] - zn) < zr).mean() > 0.5 for zx, zn, zr in GRADING_ZONES):
+            continue
+        # Un point tous les 5 m le long de l'axe.
+        steps = np.concatenate([[0], np.cumsum(np.hypot(*np.diff(line, axis=0).T))])
+        marks = np.linspace(0, steps[-1], max(2, int(steps[-1] / 5) + 1))
+        axis = np.column_stack([np.interp(marks, steps, line[:, 0]), np.interp(marks, steps, line[:, 1])])
+        natural = height(axis[:, 0], axis[:, 1])
+        # Profil : on ne remblaie jamais, on entaille seulement ; la pente reste sous MAX_GRADE à partir des points bas.
+        profile = (natural[None, :] + MAX_GRADE * np.abs(marks[:, None] - marks[None, :])).min(axis=1)
+        if (natural - profile).max() < 1.0:
+            continue
+        tangent = np.gradient(axis, axis=0)
+        tangent /= np.maximum(np.linalg.norm(tangent, axis=1, keepdims=True), 1e-6)
+        normal = np.column_stack([-tangent[:, 1], tangent[:, 0]])
+        edge = road["w"] / 2 + road.get("sw", 0) + 0.6
+        graded_points.append(axis); graded_heights.append(profile)
+        for side in (1, -1):
+            platform = axis + normal * side * edge
+            crest = axis + normal * side * (edge + 0.8)
+            crest_height = np.maximum(profile, height(crest[:, 0], crest[:, 1]))
+            graded_points += [platform, crest]; graded_heights += [profile, crest_height]
+            # Mur de soutènement là où le talus dépasse 1,2 m.
+            foot = axis + normal * side * (edge - 0.08)  # juste devant le talus, qu'il masque entièrement
+            for k in range(len(axis) - 1):
+                if crest_height[k] - profile[k] > 1.2 or crest_height[k + 1] - profile[k + 1] > 1.2:
+                    WALLS.extend(round(float(v), 2) for v in (foot[k, 0], foot[k, 1], foot[k + 1, 0], foot[k + 1, 1],
+                                 profile[k] - 0.4, crest_height[k] + 0.9, profile[k + 1] - 0.4, crest_height[k + 1] + 0.9))
+        # Les points de la grille pris dans la plate-forme sont retirés : c'est la rue qui commande ici.
+        interior = interior[cKDTree(axis).query(interior)[0] > edge + 3.5]
+        print(f"rue taillée : {road.get('n') or road['k']}, {steps[-1]:.0f} m, entaille maximale {(natural - profile).max():.1f} m, "
+              f"altitude {profile.min():.1f} à {profile.max():.1f} m (avant : jusqu'à {natural.max():.1f} m)")
+    graded_count = sum(len(g) for g in graded_points)
+
+    points = np.vstack([coast_points, interior] + graded_points)
     triangles = Delaunay(points).simplices
     centers = points[triangles].mean(axis=1)
     keep = np.zeros(len(triangles), dtype=bool)
@@ -126,7 +173,11 @@ def main():
     low = shore_height[nearest] < 8
     limit = np.where(on_beach, 0.22 + 0.045 * reach, 0.55 + 0.11 * reach)
     lowered = low & (heights > limit)
-    heights = np.where(lowered, limit, heights)
+    # L'effet s'efface entre 40 et 100 m du rivage : plus loin, les collines gardent leur vraie hauteur.
+    fade = np.clip((reach - 40) / 60, 0, 1)
+    heights = np.where(lowered, limit * (1 - fade) + heights * fade, heights)
+    if graded_count:
+        heights[-graded_count:] = np.concatenate(graded_heights)
     print("rivage abaissé :", int(lowered.sum()), "points du terrain")
 
     # --- couleur de chaque point : type de sol OSM, sinon selon l'altitude et la pente
@@ -362,6 +413,7 @@ def build_trees(world, grid=None, grid_origin=None):
                 add("rock", *(point + inland * rng.uniform(-1.5, 2.5) + rng.normal(0, 1.2, 2)), 0.5, 1.9)
 
     counts = {k: len(v) // 3 for k, v in out.items()}
+    out["wall"] = WALLS
     TREES_OUT.write_text(json.dumps(out, separators=(",", ":")), encoding="utf-8")
     print("végétation :", counts, "total", sum(counts.values()))
 
