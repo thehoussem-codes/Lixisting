@@ -138,12 +138,40 @@ function bush(b: MeshBuilder, i: number, x: number, y: number, z: number, s: num
   blob(b, x, y + h * 0.55, z, r, h, r * (0.7 + noise(i, 3) * 0.5), 6, 3, color, i % 5 === 0 ? FLOWER : color);
 }
 
+const STRAW = new THREE.Color(0xc9a45c), STRAW_DARK = new THREE.Color(0x9c7a3e), POLE = new THREE.Color(0x7a5a3a);
+const ROCKS = [0x8d857a, 0x9a9184, 0x7c766d, 0xa39a88].map((c) => new THREE.Color(c));
+
+/** Parasol de paille des plages : mât en bois, chapeau conique à franges. */
+function parasol(b: MeshBuilder, i: number, x: number, y: number, z: number, s: number): void {
+  const [tx, ty, tz] = trunk(b, x, y, z, 0.06, 2.3 * s, 0, 0, 4, POLE);
+  const SIDES = 10, r = 1.7 * s, tip = b.vertex(tx, ty + 0.25, tz, STRAW, 1);
+  const rim: number[] = [], fringe: number[] = [];
+  for (let k = 0; k < SIDES; k++) {
+    const a = (k / SIDES) * Math.PI * 2 + i;
+    rim.push(b.vertex(tx + Math.cos(a) * r, ty - 0.45 * s, tz + Math.sin(a) * r, STRAW, 0.9));
+    fringe.push(b.vertex(tx + Math.cos(a) * r * 1.04, ty - 0.75 * s, tz + Math.sin(a) * r * 1.04, STRAW_DARK, 0.75));
+  }
+  for (let k = 0; k < SIDES; k++) {
+    const j = (k + 1) % SIDES;
+    b.triangle(tip, rim[j], rim[k]);
+    b.triangle(rim[k], rim[j], fringe[j]); b.triangle(rim[k], fringe[j], fringe[k]);
+  }
+}
+
+/** Rocher du rivage : bloc irrégulier à moitié enfoui. */
+function rock(b: MeshBuilder, i: number, x: number, y: number, z: number, s: number): void {
+  const color = ROCKS[i % ROCKS.length];
+  const rx = (0.9 + noise(i, 1) * 1.1) * s, rz = (0.8 + noise(i, 2) * 1.0) * s, ry = (0.5 + noise(i, 3) * 0.7) * s;
+  blob(b, x, Math.max(y, -0.5) + ry * 0.25, z, rx, ry, rz, 5, 3, color);
+  if (noise(i, 4) > 0.5) blob(b, x + rx * 0.8, Math.max(y, -0.5) + ry * 0.1, z + rz * 0.5, rx * 0.55, ry * 0.6, rz * 0.6, 5, 3, ROCKS[(i + 1) % ROCKS.length]);
+}
+
 /** Ajoute une plante isolée (îlots de ronds-points, places...). */
 export function addPlant(b: MeshBuilder, species: string, i: number, x: number, y: number, z: number, size: number): void {
   SHAPES[species]?.(b, i, x, y, z, size);
 }
 
-const SHAPES: Record<string, (b: MeshBuilder, i: number, x: number, y: number, z: number, s: number) => void> = { pine, palm, ficus, cypress, bush };
+const SHAPES: Record<string, (b: MeshBuilder, i: number, x: number, y: number, z: number, s: number) => void> = { pine, palm, ficus, cypress, bush, parasol, rock };
 
 /** Ajoute toute la végétation à la scène, regroupée par blocs. Renvoie le nombre de plantes. */
 export function buildTrees(scene: THREE.Scene, data: TreeData, ground: (x: number, z: number) => number): number {

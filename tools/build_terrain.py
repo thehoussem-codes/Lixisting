@@ -112,6 +112,23 @@ def main():
 
     heights = height(points[:, 0], points[:, 1])
 
+    # --- rivage : le relief à 30 m ne « voit » pas la mer et laisse la terre finir en marche de 2 à 3 m.
+    # Là où la côte est basse (plages, quais), le sol descend en pente douce jusqu'au niveau de l'eau.
+    # Les vraies falaises (côte à plus de 8 m) ne sont pas touchées.
+    real = ~((np.abs(coast_points[:, 0] - x0) < 1) | (np.abs(coast_points[:, 0] - x1) < 1) | (np.abs(coast_points[:, 1] - n0) < 1) | (np.abs(coast_points[:, 1] - n1) < 1))
+    shore = coast_points[real]
+    shore_height = height(shore[:, 0], shore[:, 1])
+    reach, nearest = cKDTree(shore).query(points)
+    on_beach = np.zeros(len(points), bool)
+    for area in world["areas"]:
+        if area["k"] == "beach":
+            on_beach |= Polygon(pairs(area["p"])).contains_points(points, radius=8) | Polygon(pairs(area["p"])).contains_points(points, radius=-8)
+    low = shore_height[nearest] < 8
+    limit = np.where(on_beach, 0.22 + 0.045 * reach, 0.55 + 0.11 * reach)
+    lowered = low & (heights > limit)
+    heights = np.where(lowered, limit, heights)
+    print("rivage abaissé :", int(lowered.sum()), "points du terrain")
+
     # --- couleur de chaque point : type de sol OSM, sinon selon l'altitude et la pente
     # Sol : gris minéral en ville, terre sèche en lisière, vert sur les terrains sans construction.
     # (Les photos d'Annaba montrent des collines couvertes de maquis, pas du sable.)
@@ -311,6 +328,38 @@ def build_trees(world, grid=None, grid_origin=None):
             print("Cours de la Révolution :", planted, "arbres plantés")
         else:
             print("Cours de la Révolution : chaussées non identifiées (", len(sides), ")")
+
+    # 5. Détails du bord de mer : parasols de paille sur les plages (emplacements indicatifs),
+    #    rochers au pied des côtes rocheuses et aux extrémités des plages.
+    out["parasol"], out["rock"] = [], []
+    for area in world["areas"]:
+        if area["k"] != "beach":
+            continue
+        ring = pairs(area["p"]); shape = Polygon(ring)
+        lo, hi = ring.min(axis=0), ring.max(axis=0)
+        spots = np.array([[x, n] for x in np.arange(lo[0], hi[0], 8.5) for n in np.arange(lo[1], hi[1], 8.5)])
+        if not len(spots):
+            continue
+        spots = spots + rng.normal(0, 1.6, spots.shape)
+        spots = spots[shape.contains_points(spots)]
+        for spot in spots:
+            sea = coast.query(spot)[0]
+            if 5 < sea < 30 and buildings.query(spot)[0] > 4 and roads.query(spot)[0] > 5 and rng.random() < 0.55:
+                add("parasol", *spot, 0.9, 1.15)
+    beach_shapes = [Polygon(pairs(a["p"])) for a in world["areas"] if a["k"] == "beach"]
+    rect = world["meta"]["rect_m"]
+    for land in world["land"]:
+        if len(land) < 6:
+            continue
+        line = densify(pairs(land), 5)
+        centre = line.mean(axis=0)
+        for point in line:
+            if min(abs(point[0] - rect[0]), abs(point[0] - rect[2]), abs(point[1] - rect[1]), abs(point[1] - rect[3])) < 2:
+                continue
+            sandy = any(shape.contains_points([point], radius=6)[0] or shape.contains_points([point], radius=-6)[0] for shape in beach_shapes)
+            if rng.random() < (0.04 if sandy else 0.45):
+                inland = (centre - point) / max(np.hypot(*(centre - point)), 1)
+                add("rock", *(point + inland * rng.uniform(-1.5, 2.5) + rng.normal(0, 1.2, 2)), 0.5, 1.9)
 
     counts = {k: len(v) // 3 for k, v in out.items()}
     TREES_OUT.write_text(json.dumps(out, separators=(",", ":")), encoding="utf-8")
