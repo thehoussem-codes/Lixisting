@@ -91,3 +91,18 @@ Première zone : rue du 24 Février 1956 (nord du Cours). Hauteur exacte des mur
 - En jeu : ligne LIEU / QUARTIER / ID / POSITION / ALTITUDE / latitude-longitude en bas de l'écran ;
   touche I = fiche détaillée (carrefour, repères, voies et bâtiments proches), touche C = copier la fiche.
 - Pour retrouver un lieu : `?at=x,nord` (donné dans la fiche), ou chercher l'identifiant dans `locations.json`.
+
+## Licences des modèles et textures (12 novembre)
+
+Lixiting est un projet personnel, non commercial. Sont donc acceptés : CC0, CC-BY, CC-BY-SA, CC-BY-NC (et variantes NC),
+ainsi que toute licence autorisant explicitement un jeu personnel non commercial.
+
+Deux questions distinctes, à vérifier pour chaque fichier :
+1. **Utiliser le modèle dans le jeu** : permis par toutes les licences ci-dessus.
+2. **Laisser le fichier d'origine téléchargeable** (dépôt GitHub public, site du jeu) : permis par les licences Creative Commons,
+   à condition de créditer l'auteur ; **non permis** par la licence « Standard » de Sketchfab ni par la licence Quaternius.
+   Ces modèles-là ne vont pas dans le dépôt public.
+
+Chaque modèle intégré est noté dans `public/assets/CREDITS.md` : titre, auteur, lien, licence.
+Si le jeu devenait commercial un jour, tous les modèles en licence NC devraient être retirés ou remplacés.
+Les modèles marqués « NoAI » sur Sketchfab restent écartés : cette mention interdit de les donner à un programme d'IA.
