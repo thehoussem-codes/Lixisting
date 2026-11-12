@@ -103,6 +103,20 @@ export class Player {
     }
   }
 
+  /** Contrôle du modèle chargé : nombre de maillages et de triangles, taille, et l'animation avance-t-elle ? */
+  probe(): { meshes: number; triangles: number; height: number; mixerTime: number | null } {
+    let meshes = 0, triangles = 0;
+    this.object.traverse((node) => {
+      const mesh = node as THREE.SkinnedMesh;
+      if (!mesh.isSkinnedMesh) return;
+      meshes++;
+      triangles += (mesh.geometry.index ? mesh.geometry.index.count : mesh.geometry.attributes.position.count) / 3;
+    });
+    const head = this.rest.get('Head')?.bone;
+    const height = head ? head.getWorldPosition(new THREE.Vector3()).y - this.object.position.y : 0;
+    return { meshes, triangles, height: Math.round(height * 100) / 100, mixerTime: this.mixer ? Math.round(this.mixer.time * 100) / 100 : null };
+  }
+
   /** Mémorise la pose de repos du squelette (bras en croix), base des mouvements de nage. */
   private captureRestPose(model: THREE.Object3D): void {
     this.object.updateWorldMatrix(true, true);

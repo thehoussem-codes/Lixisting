@@ -99,6 +99,7 @@ export class Game {
       textures: this.renderer.info.memory.textures,
       scale: this.renderScale,
       swimming: this.player.swimming,
+      character: this.player.probe(),
       car: this.driving ? { kmh: Math.round(this.driving.speed * 3.6), above: Math.round((this.driving.object.position.y - this.ground(this.driving.object.position.x, this.driving.object.position.z)) * 100) / 100, ...this.driving.telemetry } : null,
     });
   }

@@ -60,3 +60,16 @@ Une entrée d'exemple (`exemple`, une caisse violette) est fournie, désactivée
 
 Le fichier doit contenir un squelette et trois animations ; `animations` donne leur nom dans le fichier.
 Le personnage actuel est un mannequin provisoire (exemples officiels de three.js, modèle issu de Mixamo).
+
+## Mise à jour : contrôle et allègement des modèles
+
+- **Personnage allégé** : `python3 tools/optimize_character.py` ramène le mannequin de 49 112 à environ 13 000 triangles
+  et retire les animations non utilisées (fichier de 2,9 Mo à 0,9 Mo). L'original reste dans `data/models/character_source.glb`.
+- **Échelle mesurée** : pour un véhicule sans `scale`, l'échelle est calculée d'après la longueur réelle (`length`) ;
+  sans `offset`, le modèle est centré et posé au sol. Les dimensions lues dans le fichier s'affichent dans la console.
+- **Peinture** : seul le matériau de carrosserie prend la couleur du véhicule. Il est reconnu à son nom
+  (body, paint, carrosserie, carpaint) ou indiqué par `"paintMaterial": "nom"` dans le catalogue.
+- **Roues du modèle** : avec `"keepWheels": false`, si le fichier contient quatre nœuds nommés wheel / roue / tire / tyre,
+  ce sont eux qui tournent et braquent.
+- **Matériaux** : tous convertis en rendu simple (style rétro), les modèles compressés Meshopt se chargent directement.
+- **Contrôle** : `window.lixitingDebug().character` donne le nombre de triangles, la taille et l'avancée de l'animation.

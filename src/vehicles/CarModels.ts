@@ -468,10 +468,15 @@ export function createCarVisual(spec: CarSpec, color: number): CarVisual {
   }
   if (asset) {
     // Modèle 3D fourni : dès qu'il est chargé, il remplace la carrosserie calculée.
-    assets.instance(asset).then((model) => {
+    assets.instance(asset, { length: spec.length, paint: color }).then((model) => {
       for (const mesh of builtIn) mesh.visible = false;
-      if (asset.keepWheels === false) for (const wheel of wheels) wheel.visible = false;
       group.add(model);
+      if (asset.keepWheels === false) {
+        const own = model.userData.wheels as THREE.Object3D[] | undefined;
+        for (const wheel of wheels) wheel.visible = false;
+        // Le modèle a ses propres roues nommées : ce sont elles qui tournent et braquent désormais.
+        if (own) wheels.splice(0, wheels.length, ...own);
+      }
     }).catch((error) => console.warn(`Modèle du véhicule "${spec.id}" non chargé, carrosserie intégrée conservée.`, error));
   }
   return { group, wheels };
