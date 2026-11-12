@@ -159,3 +159,38 @@ Note on brand marks: the four Algerian vehicles carry real manufacturer badges a
 
 Search gaps after three rounds: no Algerian apartment block (cité), no ficus, no Aleppo or stone pine by name
 (the pines above are northern conifers), no school or hospital, no Arabic or French shop signs.
+
+## H. Second preview round and reduction tests (12 November, late evening)
+
+Decision recorded: the Algerian vehicles keep their liveries, badges and official markings.
+
+### Packs re-rendered one item at a time
+
+| Sheet | Content | Result |
+| --- | --- | --- |
+| `sheet_5_cars.jpg` | Generic passenger car pack, 7 items | Each car now renders alone with its textures. Measured: 6,022 to 7,257 triangles per single car; three items of about 14,000 triangles are two cars standing close together |
+| `sheet_6_characters.jpg` | Retro PSX Male Pack, 12 of 23 characters | One shared body of 466 triangles with different clothing textures: plain shirts in several colours, plaid shirts, a leather jacket, one bare-chested. Proportions are natural and slim; detail is PS1 level. The three views show the side and the back; no front view of the faces was produced, and several heads show a white glare or render black |
+
+### Reduction tests (grid merge of nearby vertices, textures kept)
+
+| Asset | Original | Reduced A | Reduced B | Reading |
+| --- | --- | --- | --- | --- |
+| Skoda Rapid, one car (`sheet_7_skoda_reduction.jpg`) | 132,140 | 52,106 | 27,780 | A is visually identical at this size. B still reads as the same car with the livery intact; small breaks appear around the front bumper and wheel arches. Going below about 25,000 needs a different method: remove the interior and underbody first |
+| Algerian villa (`sheet_8_villa_reduction.jpg`) | 148,420 | 34,162 | 10,884 | A is almost identical. B damages the front: balustrade, window grilles and wall edges crumble. The usable range with this method is roughly 20,000 to 34,000 |
+
+This is the simplest reduction method. A proper edge-collapse tool would do better at the same triangle count, so these results are a floor, not a ceiling.
+
+### New candidates from the fourth search (not downloaded)
+
+| Asset | Download page | Licence | Triangles | Note |
+| --- | --- | --- | --- | --- |
+| Algerian House, tafirest | https://sketchfab.com/3d-models/algerian-house-cae302b43d8d4594af45706ed87a97c1 | Not shown; may not be downloadable | 38.2k | Tagged algeria, algiers, casbah |
+| Algerian monuments, Mukagen | https://sketchfab.com/3d-models/algerian-monuments-2e7f88f9df00490db5b2065e9544b712 | CC-BY | 700.1k | Content unknown until rendered |
+| 3D Map for old Algiers, Imad Hamouda | https://sketchfab.com/3d-models/3d-map-for-old-algeries-b089375a8f734224bb0a4b9382ac92f4 | CC-BY | Not shown | Casbah quarter; reference for old-town massing |
+| Low Poly Hospital Scene, _its_sagar_bro | https://sketchfab.com/3d-models/low-poly-hospital-scene-a00aa1a1a9774a53869b6dd8b3497bd2 | CC-BY | 3.5k | Hospital with ambulance, diffuse maps |
+| Low Poly Hospital, saqib24 | https://sketchfab.com/3d-models/low-poly-hospital-31ee55ffb7cf42698a9bf4d9300ac783 | CC-BY | 2k | Tagged cartoonish |
+| lowpoly HOSPITAL PACK, Son.Sinpivong | https://sketchfab.com/3d-models/lowpoly-hospital-pack-6c49cf4ec94149c3b35c108428bdaee1 | CC-BY | 9.7k | Hospital pieces |
+| Low Poly City, kabukidanshii | https://sketchfab.com/3d-models/low-poly-city-579d7493dbbc4cfa9fd50dde3df229bb | Not shown | 82.6k | 20 buildings including a hospital and a school, 10 traffic signs |
+
+Still not found after four rounds: an Algerian apartment block (cité), a school on its own, ficus, Aleppo or stone pine,
+Arabic or French shop signs. Tunisian heritage collections exist on Sketchfab but most items are not downloadable.
