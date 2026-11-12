@@ -128,6 +128,46 @@ export function createFacadeTexture(style: FacadeStyle): THREE.CanvasTexture {
   return finish(element);
 }
 
+/**
+ * Feuillage : image à trous (on voit à travers), teintée ensuite par la couleur de chaque espèce.
+ * Moitié gauche : amas de feuilles. Moitié droite : une palme avec ses folioles.
+ * Le coin bas-gauche est plein : c'est lui qu'utilisent les troncs et les rochers.
+ */
+export function createFoliageTexture(): THREE.CanvasTexture {
+  const element = document.createElement('canvas');
+  element.width = element.height = 256;
+  const ctx = element.getContext('2d')!;
+  let seed = 7;
+  const random = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+  // Amas de feuilles : trois couches, de la plus sombre (fond) à la plus claire (dessus).
+  for (const [count, low, high] of [[420, 105, 150], [520, 150, 200], [380, 200, 255]] as const) {
+    for (let i = 0; i < count; i++) {
+      const x = 4 + random() * 120, y = 4 + random() * 248, r = 3 + random() * 4.5, a = random() * Math.PI;
+      const g = Math.round(low + random() * (high - low));
+      ctx.fillStyle = `rgb(${g},${g},${Math.round(g * 0.92)})`;
+      ctx.beginPath(); ctx.ellipse(x, y, r, r * 0.5, a, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  // Palme : nervure centrale et folioles obliques, de plus en plus courtes vers la pointe (en haut).
+  ctx.strokeStyle = '#d8d8c8'; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(192, 254); ctx.lineTo(192, 2); ctx.stroke();
+  for (let y = 250; y > 4; y -= 5) {
+    const t = 1 - y / 256, reach = 58 * (1 - t * t) * (0.35 + Math.min(1, t * 4) * 0.65);
+    const g = Math.round(170 + random() * 80);
+    ctx.strokeStyle = `rgb(${g},${g},${g})`; ctx.lineWidth = 3.2;
+    ctx.beginPath(); ctx.moveTo(192, y); ctx.lineTo(192 - reach, y - 14); ctx.moveTo(192, y); ctx.lineTo(192 + reach, y - 14); ctx.stroke();
+  }
+  // Coins pleins (les quatre, car l'image se répète) : troncs, rochers et parasols y prennent leur couleur unie.
+  ctx.fillStyle = '#ffffff';
+  for (const [x, y] of [[0, 0], [246, 0], [0, 246], [246, 246]]) ctx.fillRect(x, y, 10, 10);
+  const texture = finish(element);
+  texture.magFilter = THREE.LinearFilter;
+  // Pas de versions réduites de l'image : de loin, le feuillage ne s'éclaircit pas et les troncs restent pleins.
+  texture.generateMipmaps = false;
+  texture.minFilter = THREE.LinearFilter;
+  return texture;
+}
+
 /** Garde-corps en fer forgé : barreaux noirs sur fond transparent. */
 export function createRailTexture(): THREE.CanvasTexture {
   const element = document.createElement('canvas');

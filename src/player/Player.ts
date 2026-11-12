@@ -96,6 +96,7 @@ export class Player {
       for (const block of this.blocks) block.visible = false;
       this.object.add(model);
       this.dress(model);
+      model.traverse((node) => { node.castShadow = true; });
       this.captureRestPose(model);
       this.play('idle', 0);
     } catch (error) {
@@ -209,8 +210,8 @@ export class Player {
     if (bone) {
       this.object.updateWorldMatrix(true, true);
       const top = bone.getWorldPosition(new THREE.Vector3());
-      const hair = new THREE.Mesh(new THREE.SphereGeometry(0.126, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.55), new THREE.MeshLambertMaterial({ color: 0x120d0a }));
-      hair.position.set(top.x, top.y + 0.1, top.z - 0.055);
+      const hair = new THREE.Mesh(new THREE.SphereGeometry(0.128, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.48), new THREE.MeshLambertMaterial({ color: 0x120d0a }));
+      hair.position.set(top.x, top.y + 0.095, top.z - 0.03);
       hair.frustumCulled = false;
       this.object.add(hair);
       bone.attach(hair);

@@ -33,6 +33,7 @@ function wallQuad(b: MeshBuilder, ax: number, az: number, bx: number, bz: number
   b.triangle(a, c, d); b.triangle(a, d, e);
 }
 
+const ROOF_EDGE = new THREE.Color(0xbdb6a6), TANK_LEG = new THREE.Color(0x77736b), TANK_BLUE = new THREE.Color(0x3f6fae), TANK_GREY = new THREE.Color(0xc9c9c4), DISH = new THREE.Color(0xeeeeea);
 const SLAB = new THREE.Color(0xd9d4c6), WHITE = new THREE.Color(0xffffff);
 type Point = [number, number, number];
 function roofPoint(x: number, y: number, z: number): Point { return [x, y, z]; }
@@ -152,6 +153,28 @@ export function buildBuildings(scene: THREE.Scene, data: WorldData, ground: (x: 
           wallQuad(rails, a1[0], a1[2], b1[0], b1[2], y, y + 1.0, WHITE, 1, 1, Math.max(1, Math.round(length / 1.1)), 0, 1);
         }
       }
+      // Immeubles d'habitation : balcons superposés à garde-corps maçonné, sur une façade longue sur deux.
+      if (tall && !colonial && length > 9 && (index * 31 + i * 17) % 2 === 0) {
+        const ox = -(bz - az) / length, oz = (bx - ax) / length;
+        const dx = (bx - ax) / length, dz = (bz - az) / length;
+        const spans = length > 16 ? [[0.1, 0.42], [0.58, 0.9]] : [[0.22, 0.78]];
+        const flat = builderIn(roofs, cell), rim = wall.clone().multiplyScalar(0.9);
+        for (let floor = hasGround ? 0 : 1; floor < floors; floor++) {
+          const y = upperFrom + floor * FLOOR_HEIGHT;
+          for (const [from, to] of spans) {
+            const sx = ax + dx * length * from, sz = az + dz * length * from, ex = ax + dx * length * to, ez = az + dz * length * to;
+            const DEPTH = 1.05;
+            const a0 = roofPoint(sx, y, sz), b0 = roofPoint(ex, y, ez);
+            const a1 = roofPoint(sx + ox * DEPTH, y, sz + oz * DEPTH), b1 = roofPoint(ex + ox * DEPTH, y, ez + oz * DEPTH);
+            slab(flat, a0, b0, b1, a1, 0.14, SLAB);
+            // Garde-corps plein : face avant et deux retours.
+            for (const [p0, p1, shade] of [[a1, b1, 0.95], [a0, a1, 0.8], [b1, b0, 0.8]] as const) {
+              const v = [flat.vertex(p0[0], y, p0[2], rim, shade), flat.vertex(p1[0], y, p1[2], rim, shade), flat.vertex(p1[0], y + 0.95, p1[2], rim, shade), flat.vertex(p0[0], y + 0.95, p0[2], rim, shade)];
+              flat.triangle(v[0], v[1], v[2]); flat.triangle(v[0], v[2], v[3]);
+            }
+          }
+        }
+      }
       // Nombre entier de travées et d'étages : pas de fenêtre coupée.
       wallQuad(upper, ax, az, bx, bz, upperFrom, top, wall, hasGround ? 0.92 : 0.75, 1, Math.round(length / FACADE_WIDTH[look.style]), 0, floors);
     }
@@ -167,6 +190,28 @@ export function buildBuildings(scene: THREE.Scene, data: WorldData, ground: (x: 
     } else {
       // Toit plat ; les murs dépassent pour former l'acrotère.
       roof.flatPolygon(p, building.t === 'industrial' ? top : top - PARAPET, roofColor);
+    }
+
+    // Toits-terrasses habités : édicule d'escalier, citernes d'eau et paraboles, comme sur les toits d'Annaba.
+    if (tall && count >= 4) {
+      const deck = top - PARAPET;
+      const spot = (k: number, t: number): [number, number] => {
+        const i = (index * 7 + k * 3) % count;
+        return [cx + (p[i * 2] - cx) * t, cz + (-p[i * 2 + 1] - cz) * t];
+      };
+      const [ex, ez] = spot(0, 0.3);
+      box(roof, ex, ez, 1.5, deck, deck + 2.3, wall.clone().multiplyScalar(0.93));
+      box(roof, ex, ez, 1.65, deck + 2.3, deck + 2.45, ROOF_EDGE);
+      for (let k = 1; k <= 1 + (index % 3); k++) {
+        const [tx, tz] = spot(k, 0.5);
+        box(roof, tx, tz, 0.12, deck, deck + 0.7, TANK_LEG);
+        box(roof, tx, tz, 0.55, deck + 0.7, deck + 1.75, index % 2 ? TANK_BLUE : TANK_GREY);
+      }
+      for (let k = 0; k < 2 + (index % 4); k++) {
+        const [sx, sz] = spot(k + 4, 0.78 + (k % 2) * 0.1);
+        box(roof, sx, sz, 0.04, deck, deck + 1.0, TANK_LEG);
+        pyramid(roof, sx, sz, 0.48, deck + 1.45, deck + 0.95, DISH);
+      }
     }
 
     if (building.t === 'station') {
@@ -220,9 +265,9 @@ export function buildBuildings(scene: THREE.Scene, data: WorldData, ground: (x: 
       material = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, map: createFacadeTexture(style) });
       materials.set(style, material);
     }
-    if (!builder.isEmpty) scene.add(new THREE.Mesh(builder.build(), material));
+    if (!builder.isEmpty) { const mesh = new THREE.Mesh(builder.build(), material); mesh.castShadow = true; scene.add(mesh); }
   }
   const roofMaterial = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
-  for (const builder of roofs.values()) if (!builder.isEmpty) scene.add(new THREE.Mesh(builder.build(), roofMaterial));
+  for (const builder of roofs.values()) if (!builder.isEmpty) { const mesh = new THREE.Mesh(builder.build(), roofMaterial); mesh.castShadow = true; scene.add(mesh); }
   return collider;
 }

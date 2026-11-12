@@ -63,3 +63,12 @@
   Essais dans le jeu : tremplin à 124 km/h, 4,2 m de haut, réception stable ; en ville, aucune perte de contact parasite.
 - 2026-11-11 : photos de référence d'Annaba (Wikimedia Commons, licences libres) dans la branche `references`, avec auteurs et
   licences dans `references/credits.json`. Elles servent de modèles visuels et ne sont pas intégrées au jeu.
+
+## Qualité visuelle (12 novembre)
+
+- **Ombres portées du soleil** (bâtiments, arbres, véhicules, personnage) dans un rayon de 85 m autour du joueur ;
+  coupées automatiquement si le jeu rame, ou à la main avec `?ombres=0`.
+- **Végétation** : feuillage à image de feuilles ajourée (on voit à travers), houppiers faits de plusieurs masses,
+  palmes à folioles. Les emplacements restent ceux des données réelles.
+- **Immeubles** : balcons superposés, édicules, citernes et paraboles sur les toits-terrasses (détails indicatifs).
+- **Modèles** : personnage ramené de 49 000 à 13 000 triangles (`tools/optimize_character.py`).

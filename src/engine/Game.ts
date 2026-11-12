@@ -22,6 +22,8 @@ import { MapView } from '../ui/MapView';
  */
 const RENDER_SCALE = Math.min(1, Math.max(0.3, Number(new URLSearchParams(window.location.search).get('res')) || 1));
 const DRONE = new URLSearchParams(window.location.search).get('drone')?.split(',').map(Number);
+const SHADOWS = new URLSearchParams(window.location.search).get('ombres') !== '0';
+const SHADOW_RANGE = 85; // demi-largeur de la zone ombrée autour du joueur, en mètres
 const AUTO_SCALE = !new URLSearchParams(window.location.search).has('res');
 const ENTER_DISTANCE = 4.5;
 const VIEW_DISTANCE = 1400; // au-delà, tout est noyé dans le brouillard
@@ -57,6 +59,8 @@ export class Game {
   /** Résolution de calcul actuelle (s'adapte à la fluidité, sauf si ?res= est fixé). */
   private renderScale = RENDER_SCALE;
   private scaleTimer = 2;
+  private sun: THREE.DirectionalLight | null = null;
+  private sunDirection = new THREE.Vector3(0.6, 0.75, 0.25);
   private hudTimer = 0;
   /** Blocs de décor masqués quand ils sont au-delà du brouillard (inutile de les dessiner). */
   private chunks: { mesh: THREE.Mesh; x: number; z: number; reach: number }[] = [];
@@ -192,6 +196,7 @@ export class Game {
         this.scene.add(moto.object);
       });
       this.goToPlace(0);
+      this.setupShadows();
       // Adresse du type ...?at=x,n : démarre à ce point de la carte (mètres depuis la gare, n = nord).
       const at = new URLSearchParams(window.location.search).get('at')?.split(',').map(Number);
       if (at && at.length === 2 && at.every(Number.isFinite)) this.player.teleport(at[0], this.ground(at[0], -at[1]), -at[1]);
@@ -279,6 +284,25 @@ export class Game {
     }
   }
 
+  /** Ombres portées du soleil (bâtiments, arbres, véhicules) dans un rayon autour du joueur. Désactivables : ?ombres=0. */
+  private setupShadows(): void {
+    this.scene.traverse((node) => { if ((node as THREE.DirectionalLight).isDirectionalLight) this.sun = node as THREE.DirectionalLight; });
+    if (!this.sun || !SHADOWS) return;
+    this.sunDirection.copy(this.sun.position).normalize();
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.PCFShadowMap;
+    this.sun.castShadow = true;
+    this.sun.shadow.mapSize.set(2048, 2048);
+    const camera = this.sun.shadow.camera;
+    camera.left = camera.bottom = -SHADOW_RANGE; camera.right = camera.top = SHADOW_RANGE;
+    camera.near = 20; camera.far = 520;
+    camera.updateProjectionMatrix();
+    this.sun.shadow.bias = -0.0006;
+    this.sun.shadow.normalBias = 0.25;
+    this.scene.add(this.sun.target);
+    this.scene.traverse((node) => { if ((node as THREE.Mesh).isMesh) node.receiveShadow = true; });
+  }
+
   /** Touches 1 à 9 : téléportation vers un repère. */
   private onKeyDown = (e: KeyboardEvent) => {
     if (e.repeat) return;
@@ -323,6 +347,14 @@ export class Game {
       this.camera.lookAt(target);
     }
     this.sky?.position.copy(this.camera.position);
+    if (this.sun?.castShadow) {
+      // L'ombre suit le joueur ; on cale sa position sur la grille de la carte d'ombre pour qu'elle ne scintille pas.
+      const focus = this.driving ? this.driving.object.position : this.player.object.position;
+      const step = (SHADOW_RANGE * 2) / this.sun.shadow.mapSize.x * 4;
+      const fx = Math.round(focus.x / step) * step, fz = Math.round(focus.z / step) * step;
+      this.sun.target.position.set(fx, focus.y, fz);
+      this.sun.position.set(fx + this.sunDirection.x * 260, focus.y + this.sunDirection.y * 260, fz + this.sunDirection.z * 260);
+    }
     this.time += dt;
     this.water?.update(this.time, this.camera.position);
     // Résolution automatique : on allège le calcul si le jeu rame, on le raffine s'il a de la marge.
@@ -330,6 +362,8 @@ export class Game {
     if (AUTO_SCALE && this.scaleTimer <= 0) {
       this.scaleTimer = 1.5;
       const fps = 1 / this.frameTime;
+      // Les ombres coûtent cher : si le jeu rame encore à la résolution minimale, on les coupe.
+      if (this.sun?.castShadow && fps < 24 && this.renderScale <= 0.6) { this.sun.castShadow = false; console.info('Ombres coupées pour garder la fluidité.'); }
       const wanted = fps < 33 ? this.renderScale - 0.1 : fps > 52 ? this.renderScale + 0.05 : this.renderScale;
       const next = Math.min(1, Math.max(0.5, wanted));
       if (next !== this.renderScale) { this.renderScale = next; this.resize(); }

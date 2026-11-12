@@ -93,6 +93,7 @@ export class Car {
   constructor(readonly spec: CarSpec, color: number) {
     const visual = createCarVisual(spec, color);
     this.object = visual.group;
+    this.object.traverse((node) => { node.castShadow = true; });
     this.wheels = visual.wheels;
     this.leanNode = visual.lean ?? null;
     this.riderNode = visual.rider ?? null;
