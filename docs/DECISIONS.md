@@ -80,3 +80,14 @@ Dans les zones listées dans `GRADING_ZONES` (`tools/build_terrain.py`), les gra
 adouci (pente maximale 3,5 %, on entaille sans jamais remblayer), le terrain est entaillé à leur passage et un mur de
 soutènement en pierre retient le talus dès qu'il dépasse 1,2 m. Le terrain autour garde son altitude réelle.
 Première zone : rue du 24 Février 1956 (nord du Cours). Hauteur exacte des murs : déduite du relief, à confirmer par photos.
+
+## Identification des lieux (12 novembre)
+
+- Base unique `public/world/locations.json`, fabriquée par `tools/build_locations.py` (à relancer après `build_world.py`).
+- Identifiants stables : tronçon de rue `ANN-<quartier>-<numéro>`, carrefour `ANN-<quartier>-X<numéro>`,
+  bâtiment `B-<rang>`, voie `R-<rang>` (rangs dans `annaba.json`, donc directement utilisables dans le code et les outils).
+- Quartier : quartier OpenStreetMap à moins de 450 m, sinon repère du jeu à moins de 600 m, sinon secteur de grille de 500 m
+  (lettre + chiffres, sans nom). Aucun nom n'est inventé ; 1 375 tronçons sur 1 834 n'ont pas de nom dans OpenStreetMap.
+- En jeu : ligne LIEU / QUARTIER / ID / POSITION / ALTITUDE / latitude-longitude en bas de l'écran ;
+  touche I = fiche détaillée (carrefour, repères, voies et bâtiments proches), touche C = copier la fiche.
+- Pour retrouver un lieu : `?at=x,nord` (donné dans la fiche), ou chercher l'identifiant dans `locations.json`.

@@ -35,3 +35,11 @@ html, body, #root { margin: 0; height: 100%; overflow: hidden; background: #000;
 .hud-speed { font-size: 34px; font-weight: bold; }
 .hud-speed span { font-size: 15px; }
 .hud-help { font-size: 12px; max-width: 60vw; }
+
+/* Identification du lieu : ligne discrète en bas, fiche détaillée avec la touche I. */
+.hud-location { color: #ffe9a8; font-family: Menlo, Consolas, monospace; font-size: 11px; }
+.hud-inspect {
+  position: fixed; right: 16px; top: 44px; margin: 0; padding: 10px 12px; max-width: 46vw; max-height: 80vh; overflow: hidden;
+  background: rgba(10, 14, 20, 0.82); border: 1px solid rgba(255, 255, 255, 0.35); border-radius: 6px;
+  color: #f2f2ee; font: 11px/1.45 Menlo, Consolas, monospace; white-space: pre-wrap; pointer-events: none;
+}

@@ -14,6 +14,7 @@ import type { Collider } from '../world/Collider';
 import { loadTerrain } from '../world/Terrain';
 import { buildTrees, loadTrees } from '../world/Trees';
 import { buildWalls } from '../world/Walls';
+import { Locations } from '../world/Locations';
 import { loadWorldData, type WorldPlace } from '../world/WorldData';
 import { MapView } from '../ui/MapView';
 
@@ -35,6 +36,8 @@ export interface GameEvents {
   onPlaces(places: WorldPlace[]): void;
   /** Quartier le plus proche et vitesse (km/h, null à pied), quelques fois par seconde. */
   onHud(zone: string, speed: number | null, fps: number): void;
+  /** Ligne d'identification du lieu, et fiche détaillée quand le mode inspection est ouvert (touche I). */
+  onLocation(line: string, detail: string | null): void;
 }
 
 /** Le moteur : crée la scène, fait tourner la boucle de jeu, nettoie à la fin. */
@@ -60,6 +63,11 @@ export class Game {
   /** Résolution de calcul actuelle (s'adapte à la fluidité, sauf si ?res= est fixé). */
   private renderScale = RENDER_SCALE;
   private scaleTimer = 2;
+  private locations: Locations | null = null;
+  private inspecting = false;
+  private district = '';
+  private copied = false;
+  private lastDetail = '';
   private sun: THREE.DirectionalLight | null = null;
   private sunDirection = new THREE.Vector3(0.6, 0.75, 0.25);
   private hudTimer = 0;
@@ -166,6 +174,7 @@ export class Game {
       this.water = world.water;
       const treeCount = buildTrees(this.scene, trees, terrain.heightAt);
       buildWalls(this.scene, trees.wall, this.collider);
+      Locations.load(data).then((locations) => { this.locations = locations; });
       // Blocs de décor (bâtiments, arbres, lampadaires) : on notera lesquels sont assez proches pour être affichés.
       this.scene.traverse((object) => {
         const mesh = object as THREE.Mesh;
@@ -311,6 +320,11 @@ export class Game {
     if (e.code.startsWith('Digit')) this.goToPlace(Number(e.code.slice(5)) - 1);
     if (e.code === 'KeyF') this.toggleCar();
     if (e.code === 'KeyM') this.map?.toggle();
+    // I : fiche détaillée du lieu ; C : la copier dans le presse-papiers.
+    if (e.code === 'KeyI') { this.inspecting = !this.inspecting; this.copied = false; this.hudTimer = 0; }
+    if (e.code === 'KeyC' && this.inspecting && this.lastDetail) {
+      navigator.clipboard?.writeText(this.lastDetail).then(() => { this.copied = true; this.hudTimer = 0; }).catch(() => undefined);
+    }
   };
 
   private frame = () => {
@@ -375,7 +389,14 @@ export class Game {
       this.hudTimer = 0.25;
       const eye = this.camera.position;
       for (const chunk of this.chunks) chunk.mesh.visible = Math.hypot(chunk.x - eye.x, chunk.z - eye.z) < chunk.reach;
-      this.events.onHud(this.nearestPlace(), this.driving ? Math.abs(this.driving.speed) * 3.6 : null, Math.round(1 / this.frameTime));
+      if (this.locations) {
+        const at = this.driving ? this.driving.object.position : this.player.object.position;
+        const fix = this.locations.locate(at.x, this.ground(at.x, at.z), at.z);
+        this.lastDetail = this.inspecting ? this.locations.inspect(fix) : '';
+        this.district = fix.district;
+        this.events.onLocation(this.locations.line(fix), this.inspecting ? `${this.lastDetail}\n\n${this.copied ? 'Copié dans le presse-papiers.' : 'C : copier cette fiche · I : fermer'}` : null);
+      }
+      this.events.onHud(this.district || this.nearestPlace(), this.driving ? Math.abs(this.driving.speed) * 3.6 : null, Math.round(1 / this.frameTime));
     }
     this.renderer.render(this.scene, this.camera);
   };

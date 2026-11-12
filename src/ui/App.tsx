@@ -11,11 +11,14 @@ export function App() {
   const [zone, setZone] = useState('');
   const [speed, setSpeed] = useState<number | null>(null);
   const [fps, setFps] = useState(0);
+  const [location, setLocation] = useState('');
+  const [detail, setDetail] = useState<string | null>(null);
 
   useEffect(() => {
     const game = new Game(containerRef.current!, {
       onStatus: setStatus,
       onPlaces: setPlaces,
+      onLocation: (line, more) => { setLocation(line); setDetail(more); },
       onHud: (z, s, f) => { setZone(z); setSpeed(s === null ? null : Math.round(s)); setFps(f); },
     });
     game.start();
@@ -25,7 +28,7 @@ export function App() {
   return (
     <>
       <div ref={containerRef} className="game-view" />
-      <Hud status={status} places={places} zone={zone} speed={speed} fps={fps} />
+      <Hud status={status} places={places} zone={zone} speed={speed} fps={fps} location={location} detail={detail} />
     </>
   );
 }
