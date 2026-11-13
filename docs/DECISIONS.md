@@ -123,3 +123,15 @@ Les modèles marqués « NoAI » sur Sketchfab restent écartés : cette mention
   Les vrais modèles sont listés dans `docs/ASSET_CATALOGUE.md` et doivent être téléchargés par Houssem.
   La licence du lot reste à confirmer sur sa page.
 
+## 13 novembre 2026 (soir) — Défauts de chaussée et cité de la Ménadia
+
+- **Trottoir qui passait par-dessus la chaussée** (taches claires en dents de scie aux carrefours en pente) :
+  chaque ruban suit le relief à ses propres bords, donc un trottoir large pouvait dépasser de quelques
+  centimètres la chaussée voisine. Les couches au sol (pistes, trottoirs, chaussées, carrefours) sont désormais
+  dessinées après le reste, dans un ordre fixe et sans écrire de profondeur : la chaussée recouvre toujours le trottoir.
+- **La Ménadia et les « 1000 logements »** : d'après les photos fournies par Houssem, les immeubles et tours
+  de la zone (centre x 450, n 1885, rayon 210 m) reçoivent un style « cité moderne » : enduit blanc, fenêtres
+  en bande, allèges et balcons jaune ocre. Les emprises et hauteurs restent celles d'OpenStreetMap ; seule la
+  façade vient des photos. La limite de la zone est une estimation, à corriger sur place.
+- Non fait : l'esplanade pavée avec ses arbres taillés et ses jardinières, les enseignes, la station-service.
+

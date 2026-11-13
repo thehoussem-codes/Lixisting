@@ -98,9 +98,14 @@ export function buildAnnabaWorld(scene: THREE.Scene, data: WorldData, terrain: T
   clouds.renderOrder = -1;
   sky.add(clouds);
 
-  const add = (builder: MeshBuilder, material: THREE.Material) => {
+  // order > 0 : couche plate posée au sol (trottoir, chaussée, carrefour). Elle est dessinée après tout le reste,
+  // dans l'ordre donné et sans écrire de profondeur : la chaussée recouvre donc toujours le trottoir, même quand
+  // le relief fait passer le trottoir quelques centimètres au-dessus d'elle.
+  const add = (builder: MeshBuilder, material: THREE.Material, order = 0) => {
     if (builder.isEmpty) return;
-    scene.add(new THREE.Mesh(builder.build(), material));
+    const mesh = new THREE.Mesh(builder.build(), material);
+    if (order > 0) { mesh.renderOrder = order; material.depthWrite = false; }
+    scene.add(mesh);
   };
 
   // Mer animée au niveau 0 ; le terrain descend en pente sous la surface le long du rivage.
@@ -135,13 +140,13 @@ export function buildAnnabaWorld(scene: THREE.Scene, data: WorldData, terrain: T
     if (rs > r + 0.3) walk.disc(x, z, rs, 0.12, white, ground, 2);
     crossings.disc(x, z, r + 0.05, 0.2, white, ground, 6);
   }
-  add(tracks, layer(1));
-  add(walk, layer(2, createPavementTexture(false)));
-  add(walkFine, layer(2, createPavementTexture(true)));
-  add(minor, layer(3, createRoadTexture(false)));
-  add(major, layer(4, createRoadTexture(true)));
-  add(painted, layer(4, createRoadTexture(true, true)));
-  add(crossings, layer(5, createAsphaltTexture()));
+  add(tracks, layer(1), 1);
+  add(walk, layer(2, createPavementTexture(false)), 2);
+  add(walkFine, layer(2, createPavementTexture(true)), 3);
+  add(minor, layer(3, createRoadTexture(false)), 4);
+  add(major, layer(4, createRoadTexture(true)), 5);
+  add(painted, layer(4, createRoadTexture(true, true)), 5);
+  add(crossings, layer(5, createAsphaltTexture()), 6);
 
   // Ronds-points réels : îlot central surélevé, bordé de béton, engazonné et planté.
   const islands = new MeshBuilder();

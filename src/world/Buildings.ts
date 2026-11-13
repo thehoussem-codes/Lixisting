@@ -93,6 +93,15 @@ function dome(b: MeshBuilder, x: number, y: number, z: number, radius: number, c
  * Apparence : choisie selon l'usage du bâtiment (maison, immeuble, tour, mosquée,
  * école, hôpital, bâtiment public, entrepôt), certain ou déduit de sa taille.
  */
+/**
+ * Cités modernes reconnaissables, repérées sur des photos des lieux (OpenStreetMap ne décrit pas les façades).
+ * La Ménadia et les « 1000 logements » : barres et tours blanches à allèges et balcons jaune ocre.
+ * x, n : centre de la zone en mètres ; r : rayon.
+ */
+const MODERN_ESTATES = [{ x: 450, n: 1885, r: 210 }];
+const ESTATE_WALLS = [0xffffff, 0xf7f4ea, 0xfdfbf3];
+const ESTATE_YELLOW = new THREE.Color(0xe0b23a);
+
 export function buildBuildings(scene: THREE.Scene, data: WorldData, ground: (x: number, z: number) => number): Collider {
   const collider = new Collider();
   const walls = new Map<string, MeshBuilder>();
@@ -105,8 +114,11 @@ export function buildBuildings(scene: THREE.Scene, data: WorldData, ground: (x: 
 
   data.buildings.forEach((building, index) => {
     const p = building.p, count = p.length / 2;
-    const look = LOOK[building.t] ?? LOOK.apartment;
+    let look = LOOK[building.t] ?? LOOK.apartment;
     const cell = `${Math.floor(p[0] / CHUNK)},${Math.floor(p[1] / CHUNK)}`;
+    const estate = (building.t === 'apartment' || building.t === 'tower')
+      && MODERN_ESTATES.some((zone) => Math.hypot(p[0] - zone.x, p[1] - zone.n) < zone.r);
+    if (estate) look = { style: building.t === 'tower' ? 'citetour' : 'cite', walls: ESTATE_WALLS, roofs: look.roofs };
     const wall = new THREE.Color(look.walls[index % look.walls.length]);
     const roofColor = new THREE.Color(look.roofs[(index * 7) % look.roofs.length]);
 
@@ -154,11 +166,11 @@ export function buildBuildings(scene: THREE.Scene, data: WorldData, ground: (x: 
         }
       }
       // Immeubles d'habitation : balcons superposés à garde-corps maçonné, sur une façade longue sur deux.
-      if (tall && !colonial && length > 9 && (index * 31 + i * 17) % 2 === 0) {
+      if (tall && !colonial && length > 9 && (estate ? i % 2 === 0 : (index * 31 + i * 17) % 2 === 0)) {
         const ox = -(bz - az) / length, oz = (bx - ax) / length;
         const dx = (bx - ax) / length, dz = (bz - az) / length;
         const spans = length > 16 ? [[0.1, 0.42], [0.58, 0.9]] : [[0.22, 0.78]];
-        const flat = builderIn(roofs, cell), rim = wall.clone().multiplyScalar(0.9);
+        const flat = builderIn(roofs, cell), rim = estate ? ESTATE_YELLOW : wall.clone().multiplyScalar(0.9);
         for (let floor = hasGround ? 0 : 1; floor < floors; floor++) {
           const y = upperFrom + floor * FLOOR_HEIGHT;
           for (const [from, to] of spans) {

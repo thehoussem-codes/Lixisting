@@ -48,12 +48,12 @@ function canvas(width: number, height: number, detail = 1): [HTMLCanvasElement, 
   return [element, ctx];
 }
 
-export type FacadeStyle = 'apartment' | 'house' | 'tower' | 'school' | 'public' | 'industrial' | 'mosque' | 'shop' | 'ground' | 'colonial' | 'arcade' | 'station';
+export type FacadeStyle = 'apartment' | 'house' | 'tower' | 'school' | 'public' | 'industrial' | 'mosque' | 'shop' | 'ground' | 'colonial' | 'arcade' | 'station' | 'cite' | 'citetour';
 
 /** Largeur réelle (m) couverte par un motif : 4 travées pour les rez-de-chaussée, 1 sinon. */
 export const FACADE_WIDTH: Record<FacadeStyle, number> = {
   apartment: 3.2, house: 3.2, tower: 3.2, school: 4, public: 3.2, industrial: 3, mosque: 4, shop: 12.8, ground: 12.8,
-  colonial: 3, arcade: 3.4, station: 5,
+  colonial: 3, arcade: 3.4, station: 5, cite: 3.4, citetour: 3.2,
 };
 
 export function createFacadeTexture(style: FacadeStyle): THREE.CanvasTexture {
@@ -70,6 +70,19 @@ export function createFacadeTexture(style: FacadeStyle): THREE.CanvasTexture {
       rect('#c4c4c4', 10, 46, 44, 4);
       for (let x = 11; x < 54; x += 5) rect('#7d7d7d', x, 38, 1, 8);
       rect('#7d7d7d', 10, 37, 44, 1);
+      break;
+    case 'cite': // cité moderne des années 1950-60 : enduit blanc, fenêtre en bande, allège jaune ocre
+      rect('#fbfaf5', 0, 0, 64, 64);
+      rect('#e3dfd2', 0, 61, 64, 3);
+      rect('#e0b23a', 6, 40, 52, 12); rect('#c99a2a', 6, 51, 52, 1);
+      rect('#8f979d', 6, 12, 52, 28); rect('#324b62', 8, 14, 48, 26); rect('#5a7c98', 8, 14, 48, 8);
+      for (const x of [23, 40]) rect('#dfe2e0', x, 14, 2, 26);
+      break;
+    case 'citetour': // tour d'habitation : enduit blanc, fenêtres carrées, bandeau jaune à chaque étage
+      rect('#fbfaf5', 0, 0, 64, 64);
+      rect('#e0b23a', 0, 54, 64, 10); rect('#c99a2a', 0, 53, 64, 1);
+      rect('#8f979d', 9, 14, 20, 30); rect('#324b62', 11, 16, 16, 26); rect('#5a7c98', 11, 16, 16, 8);
+      rect('#8f979d', 36, 14, 20, 30); rect('#324b62', 38, 16, 16, 26); rect('#5a7c98', 38, 16, 16, 8);
       break;
     case 'house': // petite fenêtre à volets
       rect('#e4e4e4', 0, 61, 64, 3);

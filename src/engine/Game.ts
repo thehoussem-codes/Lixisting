@@ -363,7 +363,8 @@ export class Game {
       const target = this.player.object.position.clone(), heading = (DRONE[1] ?? 0) * Math.PI / 180;
       target.z += DRONE[2] ?? 0;
       target.y += DRONE[3] ?? 0;
-      this.camera.position.set(target.x - Math.sin(heading) * DRONE[0] * 0.9, target.y + DRONE[0], target.z + Math.cos(heading) * DRONE[0] * 0.9);
+      const reach = DRONE[4] ?? DRONE[0] * 0.9; // 5e valeur : recul horizontal en mètres (vue rasante)
+      this.camera.position.set(target.x - Math.sin(heading) * reach, target.y + DRONE[0], target.z + Math.cos(heading) * reach);
       this.camera.lookAt(target);
     }
     this.sky?.position.copy(this.camera.position);
