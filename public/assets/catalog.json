@@ -71,7 +71,7 @@
       "length": 4.3,
       "width": 1.98,
       "height": 1.64,
-      "wheelRadius": 0.31,
+      "wheelRadius": 0.314,
       "weight": 0.12,
       "collision": {
         "halfLength": 2.15,
@@ -87,7 +87,7 @@
       "length": 5.5,
       "width": 2.48,
       "height": 2.7,
-      "wheelRadius": 0.36,
+      "wheelRadius": 0.39,
       "weight": 0.12,
       "collision": {
         "halfLength": 2.75,
@@ -103,7 +103,7 @@
       "length": 4.9,
       "width": 2.2,
       "height": 2.02,
-      "wheelRadius": 0.33,
+      "wheelRadius": 0.353,
       "weight": 0.12,
       "collision": {
         "halfLength": 2.45,
@@ -119,7 +119,7 @@
       "length": 4.7,
       "width": 2.24,
       "height": 1.9,
-      "wheelRadius": 0.38,
+      "wheelRadius": 0.395,
       "weight": 0.12,
       "collision": {
         "halfLength": 2.35,

@@ -204,6 +204,12 @@ export class Car {
     });
   }
 
+  /** Braque les roues avant d'un véhicule à l'arrêt (salon d'exposition : montre que les roues sont mobiles). */
+  poseWheels(steer: number): void {
+    this.steerInput = -steer / 0.45;
+    this.wheels.forEach((wheel, i) => { wheel.rotation.order = 'YXZ'; if (i >= 2) wheel.rotation.y = steer; });
+  }
+
   /** Place directement la voiture (utilisé par la circulation automatique). */
   setPose(x: number, z: number, heading: number): void {
     this.dropPhysics();

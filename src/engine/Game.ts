@@ -219,7 +219,8 @@ export class Game {
         [...CAR_CATALOG, ...MOTO_CATALOG].forEach((spec, i) => {
           const car = new Car(spec, spec.colors[0]);
           const column = i % 5, row = Math.floor(i / 5);
-          car.place(me.x + (column - 2) * 3.1, me.z + 5 + row * 5.5, Math.PI + (row === 0 ? 0.7 : -2.5));
+          car.place(me.x + (column - 2) * 6.2, me.z + 6 + row * 4.2, Math.PI / 2);
+          window.setTimeout(() => car.poseWheels(0.45), 5000); // après le chargement des modèles
           if (spec.moto) { car.place(me.x + (spec.moto === 'maxiscooter' ? 1.6 : -1.6), me.z - 2.6, Math.PI / 2 + 0.5); car.rider = spec.moto === 'cyclomoteur'; }
           this.cars.push(car);
           this.scene.add(car.object);
