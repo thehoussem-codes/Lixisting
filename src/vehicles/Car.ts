@@ -45,6 +45,8 @@ const BOOST_SPEED = 14;      // bonus en ligne droite : jusqu'à environ 165 km/
 const BOOST_BUILD = 0.12;    // le bonus met environ 8 secondes à se remplir
 const BOOST_LOSS = 0.8;      // et se perd vite dès qu'on tourne ou qu'on lâche
 const MAX_REVERSE = 8;
+// Essai : ?vitesse=libre retire la vitesse maximale (seuls le moteur et la résistance de l'air freinent encore).
+const FREE_SPEED = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('vitesse') === 'libre';
 const ACCELERATION = 10;
 const BRAKING = 22;
 const DRAG = 5.5;            // frein moteur quand on lâche l'accélérateur (m/s²)
@@ -351,7 +353,7 @@ export class Car {
       if (gas > 0 && steer === 0 && this.speed > top * 0.8) this.boost = Math.min(1, this.boost + BOOST_BUILD * dt);
       else this.boost = Math.max(0, this.boost - BOOST_LOSS * dt);
       this.restTime = 0;
-      this.simulate(dt, { throttle: gas, steer, handbrake: input.isDown('Space'), speedLimit: top + BOOST_SPEED * this.boost }, collider, others, ground);
+      this.simulate(dt, { throttle: gas, steer, handbrake: input.isDown('Space'), speedLimit: FREE_SPEED ? Infinity : top + BOOST_SPEED * this.boost }, collider, others, ground);
       return;
     }
     this.steerInput = steer;
@@ -375,7 +377,7 @@ export class Car {
     // Élan : il monte peu à peu tant qu'on accélère tout droit, et retombe sinon.
     if (gas > 0 && steer === 0 && this.speed > MAX_SPEED * 0.8) this.boost = Math.min(1, this.boost + BOOST_BUILD * dt);
     else this.boost = Math.max(0, this.boost - BOOST_LOSS * dt);
-    const limit = MAX_SPEED + BOOST_SPEED * this.boost;
+    const limit = FREE_SPEED ? Infinity : MAX_SPEED + BOOST_SPEED * this.boost;
     if (this.speed > limit) this.speed = Math.max(limit, this.speed - BRAKING * 0.5 * dt);
     this.speed = Math.max(this.speed, -MAX_REVERSE);
     this.revs(dt, gas > 0 && !underwater ? 1 : 0);
@@ -395,7 +397,8 @@ export class Car {
     if (v > GEAR_TOP[this.gear - 1] * 0.93 && this.gear < GEAR_TOP.length) { this.gear++; this.shifting = SHIFT_TIME; return 0.15; }
     // Le moteur pousse le mieux à mi-régime et s'essouffle près de la zone rouge.
     const r = v / GEAR_TOP[this.gear - 1];
-    return GEAR_PULL[this.gear - 1] * (0.75 + 0.5 * r - 0.45 * r * r);
+    const push = GEAR_PULL[this.gear - 1] * (0.75 + 0.5 * r - 0.45 * r * r);
+    return FREE_SPEED ? Math.max(0.35, push) : push; // sans limite, le dernier rapport continue de pousser
   }
 
   /** Régime moteur affiché et entendu : il suit la vitesse dans le rapport engagé, et rétrograde en ralentissant. */
