@@ -40,10 +40,8 @@ export const USE_ARCADE = new URLSearchParams(window.location.search).get('physi
 const GRAVITY = 9.81;
 const TAKEOFF_GAP = 0.3;    // la voiture ne décolle que si le sol se dérobe de plus de 30 cm sous sa trajectoire (vrais sauts)
 
-const MAX_SPEED = 32;        // m/s, environ 115 km/h
-const BOOST_SPEED = 14;      // bonus en ligne droite : jusqu'à environ 165 km/h
-const BOOST_BUILD = 0.12;    // le bonus met environ 8 secondes à se remplir
-const BOOST_LOSS = 0.8;      // et se perd vite dès qu'on tourne ou qu'on lâche
+const DEFAULT_TOP = 115;      // km/h, si le modèle n'indique rien
+const SPRINT_UNTIL = 100 / 3.6; // la reprise propre au modèle (sprint) agit jusqu'à 100 km/h
 const MAX_REVERSE = 8;
 // Essai : ?vitesse=libre retire la vitesse maximale (seuls le moteur et la résistance de l'air freinent encore).
 const FREE_SPEED = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('vitesse') === 'libre';
@@ -71,7 +69,6 @@ export class Car {
   heading = 0;
   speed = 0;
   /** 0 à 1 : élan accumulé en roulant droit, qui relève la vitesse maximale. */
-  private boost = 0;
   private wheels: THREE.Object3D[];
   private halfLength: number;
   private halfWidth: number;
@@ -136,7 +133,6 @@ export class Car {
     this.heading = heading;
     this.object.rotation.y = heading;
     this.speed = 0;
-    this.boost = 0;
   }
 
   /**
@@ -349,11 +345,9 @@ export class Car {
 
     if (!USE_ARCADE) {
       // Élan : il monte peu à peu tant qu'on accélère tout droit, et retombe sinon.
-      const top = this.wake().setup.handling.maxSpeed;
-      if (gas > 0 && steer === 0 && this.speed > top * 0.8) this.boost = Math.min(1, this.boost + BOOST_BUILD * dt);
-      else this.boost = Math.max(0, this.boost - BOOST_LOSS * dt);
+      this.wake();
       this.restTime = 0;
-      this.simulate(dt, { throttle: gas, steer, handbrake: input.isDown('Space'), speedLimit: FREE_SPEED ? Infinity : top + BOOST_SPEED * this.boost }, collider, others, ground);
+      this.simulate(dt, { throttle: gas, steer, handbrake: input.isDown('Space'), speedLimit: this.topSpeed }, collider, others, ground);
       return;
     }
     this.steerInput = steer;
@@ -374,10 +368,7 @@ export class Car {
     } else {
       this.speed -= Math.sign(this.speed) * Math.min(Math.abs(this.speed), (DRAG + DRAG_SPEED * Math.abs(this.speed)) * dt);
     }
-    // Élan : il monte peu à peu tant qu'on accélère tout droit, et retombe sinon.
-    if (gas > 0 && steer === 0 && this.speed > MAX_SPEED * 0.8) this.boost = Math.min(1, this.boost + BOOST_BUILD * dt);
-    else this.boost = Math.max(0, this.boost - BOOST_LOSS * dt);
-    const limit = FREE_SPEED ? Infinity : MAX_SPEED + BOOST_SPEED * this.boost;
+    const limit = this.topSpeed;
     if (this.speed > limit) this.speed = Math.max(limit, this.speed - BRAKING * 0.5 * dt);
     this.speed = Math.max(this.speed, -MAX_REVERSE);
     this.revs(dt, gas > 0 && !underwater ? 1 : 0);
@@ -388,24 +379,42 @@ export class Car {
     this.move(dt, this.steering, collider, others);
   }
 
+  /** Vitesse maximale de ce modèle en m/s (Infinity : aucune limite). */
+  get topSpeed(): number {
+    const top = this.spec.topSpeed === undefined ? DEFAULT_TOP : this.spec.topSpeed;
+    return FREE_SPEED || top === null ? Infinity : top / 3.6;
+  }
+
+  /** Rapports étirés selon la vitesse du modèle : un cyclomoteur passe ses vitesses tôt, une voiture rapide tard. */
+  private get gearScale(): number {
+    return Math.min(1.35, Math.max(0.3, this.topSpeed === Infinity ? 1.35 : this.topSpeed / 42));
+  }
+
   /** Force du moteur selon le rapport et le régime (1 = poussée de référence). Gère aussi les passages de rapport. */
   private pull(dt: number): number {
+    const sprint = Math.abs(this.speed) < SPRINT_UNTIL ? this.spec.sprint ?? 1 : 1;
+    return this.gearPull(dt) * sprint;
+  }
+
+  private gearPull(dt: number): number {
     if (this.speed < -0.2) { this.gear = 0; return 1; }
     if (this.gear === 0) this.gear = 1;
     const v = Math.abs(this.speed);
     if (this.shifting > 0) { this.shifting -= dt; return 0.15; }
-    if (v > GEAR_TOP[this.gear - 1] * 0.93 && this.gear < GEAR_TOP.length) { this.gear++; this.shifting = SHIFT_TIME; return 0.15; }
+    const tops = GEAR_TOP.map((g) => g * this.gearScale);
+    if (v > tops[this.gear - 1] * 0.93 && this.gear < tops.length) { this.gear++; this.shifting = SHIFT_TIME; return 0.15; }
     // Le moteur pousse le mieux à mi-régime et s'essouffle près de la zone rouge.
-    const r = v / GEAR_TOP[this.gear - 1];
+    const r = v / tops[this.gear - 1];
     const push = GEAR_PULL[this.gear - 1] * (0.75 + 0.5 * r - 0.45 * r * r);
-    return FREE_SPEED ? Math.max(0.35, push) : push; // sans limite, le dernier rapport continue de pousser
+    return this.topSpeed === Infinity ? Math.max(0.35, push) : Math.max(0.12, push); // sans limite, le dernier rapport continue de pousser
   }
 
   /** Régime moteur affiché et entendu : il suit la vitesse dans le rapport engagé, et rétrograde en ralentissant. */
   private revs(dt: number, throttle: number): void {
     const v = Math.abs(this.speed);
-    while (this.gear > 1 && v < GEAR_TOP[this.gear - 2] * 0.62) this.gear--;
-    const top = this.gear === 0 ? MAX_REVERSE * 1.3 : GEAR_TOP[this.gear - 1];
+    const scale = this.gearScale;
+    while (this.gear > 1 && v < GEAR_TOP[this.gear - 2] * scale * 0.62) this.gear--;
+    const top = this.gear === 0 ? MAX_REVERSE * 1.3 : GEAR_TOP[this.gear - 1] * scale;
     const target = Math.min(1, v / top) * (this.shifting > 0 ? 0.8 : 1) + (throttle && v < 1 ? 0.15 : 0);
     this.rpm += (target - this.rpm) * (1 - Math.exp(-9 * dt));
     this.throttle += (throttle - this.throttle) * (1 - Math.exp(-10 * dt));
@@ -423,7 +432,6 @@ export class Car {
     this.turnWheel(0, dt);
     if (this.speed === 0) return;
     if (!this.airborne) this.speed -= Math.sign(this.speed) * Math.min(Math.abs(this.speed), 6 * dt);
-    this.boost = 0;
     this.move(dt, 0, collider, others);
   }
 
@@ -451,7 +459,6 @@ export class Car {
       // La voiture percutée est poussée dans le sens du choc.
       if (other) other.shove(this.speed * 0.5 * Math.cos(other.heading - heading));
       this.speed *= -0.3; // choc : la voiture rebondit légèrement
-      this.boost = 0;
       return;
     }
     position.x = x;

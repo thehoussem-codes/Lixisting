@@ -57,6 +57,10 @@ export interface VehicleAsset extends ModelRef {
    * Sans indication, on cherche un matériau nommé body, paint, carrosserie ou carpaint.
    */
   paintMaterial?: string;
+  /** Vitesse maximale en km/h ; null : aucune limite. */
+  topSpeed?: number | null;
+  /** Reprise jusqu'à 100 km/h (1 par défaut). */
+  sprint?: number;
   /** true : plaques d'immatriculation algériennes posées à l'avant et à l'arrière. */
   plates?: boolean;
 }

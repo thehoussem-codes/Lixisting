@@ -30,6 +30,10 @@ export interface CarSpec {
   /** Deux-roues : maxi-scooter ou cyclomoteur (silhouettes génériques, sans logo). */
   moto?: 'maxiscooter' | 'cyclomoteur';
   tallLights?: boolean;       // feux arrière verticaux (hayons)
+  /** Vitesse maximale en km/h ; null : aucune limite (véhicules d'intervention). 115 par défaut. */
+  topSpeed?: number | null;
+  /** Reprise : multiplie l'accélération jusqu'à 100 km/h (1 par défaut ; 1.4 = nettement plus vif). */
+  sprint?: number;
   /** Réglages de conduite propres à ce modèle (le reste est déduit de ses dimensions). */
   handling?: Partial<Handling>;
   /** Points de suspension imposés ([x, z] × 4), sinon déduits des essieux. */
@@ -87,9 +91,9 @@ function interpolate(points: [number, number][], t: number): number {
 
 /** Deux-roues présents dans la circulation (environ un véhicule sur dix). */
 export const MOTO_CATALOG: CarSpec[] = [
-  { id: 'maxiscooter', label: 'Maxi-scooter', moto: 'maxiscooter', length: 2.2, width: 0.78, height: 1.42, clearance: 0.14, wheelRadius: 0.29, axleRear: 0.14, axleFront: 0.86,
+  { id: 'maxiscooter', label: 'Maxi-scooter', moto: 'maxiscooter', topSpeed: 140, sprint: 1.15, length: 2.2, width: 0.78, height: 1.42, clearance: 0.14, wheelRadius: 0.29, axleRear: 0.14, axleFront: 0.86,
     belt: [], roof: [], trim: false, colors: [0x1b1b1d, 0x3a3d42, 0xe9e7e0, 0x1f2a44] },
-  { id: 'cyclomoteur', label: 'Cyclomoteur', moto: 'cyclomoteur', length: 1.78, width: 0.62, height: 1.05, clearance: 0.12, wheelRadius: 0.3, axleRear: 0.17, axleFront: 0.83,
+  { id: 'cyclomoteur', label: 'Cyclomoteur', moto: 'cyclomoteur', topSpeed: 50, sprint: 0.6, length: 1.78, width: 0.62, height: 1.05, clearance: 0.12, wheelRadius: 0.3, axleRear: 0.17, axleFront: 0.83,
     belt: [], roof: [], trim: false, colors: [0x2f55a4, 0xb3261e, 0xe8e4d8, 0xd9731a] },
 ];
 
@@ -398,6 +402,7 @@ export function applyVehicleAssets(): void {
       length: asset.length ?? base.length, width: asset.width ?? base.width, height: asset.height ?? base.height,
       wheelRadius: asset.wheelRadius ?? base.wheelRadius,
       wheelPoints: asset.wheels ?? base.wheelPoints, collision: asset.collision ?? base.collision,
+      topSpeed: asset.topSpeed !== undefined ? asset.topSpeed : base.topSpeed, sprint: asset.sprint ?? base.sprint,
       colors: asset.colors ?? base.colors, taxi: index >= 0 ? base.taxi : false, weight: asset.weight ?? (index >= 0 ? base.weight : 1),
       handling: { ...base.handling, ...asset.handling, ...(asset.centerOfGravityHeight ? { cgHeight: asset.centerOfGravityHeight } : {}) },
     };

@@ -102,7 +102,13 @@ export class Game {
     this.resize();
     void this.loadWorld();
     // Vérifications automatiques : monter dans la voiture la plus proche, quelle que soit la distance.
-    (window as unknown as Record<string, unknown>).lixitingDrive = () => { this.toggleCar(Infinity); };
+    (window as unknown as Record<string, unknown>).lixitingDrive = () => {
+      // Essais : avec ?voiture=identifiant, on amène ce modèle sous le joueur avant de monter dedans.
+      const wanted = new URLSearchParams(window.location.search).get('voiture');
+      const car = wanted ? this.cars.find((c) => c.spec.id === wanted) : undefined;
+      if (car) car.place(this.player.object.position.x, this.player.object.position.z, car.heading);
+      this.toggleCar(Infinity);
+    };
     // Petit accès de diagnostic, utilisé par les vérifications automatiques.
     (window as unknown as Record<string, unknown>).lixitingDebug = () => ({
       traffic: this.traffic?.cars.filter((c) => c.object.visible).length ?? 0,
@@ -116,7 +122,7 @@ export class Game {
       scale: this.renderScale,
       swimming: this.player.swimming,
       character: this.player.probe(),
-      car: this.driving ? { kmh: Math.round(this.driving.speed * 3.6), above: Math.round((this.driving.object.position.y - this.ground(this.driving.object.position.x, this.driving.object.position.z)) * 100) / 100, ...this.driving.telemetry } : null,
+      car: this.driving ? { id: this.driving.spec.id, topKmh: Math.round(this.driving.topSpeed * 3.6), sprint: this.driving.spec.sprint ?? 1, gear: this.driving.gear, kmh: Math.round(this.driving.speed * 3.6), above: Math.round((this.driving.object.position.y - this.ground(this.driving.object.position.x, this.driving.object.position.z)) * 100) / 100, ...this.driving.telemetry } : null,
     });
   }
 

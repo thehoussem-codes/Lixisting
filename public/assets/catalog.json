@@ -76,7 +76,8 @@
       "collision": {
         "halfLength": 2.15,
         "halfWidth": 0.87
-      }
+      },
+      "topSpeed": null
     },
     "ambulance": {
       "enabled": true,
@@ -92,7 +93,8 @@
       "collision": {
         "halfLength": 2.75,
         "halfWidth": 1.12
-      }
+      },
+      "topSpeed": null
     },
     "police": {
       "enabled": true,
@@ -108,7 +110,8 @@
       "collision": {
         "halfLength": 2.45,
         "halfWidth": 0.98
-      }
+      },
+      "topSpeed": null
     },
     "bri": {
       "enabled": true,
@@ -124,7 +127,9 @@
       "collision": {
         "halfLength": 2.35,
         "halfWidth": 1.0
-      }
+      },
+      "topSpeed": null,
+      "sprint": 1.4
     },
     "mini": {
       "enabled": true,
@@ -166,7 +171,8 @@
         9059122,
         3102116
       ],
-      "plates": true
+      "plates": true,
+      "topSpeed": 120
     },
     "citadine": {
       "enabled": true,
@@ -210,7 +216,8 @@
         8357539,
         11740702
       ],
-      "plates": true
+      "plates": true,
+      "topSpeed": 130
     },
     "citadine-recente": {
       "enabled": true,
@@ -252,7 +259,8 @@
         2042436,
         2764083
       ],
-      "plates": true
+      "plates": true,
+      "topSpeed": 150
     },
     "compacte": {
       "enabled": true,
@@ -294,7 +302,8 @@
         2764083,
         2905152
       ],
-      "plates": true
+      "plates": true,
+      "topSpeed": 140
     },
     "berline": {
       "enabled": true,
@@ -338,7 +347,8 @@
         2377114,
         2042436
       ],
-      "plates": true
+      "plates": true,
+      "topSpeed": 145
     },
     "grande-berline": {
       "enabled": true,
@@ -379,7 +389,8 @@
         2042436,
         15130831
       ],
-      "plates": true
+      "plates": true,
+      "topSpeed": 155
     },
     "suv": {
       "enabled": true,
@@ -416,7 +427,8 @@
         1710618
       ],
       "paintMaterial": "aucune-peinture",
-      "plates": true
+      "plates": true,
+      "topSpeed": 150
     },
     "suv-coupe": {
       "enabled": true,
@@ -456,7 +468,8 @@
         2905152,
         11740702
       ],
-      "plates": true
+      "plates": true,
+      "topSpeed": 140
     },
     "taxi": {
       "enabled": true,
@@ -492,7 +505,8 @@
       "colors": [
         16103424
       ],
-      "plates": true
+      "plates": true,
+      "topSpeed": 135
     },
     "pickup": {
       "enabled": true,
@@ -534,7 +548,8 @@
       ],
       "base": "suv",
       "weight": 0.5,
-      "plates": true
+      "plates": true,
+      "topSpeed": 125
     },
     "monospace": {
       "enabled": true,
@@ -577,7 +592,8 @@
       ],
       "base": "suv",
       "weight": 0.5,
-      "plates": true
+      "plates": true,
+      "topSpeed": 130
     }
   },
   "props": {}

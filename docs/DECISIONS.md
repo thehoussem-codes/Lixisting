@@ -160,3 +160,16 @@ Skill chargé en plus : `audio-design`.
 - Idées reprises de codingedger/car-game (EngineManager) ; aucun code copié.
 - Non vérifié : le son (le navigateur de test n'a pas de sortie audio) et la sensation de la boîte.
 
+## 13 novembre 2026 (23 h 45) — Vitesse maximale par véhicule
+
+Demande de Houssem : une vitesse maximale différente pour chaque voiture ; police, gendarmerie, ambulance et BRI
+sans limite ; le BRI monte plus vite que les autres jusqu'à 100 km/h.
+- Nouveaux champs du catalogue : `topSpeed` (km/h, `null` = aucune limite) et `sprint` (multiplie l'accélération
+  jusqu'à 100 km/h). Le bonus d'élan en ligne droite (« boost ») est supprimé : la vitesse affichée est la vraie limite.
+- Vitesses : mini 120, citadine 130, coupé 150, break 140, berline 145, grande berline 155, SUV 150,
+  tout-terrain 140, taxi 135, pick-up 125, monospace 130, maxi-scooter 140, cyclomoteur 50.
+  Police, gendarmerie, ambulance, BRI : aucune limite. BRI : `sprint` 1,4.
+- Les rapports de la boîte s'étirent selon la vitesse du modèle.
+- Mesuré sur la zone d'essai plate (?test=1) : à 3 s, BRI 108 km/h, police 91, berline 75 ; berline plafonne à 145,
+  cyclomoteur à 50 ; BRI et police dépassent 190 km/h à 9 s et accélèrent encore.
+
