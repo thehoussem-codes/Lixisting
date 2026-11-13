@@ -52,6 +52,12 @@ const DRAG_SPEED = 0.18;     // + une part proportionnelle à la vitesse (résis
 const MAX_STEER = 0.55;      // angle maximal des roues (radians)
 // Volant : il ne saute pas d'un bord à l'autre, il tourne à vitesse limitée (plus lentement quand on roule vite)
 // et revient plus vite au centre quand on le lâche. Principe repris du jeu libre codingedger/car-game (SteerManager).
+// Boîte automatique : vitesse (m/s) à laquelle chaque rapport atteint la zone rouge, et force de chaque rapport.
+// Les premiers rapports poussent fort, les derniers allongent. Principe (régime lié à la vitesse et au rapport,
+// passage près de la zone rouge, creux pendant le passage) inspiré de codingedger/car-game (EngineManager).
+const GEAR_TOP = [9, 16, 24, 34, 50];
+const GEAR_PULL = [1.55, 1.2, 0.95, 0.75, 0.55];
+const SHIFT_TIME = 0.28;     // durée d'un passage de rapport : le moteur ne pousse presque plus
 const STEER_TURN = 3.2;      // demi-course du volant par seconde, à l'arrêt
 const STEER_RETURN = 5.5;    // retour au centre
 const STEER_SLOW = 28;       // m/s : vitesse à laquelle le volant tourne deux fois moins vite
@@ -81,6 +87,13 @@ export class Car {
   private tiltZ = 0;      // roulis affiché
   private slopePitch = 0; // pente du sol sous la voiture, dans le sens de la marche
   private steerInput = 0;
+  /** Rapport engagé (1 à 5 ; 0 : marche arrière) et régime moteur de 0 (ralenti) à 1 (zone rouge). */
+  gear = 1;
+  rpm = 0;
+  /** Accélérateur réellement appliqué (0 à 1) et intensité du crissement des pneus (0 à 1), pour le son. */
+  throttle = 0;
+  skid = 0;
+  private shifting = 0;
   /** Position réelle du volant, de -1 à 1 : elle rejoint peu à peu la touche appuyée. */
   private steering = 0;
   /** Angle des roues avant (radians) réellement appliqué à la trajectoire. */
@@ -355,7 +368,7 @@ export class Car {
       this.speed -= Math.sign(this.speed) * Math.min(Math.abs(this.speed), BRAKING * 1.5 * dt);
     } else if (gas !== 0 && !underwater) {
       const opposing = this.speed !== 0 && Math.sign(this.speed) !== gas;
-      this.speed += gas * (opposing ? BRAKING : ACCELERATION) * dt;
+      this.speed += gas * (opposing ? BRAKING : ACCELERATION * this.pull(dt)) * dt;
     } else {
       this.speed -= Math.sign(this.speed) * Math.min(Math.abs(this.speed), (DRAG + DRAG_SPEED * Math.abs(this.speed)) * dt);
     }
@@ -365,7 +378,34 @@ export class Car {
     const limit = MAX_SPEED + BOOST_SPEED * this.boost;
     if (this.speed > limit) this.speed = Math.max(limit, this.speed - BRAKING * 0.5 * dt);
     this.speed = Math.max(this.speed, -MAX_REVERSE);
+    this.revs(dt, gas > 0 && !underwater ? 1 : 0);
+    // Crissement : frein à main en roulant, ou virage serré pris trop vite.
+    const cornering = Math.abs(this.steerAngle) * this.speed * this.speed / this.wheelbase; // accélération latérale (m/s²)
+    const wanted = (input.isDown('Space') && Math.abs(this.speed) > 4 ? 1 : 0) + Math.max(0, Math.min(1, (cornering - 7) / 5));
+    this.skid += (Math.min(1, wanted) - this.skid) * (1 - Math.exp(-12 * dt));
     this.move(dt, this.steering, collider, others);
+  }
+
+  /** Force du moteur selon le rapport et le régime (1 = poussée de référence). Gère aussi les passages de rapport. */
+  private pull(dt: number): number {
+    if (this.speed < -0.2) { this.gear = 0; return 1; }
+    if (this.gear === 0) this.gear = 1;
+    const v = Math.abs(this.speed);
+    if (this.shifting > 0) { this.shifting -= dt; return 0.15; }
+    if (v > GEAR_TOP[this.gear - 1] * 0.93 && this.gear < GEAR_TOP.length) { this.gear++; this.shifting = SHIFT_TIME; return 0.15; }
+    // Le moteur pousse le mieux à mi-régime et s'essouffle près de la zone rouge.
+    const r = v / GEAR_TOP[this.gear - 1];
+    return GEAR_PULL[this.gear - 1] * (0.75 + 0.5 * r - 0.45 * r * r);
+  }
+
+  /** Régime moteur affiché et entendu : il suit la vitesse dans le rapport engagé, et rétrograde en ralentissant. */
+  private revs(dt: number, throttle: number): void {
+    const v = Math.abs(this.speed);
+    while (this.gear > 1 && v < GEAR_TOP[this.gear - 2] * 0.62) this.gear--;
+    const top = this.gear === 0 ? MAX_REVERSE * 1.3 : GEAR_TOP[this.gear - 1];
+    const target = Math.min(1, v / top) * (this.shifting > 0 ? 0.8 : 1) + (throttle && v < 1 ? 0.15 : 0);
+    this.rpm += (target - this.rpm) * (1 - Math.exp(-9 * dt));
+    this.throttle += (throttle - this.throttle) * (1 - Math.exp(-10 * dt));
   }
 
   /** Voiture sans conducteur : elle finit de rouler puis s'arrête. */

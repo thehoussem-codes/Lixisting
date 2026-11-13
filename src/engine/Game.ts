@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { Sound } from './Sound';
 import { Input } from './Input';
 import { Player } from '../player/Player';
 import { ThirdPersonCamera } from '../player/ThirdPersonCamera';
@@ -36,7 +37,7 @@ export interface GameEvents {
   onStatus(text: string): void;
   onPlaces(places: WorldPlace[]): void;
   /** Quartier le plus proche et vitesse (km/h, null à pied), quelques fois par seconde. */
-  onHud(zone: string, speed: number | null, fps: number): void;
+  onHud(zone: string, speed: number | null, fps: number, gear?: string): void;
   /** Ligne d'identification du lieu, et fiche détaillée quand le mode inspection est ouvert (touche I). */
   onLocation(line: string, detail: string | null): void;
 }
@@ -50,6 +51,7 @@ export class Game {
   private input: Input;
   private player = new Player();
   private cameraRig: ThirdPersonCamera;
+  private sound = new Sound();
   private collider: Collider | null = null;
   /** Hauteur du sol en un point (0 partout tant que le terrain n'est pas chargé). */
   private ground: (x: number, z: number) => number = () => 0;
@@ -321,6 +323,8 @@ export class Game {
 
   /** Touches 1 à 9 : téléportation vers un repère. */
   private onKeyDown = (e: KeyboardEvent) => {
+    this.sound.unlock(); // le navigateur n'autorise le son qu'après une première touche
+    if (e.code === 'KeyP') this.sound.muted = !this.sound.muted;
     if (e.repeat) return;
     if (e.code.startsWith('Digit')) this.goToPlace(Number(e.code.slice(5)) - 1);
     if (e.code === 'KeyF') this.toggleCar();
@@ -347,12 +351,14 @@ export class Game {
       const car = this.driving;
       car.drive(dt, this.input, this.collider, everyCar, this.ground);
       car.settle(this.ground, true);
+      this.sound.update({ rpm: car.rpm, throttle: car.throttle, skid: car.skid, small: !!car.spec.moto });
       this.player.object.position.copy(car.object.position);
       // En roulant, la caméra revient d'elle-même derrière la voiture.
       const follow = Math.abs(car.speed) > 2 ? car.heading + Math.PI : null;
       // La caméra recule un peu avec la vitesse : on voit plus loin quand on roule vite.
       this.cameraRig.update(this.input, car.object.position, this.collider, dt, this.ground, 8 + Math.min(3.5, Math.abs(car.speed) * 0.09), follow);
     } else {
+      this.sound.update(null);
       this.player.update(dt, this.input, this.cameraRig.yaw, this.obstacles, this.ground);
       this.cameraRig.update(this.input, this.player.object.position, this.collider, dt, this.ground);
     }
@@ -404,7 +410,7 @@ export class Game {
         this.district = fix.district;
         this.events.onLocation(this.locations.line(fix), this.inspecting ? `${this.lastDetail}\n\n${this.copied ? 'Copié dans le presse-papiers.' : 'C : copier cette fiche · I : fermer'}` : null);
       }
-      this.events.onHud(this.nearestPlace(), this.driving ? Math.abs(this.driving.speed) * 3.6 : null, Math.round(1 / this.frameTime));
+      this.events.onHud(this.nearestPlace(), this.driving ? Math.abs(this.driving.speed) * 3.6 : null, Math.round(1 / this.frameTime), this.driving ? (this.driving.gear === 0 ? 'R' : String(this.driving.gear)) : undefined);
     }
     this.renderer.render(this.scene, this.camera);
   };

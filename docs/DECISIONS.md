@@ -147,3 +147,16 @@ Skills chargés avant de coder : `physics-tuning`, `game-feel`, `camera-systems`
   et sa carte viennent de jeux commerciaux (l'auteur le dit dans son README).
 - `?voiture=identifiant` : choisit la voiture garée à la gare, pour les essais.
 
+## 13 novembre 2026 (20 h 35) — Roues redressées, boîte de vitesses, son
+
+Skill chargé en plus : `audio-design`.
+- **Roues des véhicules algériens** : trois des quatre modèles étaient livrés roues avant braquées d'environ 25°
+  (gendarmerie, ambulance, BRI). En tournant, elles « voilaient ». L'outil d'export mesure maintenant l'axe réel de
+  chaque pneu et le remet dans l'axe de l'essieu avant de séparer la roue.
+- **Boîte automatique à cinq rapports** : le moteur pousse fort en première puis de moins en moins, avec un court
+  creux à chaque passage ; le régime suit la vitesse dans le rapport. Le rapport s'affiche à côté de la vitesse.
+- **Son** (fabriqué en direct, aucun fichier) : moteur dont la hauteur suit le régime, crissement des pneus au frein
+  à main et dans les virages pris trop vite. Touche P : couper ou remettre le son. Bus général à 0,3 avec limiteur.
+- Idées reprises de codingedger/car-game (EngineManager) ; aucun code copié.
+- Non vérifié : le son (le navigateur de test n'a pas de sortie audio) et la sensation de la boîte.
+

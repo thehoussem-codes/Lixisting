@@ -1,9 +1,9 @@
 import type { WorldPlace } from '../world/WorldData';
 
-interface HudProps { status: string; places: WorldPlace[]; zone: string; speed: number | null; fps: number; location: string; detail: string | null }
+interface HudProps { status: string; places: WorldPlace[]; zone: string; speed: number | null; gear: string; fps: number; location: string; detail: string | null }
 
 /** Texte affiché par-dessus le jeu. */
-export function Hud({ status, places, zone, speed, fps, location, detail }: HudProps) {
+export function Hud({ status, places, zone, speed, gear, fps, location, detail }: HudProps) {
   return (
     <>
       <div className="hud">
@@ -21,7 +21,7 @@ export function Hud({ status, places, zone, speed, fps, location, detail }: HudP
       )}
       {detail && <pre className="hud-inspect">{detail}</pre>}
       <div className="hud hud-zone">
-        {speed !== null && <div className="hud-speed">{speed} <span>km/h</span></div>}
+        {speed !== null && <div className="hud-speed">{speed} <span>km/h · rapport {gear}</span></div>}
         <div className="hud-zone-name">{zone}</div>
       </div>
       <div className="hud hud-credit">Données cartographiques © contributeurs OpenStreetMap</div>

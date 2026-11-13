@@ -10,6 +10,7 @@ export function App() {
   const [places, setPlaces] = useState<WorldPlace[]>([]);
   const [zone, setZone] = useState('');
   const [speed, setSpeed] = useState<number | null>(null);
+  const [gear, setGear] = useState('');
   const [fps, setFps] = useState(0);
   const [location, setLocation] = useState('');
   const [detail, setDetail] = useState<string | null>(null);
@@ -19,7 +20,7 @@ export function App() {
       onStatus: setStatus,
       onPlaces: setPlaces,
       onLocation: (line, more) => { setLocation(line); setDetail(more); },
-      onHud: (z, s, f) => { setZone(z); setSpeed(s === null ? null : Math.round(s)); setFps(f); },
+      onHud: (z, s, f, g) => { setZone(z); setSpeed(s === null ? null : Math.round(s)); setFps(f); setGear(g ?? ''); },
     });
     game.start();
     return () => game.dispose();
@@ -28,7 +29,7 @@ export function App() {
   return (
     <>
       <div ref={containerRef} className="game-view" />
-      <Hud status={status} places={places} zone={zone} speed={speed} fps={fps} location={location} detail={detail} />
+      <Hud status={status} places={places} zone={zone} speed={speed} gear={gear} fps={fps} location={location} detail={detail} />
     </>
   );
 }
