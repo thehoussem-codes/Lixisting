@@ -173,3 +173,7 @@ sans limite ; le BRI monte plus vite que les autres jusqu'à 100 km/h.
 - Mesuré sur la zone d'essai plate (?test=1) : à 3 s, BRI 108 km/h, police 91, berline 75 ; berline plafonne à 145,
   cyclomoteur à 50 ; BRI et police dépassent 190 km/h à 9 s et accélèrent encore.
 
+
+## 14 novembre 2026 — Priorités
+
+- Piétons : tout en bas de la liste, à ne pas proposer avant que tout le reste soit fait (demande de Houssem).
