@@ -177,3 +177,4 @@ sans limite ; le BRI monte plus vite que les autres jusqu'à 100 km/h.
 ## 14 novembre 2026 — Priorités
 
 - Piétons : tout en bas de la liste, à ne pas proposer avant que tout le reste soit fait (demande de Houssem).
+- Mode histoire, missions, poursuite policière, menu : aussi à la fin. Priorité actuelle : environnement et visuel uniquement.
