@@ -9,3 +9,7 @@
 | models/vehicles/police.glb | Fourgon de police algérien, allégé | à compléter | page Sketchfab à préciser | À confirmer |
 | models/vehicles/bri.glb | Véhicule BRI, allégé | à compléter | page Sketchfab à préciser | À confirmer |
 | models/vehicles/{mini,citadine,coupe,break,berline,suv,tout-terrain,pickup,monospace}.glb | Generic Passenger Car Pack (9 voitures séparées, peinture neutralisée, textures réduites à 512 px) | à compléter | page Sketchfab à préciser | À confirmer |
+
+## Idées de conduite
+
+Le lissage du volant (vitesse de rotation limitée, plus lente à haute vitesse, retour rapide au centre) et l'épure d'Ackermann s'inspirent du projet libre [codingedger/car-game](https://github.com/codingedger/car-game) (GPL v3). Aucun code ni fichier de ce projet n'a été copié : notre version est réécrite pour notre moteur.

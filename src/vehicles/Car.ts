@@ -50,6 +50,11 @@ const BRAKING = 22;
 const DRAG = 5.5;            // frein moteur quand on lâche l'accélérateur (m/s²)
 const DRAG_SPEED = 0.18;     // + une part proportionnelle à la vitesse (résistance de l'air)
 const MAX_STEER = 0.55;      // angle maximal des roues (radians)
+// Volant : il ne saute pas d'un bord à l'autre, il tourne à vitesse limitée (plus lentement quand on roule vite)
+// et revient plus vite au centre quand on le lâche. Principe repris du jeu libre codingedger/car-game (SteerManager).
+const STEER_TURN = 3.2;      // demi-course du volant par seconde, à l'arrêt
+const STEER_RETURN = 5.5;    // retour au centre
+const STEER_SLOW = 28;       // m/s : vitesse à laquelle le volant tourne deux fois moins vite
 
 /** Une voiture du jeu, à conduite "arcade" (pas de simulation physique complète). Son apparence vient du catalogue. */
 export class Car {
@@ -76,6 +81,10 @@ export class Car {
   private tiltZ = 0;      // roulis affiché
   private slopePitch = 0; // pente du sol sous la voiture, dans le sens de la marche
   private steerInput = 0;
+  /** Position réelle du volant, de -1 à 1 : elle rejoint peu à peu la touche appuyée. */
+  private steering = 0;
+  /** Angle des roues avant (radians) réellement appliqué à la trajectoire. */
+  private steerAngle = 0;
   private leanNode: THREE.Object3D | null;
   private riderNode: THREE.Object3D | null;
   private leanFrom = 0;
@@ -141,7 +150,7 @@ export class Car {
       turn = Math.atan2(Math.sin(turn), Math.cos(turn)) / dt;
       this.leanFrom = this.heading;
       const target = Math.max(-0.5, Math.min(0.5, -turn * Math.abs(this.speed) * 0.09));
-      this.leanNode.rotation.z += (target - this.leanNode.rotation.z) * Math.min(1, 6 * dt);
+      this.leanNode.rotation.z += (target - this.leanNode.rotation.z) * (1 - Math.exp(-5 * dt));
       // Roue arrière : la moto pivote autour du point de contact de sa roue arrière.
       const lift = this.wheelieHeld && Math.abs(this.speed) > 1.5 ? 0.78 : 0;
       this.wheelie += (lift - this.wheelie) * Math.min(1, (lift ? 4 : 7) * dt);
@@ -192,21 +201,27 @@ export class Car {
     const lean = Math.max(-0.035, Math.min(0.035, this.speed * turn * 0.004)); // penche à peine vers l'extérieur du virage
     const targetX = this.airborne ? this.tiltX + 0.25 * dt : -slopePitch - squat; // en l'air, le nez pique doucement
     const targetZ = this.airborne ? this.tiltZ : slopeRoll + lean;
-    const follow = Math.min(1, 9 * dt);
+    const follow = 1 - Math.exp(-9 * dt); // même douceur quel que soit le nombre d'images par seconde
     this.tiltX += (targetX - this.tiltX) * follow;
     this.tiltZ += (targetZ - this.tiltZ) * follow;
     this.object.rotation.x = this.tiltX; this.object.rotation.z = this.tiltZ;
     // Roues : elles restent au sol quand la caisse s'écrase, et les roues avant braquent.
+    // La roue intérieure au virage braque un peu plus que l'autre (épure d'Ackermann), comme sur une vraie voiture.
+    const angle = Math.abs(this.steerAngle), track = this.halfWidth * 2 - 0.3;
+    const radius = angle > 1e-3 ? this.wheelbase / Math.tan(angle) : 0;
     this.wheels.forEach((wheel, i) => {
       wheel.position.y = this.spec.wheelRadius + this.dip;
       wheel.rotation.order = 'YXZ';
-      if (i >= 2) wheel.rotation.y += (-this.steerInput * 0.45 - wheel.rotation.y) * Math.min(1, 10 * dt);
+      if (i < 2 || this.wheels.length < 4) { if (i >= 1 && this.wheels.length < 4) wheel.rotation.y = -this.steerAngle; return; }
+      const inner = (this.steerAngle > 0) === (i === 3) ? 1 : -1; // roue 2 : gauche, roue 3 : droite
+      wheel.rotation.y = radius ? -Math.sign(this.steerAngle) * Math.atan(this.wheelbase / Math.max(0.5, radius - inner * track / 2)) : 0;
     });
   }
 
   /** Braque les roues avant d'un véhicule à l'arrêt (salon d'exposition : montre que les roues sont mobiles). */
   poseWheels(steer: number): void {
     this.steerInput = -steer / 0.45;
+    this.steerAngle = -steer;
     this.wheels.forEach((wheel, i) => { wheel.rotation.order = 'YXZ'; if (i >= 2) wheel.rotation.y = steer; });
   }
 
@@ -327,6 +342,7 @@ export class Car {
       return;
     }
     this.steerInput = steer;
+    this.turnWheel(steer, dt);
     if (this.airborne) {
       // En l'air : ni moteur, ni freins, ni direction. La voiture garde son élan.
       this.move(dt, 0, collider, others);
@@ -349,7 +365,7 @@ export class Car {
     const limit = MAX_SPEED + BOOST_SPEED * this.boost;
     if (this.speed > limit) this.speed = Math.max(limit, this.speed - BRAKING * 0.5 * dt);
     this.speed = Math.max(this.speed, -MAX_REVERSE);
-    this.move(dt, steer, collider, others);
+    this.move(dt, this.steering, collider, others);
   }
 
   /** Voiture sans conducteur : elle finit de rouler puis s'arrête. */
@@ -361,15 +377,26 @@ export class Car {
       return;
     }
     this.steerInput = 0;
+    this.turnWheel(0, dt);
     if (this.speed === 0) return;
     if (!this.airborne) this.speed -= Math.sign(this.speed) * Math.min(Math.abs(this.speed), 6 * dt);
     this.boost = 0;
     this.move(dt, 0, collider, others);
   }
 
+  /** Fait tourner le volant vers la touche appuyée, à vitesse limitée. */
+  private turnWheel(input: number, dt: number): void {
+    const moto = this.spec.moto ? 1.5 : 1; // un guidon répond plus vite qu'un volant
+    const rate = input !== 0 && Math.sign(input) === Math.sign(this.steering || input)
+      ? STEER_TURN * moto / (1 + Math.abs(this.speed) / STEER_SLOW) : STEER_RETURN * moto;
+    const gap = input - this.steering;
+    this.steering += Math.sign(gap) * Math.min(Math.abs(gap), rate * dt);
+  }
+
   private move(dt: number, steer: number, collider: Collider | null, others: Car[]): void {
     // Plus on roule vite, moins les roues braquent (sinon la voiture est incontrôlable).
     const steerAngle = steer * MAX_STEER / (1 + Math.abs(this.speed) / 12);
+    this.steerAngle = steerAngle;
     const heading = this.heading - (this.speed / this.wheelbase) * Math.tan(steerAngle) * dt;
     const fx = Math.sin(heading), fz = Math.cos(heading);
     const position = this.object.position;

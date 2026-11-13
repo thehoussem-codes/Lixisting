@@ -193,7 +193,9 @@ export class Game {
       this.events.onPlaces(data.places);
       // Une voiture garée à chaque repère, pour en avoir toujours une sous la main.
       data.places.forEach((place, i) => {
-        const spec = CAR_CATALOG[i % CAR_CATALOG.length];
+        // ?voiture=identifiant : choisit le modèle garé au premier repère (essais).
+        const wanted = new URLSearchParams(window.location.search).get('voiture');
+        const spec = (i === 0 && CAR_CATALOG.find((c) => c.id === wanted)) || CAR_CATALOG[i % CAR_CATALOG.length];
         const car = new Car(spec, spec.colors[i % spec.colors.length]);
         // Garée contre le trottoir, dans le sens de la rue (emplacement calculé avec la carte).
         car.place(place.cx, -place.cn, place.ch);
@@ -348,7 +350,8 @@ export class Game {
       this.player.object.position.copy(car.object.position);
       // En roulant, la caméra revient d'elle-même derrière la voiture.
       const follow = Math.abs(car.speed) > 2 ? car.heading + Math.PI : null;
-      this.cameraRig.update(this.input, car.object.position, this.collider, dt, this.ground, 9, follow);
+      // La caméra recule un peu avec la vitesse : on voit plus loin quand on roule vite.
+      this.cameraRig.update(this.input, car.object.position, this.collider, dt, this.ground, 8 + Math.min(3.5, Math.abs(car.speed) * 0.09), follow);
     } else {
       this.player.update(dt, this.input, this.cameraRig.yaw, this.obstacles, this.ground);
       this.cameraRig.update(this.input, this.player.object.position, this.collider, dt, this.ground);

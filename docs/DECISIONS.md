@@ -135,3 +135,15 @@ Les modèles marqués « NoAI » sur Sketchfab restent écartés : cette mention
   façade vient des photos. La limite de la zone est une estimation, à corriger sur place.
 - Non fait : l'esplanade pavée avec ses arbres taillés et ses jardinières, les enseignes, la station-service.
 
+## 13 novembre 2026 (20 h) — Conduite plus douce
+
+Skills chargés avant de coder : `physics-tuning`, `game-feel`, `camera-systems`.
+- **Volant progressif** : la touche ne braque plus les roues d'un coup. Le volant tourne à vitesse limitée
+  (plus lentement à haute vitesse) et revient plus vite au centre. Les deux-roues répondent 1,5 fois plus vite.
+- **Roues avant** : elles affichent l'angle réellement appliqué, la roue intérieure braquant un peu plus (Ackermann).
+- **Caméra** : tous les lissages utilisent `1 - exp(-taux × dt)` (règle du skill camera-systems : même sensation à
+  30 et à 144 images/s) ; la hauteur visée est lissée ; la caméra recule légèrement avec la vitesse.
+- Référence étudiée : codingedger/car-game (Unity, GPL v3). Idées reprises, aucun code ni asset copié : ses voitures
+  et sa carte viennent de jeux commerciaux (l'auteur le dit dans son README).
+- `?voiture=identifiant` : choisit la voiture garée à la gare, pour les essais.
+

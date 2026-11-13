@@ -28,13 +28,16 @@ export class ThirdPersonCamera {
     if (followYaw !== null && dx === 0) {
       let diff = followYaw - this.yaw;
       diff = Math.atan2(Math.sin(diff), Math.cos(diff));
-      this.yaw += diff * Math.min(1, 2.5 * dt);
+      this.yaw += diff * (1 - Math.exp(-3.2 * dt)); // lissage indépendant du nombre d'images par seconde
     }
     this.yaw -= dx * SENSITIVITY;
     this.pitch = THREE.MathUtils.clamp(this.pitch + dy * SENSITIVITY, MIN_PITCH, MAX_PITCH);
 
-    this.target.copy(playerPosition);
-    this.target.y += TARGET_HEIGHT;
+    // La cible suit le joueur exactement à l'horizontale, mais en douceur à la verticale :
+    // les bosses et les réceptions ne secouent plus l'image.
+    const wantedY = playerPosition.y + TARGET_HEIGHT;
+    const jump = Math.abs(wantedY - this.target.y) > 6 || this.target.lengthSq() === 0; // téléportation : pas de glissade
+    this.target.set(playerPosition.x, jump ? wantedY : this.target.y + (wantedY - this.target.y) * (1 - Math.exp(-10 * dt)), playerPosition.z);
     const dirX = Math.sin(this.yaw) * Math.cos(this.pitch);
     const dirZ = Math.cos(this.yaw) * Math.cos(this.pitch);
     const dirY = Math.sin(this.pitch);
@@ -52,7 +55,7 @@ export class ThirdPersonCamera {
       }
     }
     // Se rapproche tout de suite, s'éloigne en douceur.
-    this.distance = wanted < this.distance ? wanted : this.distance + (wanted - this.distance) * 0.1;
+    this.distance = wanted < this.distance ? wanted : this.distance + (wanted - this.distance) * (1 - Math.exp(-6 * dt));
 
     const camX = this.target.x + dirX * this.distance, camZ = this.target.z + dirZ * this.distance;
     // La caméra reste toujours au-dessus du sol, même au pied d'une colline.
