@@ -106,3 +106,20 @@ Deux questions distinctes, à vérifier pour chaque fichier :
 Chaque modèle intégré est noté dans `public/assets/CREDITS.md` : titre, auteur, lien, licence.
 Si le jeu devenait commercial un jour, tous les modèles en licence NC devraient être retirés ou remplacés.
 Les modèles marqués « NoAI » sur Sketchfab restent écartés : cette mention interdit de les donner à un programme d'IA.
+
+## 13 novembre 2026 — Règle de décision visuelle et voitures du quotidien
+
+- **Règle demandée par Houssem** : pour tout ce qui touche à l'apparence, Claude choisit lui-même la solution
+  qui rend le jeu le plus beau, puis explique ce qu'il a fait. Les règles fixes restent : pas de données
+  géographiques inventées, licences vérifiées, pas de code ni de ressources Rockstar.
+- **Circulation** : les voitures calculées (formes simples) sont remplacées par les neuf modèles du
+  « Generic Passenger Car Pack » (6 000 à 7 000 triangles chacun, roues séparées qui tournent et braquent).
+  La peinture cuite dans les textures a été neutralisée pour que le jeu choisisse la couleur.
+  Couleurs : surtout blanc et gris, comme dans les rues algériennes ; taxi jaune ; SUV noir (sa texture
+  ne se laisse pas repeindre proprement).
+- **Plaques algériennes** : blanche à l'avant, jaune à l'arrière, indicatif 23 (wilaya d'Annaba).
+  Les numéros sont fictifs. La position est trouvée par lancer de rayon sur le pare-chocs.
+- **Limites** : ce sont des voitures génériques, pas des modèles de marque (Symbol, Logan, Clio).
+  Les vrais modèles sont listés dans `docs/ASSET_CATALOGUE.md` et doivent être téléchargés par Houssem.
+  La licence du lot reste à confirmer sur sa page.
+

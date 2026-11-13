@@ -8,3 +8,4 @@
 | models/vehicles/ambulance.glb | Renault Master (Protection civile), allégé | à compléter | page Sketchfab à préciser | À confirmer |
 | models/vehicles/police.glb | Fourgon de police algérien, allégé | à compléter | page Sketchfab à préciser | À confirmer |
 | models/vehicles/bri.glb | Véhicule BRI, allégé | à compléter | page Sketchfab à préciser | À confirmer |
+| models/vehicles/{mini,citadine,coupe,break,berline,suv,tout-terrain,pickup,monospace}.glb | Generic Passenger Car Pack (9 voitures séparées, peinture neutralisée, textures réduites à 512 px) | à compléter | page Sketchfab à préciser | À confirmer |

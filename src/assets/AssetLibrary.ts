@@ -57,6 +57,8 @@ export interface VehicleAsset extends ModelRef {
    * Sans indication, on cherche un matériau nommé body, paint, carrosserie ou carpaint.
    */
   paintMaterial?: string;
+  /** true : plaques d'immatriculation algériennes posées à l'avant et à l'arrière. */
+  plates?: boolean;
 }
 
 export interface InstanceOptions {

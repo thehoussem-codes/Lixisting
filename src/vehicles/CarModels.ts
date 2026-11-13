@@ -473,6 +473,7 @@ export function createCarVisual(spec: CarSpec, color: number): CarVisual {
     assets.instance(asset, { length: spec.length, paint: color }).then((model) => {
       for (const mesh of builtIn) mesh.visible = false;
       group.add(model);
+      if (asset.plates) addPlates(group, model, spec);
       if (asset.keepWheels === false) {
         const own = model.userData.wheels as THREE.Object3D[] | undefined;
         for (const wheel of wheels) wheel.visible = false;
@@ -482,6 +483,55 @@ export function createCarVisual(spec: CarSpec, color: number): CarVisual {
     }).catch((error) => console.warn(`Modèle du véhicule "${spec.id}" non chargé, carrosserie intégrée conservée.`, error));
   }
   return { group, wheels };
+}
+
+const plateTextures = new Map<string, THREE.Texture>();
+let plateCount = 0;
+
+/**
+ * Plaque algérienne : blanche à l'avant, jaune à l'arrière, chiffres noirs.
+ * Numéro de série, puis catégorie et année, puis l'indicatif de la wilaya : 23 pour Annaba.
+ */
+function plateTexture(rear: boolean, index: number): THREE.Texture {
+  const key = `${rear}|${index}`;
+  let texture = plateTextures.get(key);
+  if (!texture) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 256; canvas.height = 56;
+    const ctx = canvas.getContext('2d')!;
+    ctx.fillStyle = rear ? '#f2c61d' : '#f4f4f0';
+    ctx.fillRect(0, 0, 256, 56);
+    ctx.strokeStyle = '#111'; ctx.lineWidth = 4; ctx.strokeRect(2, 2, 252, 52);
+    const serial = String(10000 + ((index * 7919 + 4871) % 89999));
+    const year = String(100 + ((index * 5) % 25)); // 1 : voiture particulière, puis les deux chiffres de l'année
+    ctx.fillStyle = '#111'; ctx.font = 'bold 38px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(`${serial} ${year} 23`, 128, 30);
+    texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    plateTextures.set(key, texture);
+  }
+  return texture;
+}
+
+/** Pose les deux plaques sur la carrosserie : on cherche la surface du pare-chocs, on ne devine pas sa position. */
+function addPlates(group: THREE.Group, model: THREE.Object3D, spec: CarSpec): void {
+  const index = plateCount++ % 16;
+  group.updateWorldMatrix(true, true);
+  const ray = new THREE.Raycaster();
+  for (const direction of [1, -1]) {
+    const height = spec.height * (direction > 0 ? 0.3 : 0.36);
+    const from = group.localToWorld(new THREE.Vector3(0, height, direction * (spec.length / 2 + 1)));
+    const towards = group.localToWorld(new THREE.Vector3(0, height, 0)).sub(from).normalize();
+    ray.set(from, towards);
+    ray.far = 2;
+    const hit = ray.intersectObject(model, true)[0];
+    if (!hit) continue;
+    const plate = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.11), new THREE.MeshLambertMaterial({ map: plateTexture(direction < 0, index) }));
+    plate.position.copy(group.worldToLocal(hit.point.clone()));
+    plate.position.z += direction * 0.02;
+    if (direction < 0) plate.rotation.y = Math.PI;
+    group.add(plate);
+  }
 }
 
 /** Tirage qui respecte la fréquence de chaque modèle (les véhicules de secours sont rares). */
