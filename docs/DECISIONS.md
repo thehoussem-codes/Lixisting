@@ -258,3 +258,14 @@ Skills chargés : `physics-tuning`, `game-ai`, `audio-design`, `threejs-material
   vertical au lieu d'une pente de plage : le fond marin ne remonte plus dans les bassins (avant, du sable
   affleurait sous l'eau le long des quais). Les vraies plages ne sont pas touchées.
 
+## 14 novembre 2026 (2 h 45) — Hôtel Seybouse International
+
+- Modèle sur mesure (src/world/Landmarks.ts) sur l'emprise OSM (way 165582442, 18 niveaux), d'après les photos :
+  barre de 18 étages de 3 m sur 6 m de pilotis (60 m), loggias à garde-corps de verre coloré (rose, vert, bleu,
+  orange, jaune, turquoise, violet, rouge) sur environ 6 baies sur 10, réparties sans ordre comme sur l'hôtel réel,
+  nez de dalle et refends blancs, rez vitré en retrait, couronne de portiques blancs sur le toit.
+- Pignon ouest : fresque arc-en-ciel, bande verticale qui s'enroule en spirale en bas. Le choix du pignon (ouest
+  plutôt qu'est) n'est pas vérifié sur place.
+- Les couleurs exactes de chaque baie ne sont pas relevées une à une : la répartition est aléatoire (tirage fixe).
+- Pas d'éclairage de nuit (le jeu n'a pas encore de nuit) : les photos de nuit ont servi aux couleurs du verre.
+

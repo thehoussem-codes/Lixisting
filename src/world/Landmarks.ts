@@ -21,6 +21,7 @@ type Ring = [number, number][]; // [x, n] ; n = nord (z = -n)
 /** Centres (x, n) des emprises remplacées par un modèle sur mesure. */
 const OWNED: [number, number][] = [
   [328.6, 774.8], [281.8, 755.8], [303.9, 765.8], [319.2, 818.6], // Sheraton
+  [206.0, 935.5], // Hôtel Seybouse International (OSM way 165582442, 18 niveaux)
 ];
 
 /** Ce bâtiment de la carte est-il remplacé par un modèle sur mesure ? */
@@ -352,8 +353,125 @@ function buildPitchLines(scene: THREE.Scene, data: WorldData, ground: Ground): v
   scene.add(mesh);
 }
 
+// ---------------------------------------------------------------------------------------------------------------
+// Hôtel Seybouse International : barre de 18 niveaux sur pilotis, loggias à garde-corps de verre de couleurs vives
+// (rose, vert, bleu, orange, jaune, turquoise, violet) réparties sans ordre, cadre blanc, fresque arc-en-ciel en
+// spirale sur le pignon, couronne à portiques blancs sur le toit. D'après les photos de Houssem.
+
+const SEYBOUSE_COLORS = ['#e8418f', '#3fbf4a', '#2f7fe0', '#f28c1e', '#f6cf2c', '#1fb5a8', '#8a4fd1', '#d9354d', '#7cc63f'];
+const FLOORS = 18, FLOOR_H = 3.0, PILOTIS = 6;
+
+/** Façade à loggias : une case par baie et par étage, verre coloré ou clair, encadrement blanc. */
+function seybouseFacade(bays: number, seed: number): THREE.CanvasTexture {
+  const cw = 64, ch = 48;
+  return canvasTexture(bays * cw, FLOORS * ch, (ctx) => {
+    let s = seed;
+    const r = () => { s = (s * 16807) % 2147483647; return s / 2147483647; };
+    ctx.fillStyle = '#f4f2ec'; ctx.fillRect(0, 0, bays * cw, FLOORS * ch);
+    for (let f = 0; f < FLOORS; f++) {
+      for (let b = 0; b < bays; b++) {
+        const x = b * cw, y = f * ch;
+        // Fond de loggia : baie vitrée sombre avec reflets.
+        ctx.fillStyle = '#3a4a56'; ctx.fillRect(x + 5, y + 6, cw - 10, ch - 10);
+        ctx.fillStyle = 'rgba(255,255,255,0.12)'; ctx.fillRect(x + 8, y + 8, 10, ch - 16);
+        ctx.fillStyle = '#c9ccc8'; ctx.fillRect(x + cw / 2 - 1, y + 6, 2, ch - 14);
+        // Garde-corps : verre coloré (environ 6 baies sur 10) ou verre clair.
+        const colored = r() < 0.62;
+        ctx.fillStyle = colored ? SEYBOUSE_COLORS[Math.floor(r() * SEYBOUSE_COLORS.length)] : '#cfd8dc';
+        ctx.fillRect(x + 5, y + ch * 0.48, cw - 10, ch * 0.4);
+        // Le verre coloré teinte aussi le haut de la loggia (reflet).
+        if (colored) { ctx.globalAlpha = 0.35; ctx.fillRect(x + 5, y + 6, cw - 10, ch * 0.42); ctx.globalAlpha = 1; }
+        ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.fillRect(x + 5, y + ch * 0.48, cw - 10, 2); // main courante
+      }
+    }
+  }, false);
+}
+
+/** Pignon : grande fresque arc-en-ciel, une bande verticale qui s'enroule en spirale vers le bas (photos). */
+function seybouseMural(): THREE.CanvasTexture {
+  const W = 256, H = 1024;
+  return canvasTexture(W, H, (ctx) => {
+    ctx.fillStyle = '#e9e7e1'; ctx.fillRect(0, 0, W, H);
+    const bands = ['#f2c12e', '#9ccc3c', '#3fb98a', '#2aa7b8', '#8a5bc8', '#c94f8c', '#e8743b', '#f2c12e'];
+    const cx = W * 0.55, cy = H * 0.72;
+    // Bande verticale montante.
+    bands.forEach((color, i) => { ctx.fillStyle = color; ctx.fillRect(W * 0.18 + i * 18, 0, 18, cy); });
+    // Spirale : anneaux concentriques de couleurs.
+    for (let k = bands.length * 2; k >= 0; k--) {
+      ctx.fillStyle = bands[k % bands.length];
+      ctx.beginPath(); ctx.ellipse(cx, cy, 9 + k * 9, 14 + k * 13, 0, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.fillStyle = '#f4f2ec'; ctx.beginPath(); ctx.ellipse(cx, cy, 8, 12, 0, 0, Math.PI * 2); ctx.fill();
+  }, false);
+}
+
+function buildSeybouse(scene: THREE.Scene, ground: Ground, collider: Collider): void {
+  // Emprise OSM : barre de 47 × 23,5 m, légèrement tournée, avec une cage d'escalier en saillie à l'est.
+  const a: [number, number] = [170.0, 922.1], b: [number, number] = [217.2, 924.1], d: [number, number] = [169.0, 945.5];
+  const ux = b[0] - a[0], un = b[1] - a[1], length = Math.hypot(ux, un);
+  const vx = d[0] - a[0], vn = d[1] - a[1], depth = Math.hypot(vx, vn);
+  const angle = Math.atan2(un, ux); // direction de la longueur, dans le plan x/n
+  const base = lowestGround([a, b, d, [b[0] + vx, b[1] + vn]], ground) - 0.3;
+  const top = base + PILOTIS + FLOORS * FLOOR_H;
+  const group = new THREE.Group();
+  group.position.set(a[0], base, -a[1]);
+  group.rotation.y = angle; // repère local : x le long de la barre, z vers -n (vers la façade d'en face)
+  scene.add(group);
+  // Les longues façades (sud : z = 0, nord : z = -depth) et les pignons (ouest : x = 0, est : x = length).
+  const BAYS = 16;
+  const facade = (texture: THREE.Texture, width: number, x: number, z: number, rotation: number) => {
+    const plane = new THREE.Mesh(new THREE.PlaneGeometry(width, FLOORS * FLOOR_H), new THREE.MeshLambertMaterial({ map: texture }));
+    plane.position.set(x, PILOTIS + FLOORS * FLOOR_H / 2, z);
+    plane.rotation.y = rotation;
+    plane.castShadow = true;
+    group.add(plane);
+  };
+  // Les garde-corps de verre sont au nu des dalles (1 m devant le mur), comme sur les photos : on voit leurs
+  // couleurs même de biais.
+  facade(seybouseFacade(BAYS, 11), length, length / 2, 1.0, 0);
+  facade(seybouseFacade(BAYS, 29), length, length / 2, -depth - 1.0, Math.PI);
+  facade(seybouseMural(), depth, -0.01, -depth / 2, -Math.PI / 2);
+  facade(seybouseFacade(7, 47), depth, length + 1.0, -depth / 2, Math.PI / 2);
+  // Relief en blanc : nez de dalle à chaque étage et refends verticaux entre les loggias (sur les 3 côtés à loggias).
+  const white = new THREE.Color(0xf6f5f0), frame = new MeshBuilder();
+  for (let f = 0; f <= FLOORS; f++) {
+    const y = PILOTIS + f * FLOOR_H - 0.12;
+    boxAt(frame, length / 2, 0.55, length + 1.2, 1.1, y, y + 0.24, white);
+    boxAt(frame, length / 2, -depth - 0.55, length + 1.2, 1.1, y, y + 0.24, white);
+    boxAt(frame, length + 0.55, -depth / 2, 1.1, depth, y, y + 0.24, white);
+  }
+  for (let k = 0; k <= BAYS; k++) {
+    const x = (k / BAYS) * length;
+    boxAt(frame, x, 0.5, 0.22, 1.0, PILOTIS, PILOTIS + FLOORS * FLOOR_H, white);
+    boxAt(frame, x, -depth - 0.5, 0.22, 1.0, PILOTIS, PILOTIS + FLOORS * FLOOR_H, white);
+  }
+  // Pilotis : rez vitré en retrait, poteaux blancs.
+  const lobby = new MeshBuilder(), glass = new THREE.Color(0x2b3d47);
+  boxAt(lobby, length / 2, -depth / 2, length - 4, depth - 4, 0, PILOTIS, glass);
+  for (let k = 0; k <= 8; k++) for (const z of [-0.8, -depth + 0.8]) boxAt(frame, (k / 8) * length, z, 0.9, 0.9, 0, PILOTIS, white);
+  boxAt(frame, length / 2, -depth / 2, length + 1, depth + 1, PILOTIS - 0.5, PILOTIS, white); // dalle de transfert
+  // Toit : terrasse et couronne de portiques blancs (étage technique ouvert).
+  boxAt(frame, length / 2, -depth / 2, length, depth, top - base - 0.3, top - base, new THREE.Color(0xdedbd2));
+  for (let k = 0; k <= 10; k++) {
+    const x = (k / 10) * (length - 2) + 1;
+    boxAt(frame, x, -1, 0.35, 0.35, top - base, top - base + 3.2, white);
+    boxAt(frame, x, -depth + 1, 0.35, 0.35, top - base, top - base + 3.2, white);
+  }
+  boxAt(frame, length / 2, -1, length - 1.5, 0.5, top - base + 3.2, top - base + 3.6, white);
+  boxAt(frame, length / 2, -depth + 1, length - 1.5, 0.5, top - base + 3.2, top - base + 3.6, white);
+  // Cage d'escalier en saillie (emprise OSM) : volume sombre.
+  boxAt(frame, length + 2.3, -depth / 2 - 7, 4.6, 6, 0, top - base + 2, new THREE.Color(0xd8d6cf)); // cage d'escalier (côté nord de l'emprise)
+  for (const builder of [frame, lobby]) {
+    const mesh = new THREE.Mesh(builder.build(), new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }));
+    mesh.castShadow = true;
+    group.add(mesh);
+  }
+  collider.addBuilding([170.0, 922.1, 217.2, 924.1, 217.0, 928.7, 221.6, 928.9, 220.9, 943.8, 216.4, 943.6, 216.2, 947.5, 169.0, 945.5]);
+}
+
 export function buildLandmarks(scene: THREE.Scene, data: WorldData, ground: Ground, collider: Collider): void {
   buildSheraton(scene, data, ground, collider);
+  buildSeybouse(scene, ground, collider);
   buildFerryTerminal(scene, ground, collider);
   buildPitchLines(scene, data, ground);
 }
