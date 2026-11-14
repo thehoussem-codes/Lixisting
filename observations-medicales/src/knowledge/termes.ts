@@ -1,0 +1,100 @@
+/** Bibliothèque de termes sémiologiques (glossaire avec insertion rapide). */
+
+export interface Terme {
+  terme: string;
+  definition: string;
+  domaine: string;
+}
+
+export const TERMES: Terme[] = [
+  // Général
+  { terme: 'Altération de l’état général', domaine: 'Général', definition: 'Association d’une asthénie, d’une anorexie et d’un amaigrissement.' },
+  { terme: 'Asthénie', domaine: 'Général', definition: 'Fatigue anormale non améliorée par le repos ; préciser physique, psychique, sexuelle, horaire.' },
+  { terme: 'Anorexie', domaine: 'Général', definition: 'Perte ou diminution de l’appétit (globale ou sélective).' },
+  { terme: 'Fébricule', domaine: 'Général', definition: 'Température comprise entre 37,5 et 38 °C.' },
+  { terme: 'Frissons solennels', domaine: 'Général', definition: 'Frissons intenses avec claquement de dents, évocateurs de bactériémie.' },
+  { terme: 'Pli cutané persistant', domaine: 'Général', definition: 'Signe de déshydratation extracellulaire (peu fiable chez le sujet âgé).' },
+  { terme: 'Marbrures', domaine: 'Général', definition: 'Coloration violacée en mailles prédominant aux genoux, signe d’hypoperfusion périphérique.' },
+  { terme: 'Anasarque', domaine: 'Général', definition: 'Œdème généralisé du tissu sous-cutané avec épanchements des séreuses.' },
+  // Cardiovasculaire
+  { terme: 'Angor', domaine: 'Cardiologie', definition: 'Douleur thoracique constrictive rétrosternale, déclenchée par l’effort, cédant au repos ou à la trinitrine en moins de 5 minutes.' },
+  { terme: 'Orthopnée', domaine: 'Cardiologie', definition: 'Dyspnée apparaissant en décubitus, obligeant le patient à se surélever (nombre d’oreillers).' },
+  { terme: 'Dyspnée paroxystique nocturne', domaine: 'Cardiologie', definition: 'Accès dyspnéique réveillant le patient la nuit et l’obligeant à s’asseoir.' },
+  { terme: 'Lipothymie', domaine: 'Cardiologie', definition: 'Malaise avec sensation de perte de connaissance imminente, sans perte de connaissance.' },
+  { terme: 'Syncope', domaine: 'Cardiologie', definition: 'Perte de connaissance brève, à début rapide, avec récupération spontanée complète, liée à une hypoperfusion cérébrale globale transitoire.' },
+  { terme: 'Turgescence jugulaire', domaine: 'Cardiologie', definition: 'Distension des veines jugulaires en position demi-assise à 45°, témoin d’une élévation de la pression veineuse centrale.' },
+  { terme: 'Reflux hépato-jugulaire', domaine: 'Cardiologie', definition: 'Apparition ou majoration d’une turgescence jugulaire à la compression prolongée de l’hypochondre droit.' },
+  { terme: 'Signe de Harzer', domaine: 'Cardiologie', definition: 'Perception des battements du ventricule droit au creux épigastrique.' },
+  { terme: 'Galop protodiastolique (B3)', domaine: 'Cardiologie', definition: 'Bruit surajouté de début de diastole, sourd, évocateur d’insuffisance ventriculaire.' },
+  { terme: 'Frottement péricardique', domaine: 'Cardiologie', definition: 'Bruit superficiel, systolo-diastolique, rugueux, persistant en apnée.' },
+  { terme: 'Claudication intermittente', domaine: 'Cardiologie', definition: 'Douleur musculaire à type de crampe apparaissant à la marche, cédant à l’arrêt ; préciser le périmètre de marche.' },
+  { terme: 'Signe de Homans', domaine: 'Cardiologie', definition: 'Douleur du mollet à la dorsiflexion du pied ; peu sensible et peu spécifique de TVP.' },
+  // Respiratoire
+  { terme: 'Polypnée', domaine: 'Pneumologie', definition: 'Fréquence respiratoire supérieure à 20 cycles par minute chez l’adulte.' },
+  { terme: 'Tirage', domaine: 'Pneumologie', definition: 'Dépression inspiratoire des parties molles (sus-sternal, sus-claviculaire, intercostal), signe de lutte.' },
+  { terme: 'Balancement thoraco-abdominal', domaine: 'Pneumologie', definition: 'Respiration paradoxale, signe d’épuisement diaphragmatique.' },
+  { terme: 'Hippocratisme digital', domaine: 'Pneumologie', definition: 'Hypertrophie des parties molles des dernières phalanges, ongles bombés en verre de montre.' },
+  { terme: 'Râles crépitants', domaine: 'Pneumologie', definition: 'Bruits fins, secs, en fin d’inspiration, non modifiés par la toux, d’origine alvéolaire.' },
+  { terme: 'Râles sous-crépitants', domaine: 'Pneumologie', definition: 'Bruits humides, bulleux, aux deux temps, modifiés par la toux, d’origine bronchique.' },
+  { terme: 'Ronchi', domaine: 'Pneumologie', definition: 'Râles graves, ronflants, modifiés par la toux, liés à des sécrétions bronchiques.' },
+  { terme: 'Sibilants', domaine: 'Pneumologie', definition: 'Râles aigus, musicaux, expiratoires, témoins d’une obstruction bronchique.' },
+  { terme: 'Souffle tubaire', domaine: 'Pneumologie', definition: 'Souffle rude, inspiratoire, témoin d’une condensation pulmonaire avec bronche perméable.' },
+  { terme: 'Syndrome d’épanchement pleural liquidien', domaine: 'Pneumologie', definition: 'Matité déclive, abolition des vibrations vocales et du murmure vésiculaire.' },
+  { terme: 'Syndrome de condensation', domaine: 'Pneumologie', definition: 'Matité, augmentation des vibrations vocales, râles crépitants, souffle tubaire.' },
+  { terme: 'Hémoptysie', domaine: 'Pneumologie', definition: 'Rejet de sang par la bouche au cours d’un effort de toux, provenant des voies aériennes sous-glottiques.' },
+  // Digestif
+  { terme: 'Défense abdominale', domaine: 'Gastro-entérologie', definition: 'Contraction réflexe et localisée de la paroi abdominale, vaincue par une palpation douce.' },
+  { terme: 'Contracture abdominale', domaine: 'Gastro-entérologie', definition: 'Contraction tonique, permanente, invincible et douloureuse : « ventre de bois ».' },
+  { terme: 'Signe de Murphy', domaine: 'Gastro-entérologie', definition: 'Arrêt de l’inspiration profonde lors de la palpation de l’hypochondre droit.' },
+  { terme: 'Signe de Blumberg', domaine: 'Gastro-entérologie', definition: 'Douleur provoquée par la décompression brutale de la paroi abdominale.' },
+  { terme: 'Méléna', domaine: 'Gastro-entérologie', definition: 'Émission par l’anus de sang digéré, noir, poisseux et nauséabond.' },
+  { terme: 'Hématémèse', domaine: 'Gastro-entérologie', definition: 'Rejet de sang par la bouche au cours d’un effort de vomissement.' },
+  { terme: 'Rectorragie', domaine: 'Gastro-entérologie', definition: 'Émission de sang rouge par l’anus.' },
+  { terme: 'Ténesme', domaine: 'Gastro-entérologie', definition: 'Sensation de tension douloureuse anale avec envie constante d’aller à la selle.' },
+  { terme: 'Épreintes', domaine: 'Gastro-entérologie', definition: 'Douleurs coliques intenses précédant l’émission de selles.' },
+  { terme: 'Pyrosis', domaine: 'Gastro-entérologie', definition: 'Brûlure rétrosternale ascendante, post-prandiale, favorisée par l’antéflexion et le décubitus.' },
+  { terme: 'Circulation veineuse collatérale', domaine: 'Gastro-entérologie', definition: 'Veines abdominales visibles ; type porto-cave (péri-ombilicale) ou cave-cave (flancs).' },
+  { terme: 'Astérixis', domaine: 'Gastro-entérologie', definition: 'Flapping tremor : chutes brusques et répétées de la posture des mains en extension.' },
+  { terme: 'Triade de Charcot', domaine: 'Gastro-entérologie', definition: 'Douleur de l’hypochondre droit, fièvre, puis ictère en 48 heures : angiocholite.' },
+  // Urinaire
+  { terme: 'Dysurie', domaine: 'Uro-néphrologie', definition: 'Difficulté à uriner : retard au démarrage, jet faible, poussée abdominale.' },
+  { terme: 'Pollakiurie', domaine: 'Uro-néphrologie', definition: 'Augmentation de la fréquence des mictions (de faible volume).' },
+  { terme: 'Urgenturie', domaine: 'Uro-néphrologie', definition: 'Besoin soudain, impérieux et difficile à différer d’uriner.' },
+  { terme: 'Signe de Giordano', domaine: 'Uro-néphrologie', definition: 'Douleur provoquée par la percussion de la fosse lombaire.' },
+  { terme: 'Globe vésical', domaine: 'Uro-néphrologie', definition: 'Matité sus-pubienne convexe vers le haut, témoin d’une rétention vésicale.' },
+  // Neurologie
+  { terme: 'Syndrome méningé', domaine: 'Neurologie', definition: 'Céphalées, vomissements, photophobie et raideur méningée (raideur de nuque, Kernig, Brudzinski).' },
+  { terme: 'Signe de Babinski', domaine: 'Neurologie', definition: 'Extension lente et majestueuse du gros orteil à la stimulation plantaire : atteinte pyramidale.' },
+  { terme: 'Syndrome pyramidal', domaine: 'Neurologie', definition: 'Déficit moteur, hypertonie spastique, ROT vifs diffusés polycinétiques, Babinski.' },
+  { terme: 'Syndrome cérébelleux', domaine: 'Neurologie', definition: 'Ataxie, dysmétrie, adiadococinésie, hypotonie, marche ébrieuse, dysarthrie.' },
+  { terme: 'Syndrome extrapyramidal', domaine: 'Neurologie', definition: 'Tremblement de repos, rigidité plastique (roue dentée), akinésie.' },
+  { terme: 'Signe de Romberg', domaine: 'Neurologie', definition: 'Instabilité aggravée par la fermeture des yeux : atteinte proprioceptive.' },
+  { terme: 'Aphasie', domaine: 'Neurologie', definition: 'Trouble du langage acquis lié à une lésion cérébrale (Broca : non fluente ; Wernicke : fluente).' },
+  { terme: 'Dysarthrie', domaine: 'Neurologie', definition: 'Trouble de l’articulation de la parole sans atteinte du langage.' },
+  { terme: 'Signe de Lasègue', domaine: 'Neurologie', definition: 'Douleur radiculaire reproduite par l’élévation du membre inférieur tendu (préciser l’angle).' },
+  { terme: 'Anesthésie en selle', domaine: 'Neurologie', definition: 'Hypoesthésie périnéale : signe de syndrome de la queue de cheval.' },
+  // Locomoteur
+  { terme: 'Dérouillage matinal', domaine: 'Rhumatologie', definition: 'Raideur articulaire au réveil ; prolongée (> 30 min) dans les atteintes inflammatoires.' },
+  { terme: 'Horaire inflammatoire', domaine: 'Rhumatologie', definition: 'Douleur nocturne, en deuxième partie de nuit, avec dérouillage matinal prolongé.' },
+  { terme: 'Horaire mécanique', domaine: 'Rhumatologie', definition: 'Douleur aggravée par l’effort et calmée par le repos, dérouillage bref.' },
+  { terme: 'Enthésite', domaine: 'Rhumatologie', definition: 'Inflammation de l’insertion osseuse d’un tendon, d’un ligament ou d’une capsule.' },
+  { terme: 'Synovite', domaine: 'Rhumatologie', definition: 'Inflammation de la membrane synoviale : tuméfaction articulaire rénitente.' },
+  { terme: 'Signe du tabouret', domaine: 'Rhumatologie', definition: 'Impossibilité de se relever d’une position assise basse sans l’aide des bras : déficit proximal.' },
+  // Hémato / peau
+  { terme: 'Purpura', domaine: 'Hématologie', definition: 'Lésion hémorragique cutanée ne s’effaçant pas à la vitropression (pétéchies, ecchymoses, vibices).' },
+  { terme: 'Adénopathie', domaine: 'Hématologie', definition: 'Ganglion lymphatique palpable de plus de 1 cm (0,5 cm en épitrochléen, 2 cm en inguinal).' },
+  { terme: 'Splénomégalie', domaine: 'Hématologie', definition: 'Rate palpable (normalement non palpable) ; stade de Hackett selon le débord.' },
+  { terme: 'Macule', domaine: 'Dermatologie', definition: 'Lésion plane, non palpable, différant de la peau adjacente par sa couleur.' },
+  { terme: 'Papule', domaine: 'Dermatologie', definition: 'Lésion surélevée, palpable, solide, de moins de 1 cm.' },
+  { terme: 'Vésicule', domaine: 'Dermatologie', definition: 'Lésion surélevée à contenu liquidien clair de moins de 5 mm.' },
+  { terme: 'Bulle', domaine: 'Dermatologie', definition: 'Lésion surélevée à contenu liquidien de plus de 5 mm.' },
+  { terme: 'Livedo', domaine: 'Dermatologie', definition: 'Coloration violacée en mailles (réticulé, régulier) ou en arborescences (racemosa, ramifié).' },
+  { terme: 'Phénomène de Raynaud', domaine: 'Dermatologie', definition: 'Accès d’ischémie digitale déclenchés par le froid : phase blanche, bleue puis rouge.' },
+  // ORL / ophtalmo / endocrino
+  { terme: 'Odynophagie', domaine: 'ORL', definition: 'Douleur à la déglutition.' },
+  { terme: 'Dysphonie', domaine: 'ORL', definition: 'Modification de la voix (timbre, intensité, hauteur).' },
+  { terme: 'Exophtalmie', domaine: 'Endocrinologie', definition: 'Protrusion du globe oculaire hors de l’orbite.' },
+  { terme: 'Goitre', domaine: 'Endocrinologie', definition: 'Augmentation de volume de la glande thyroïde.' },
+  { terme: 'Syndrome polyuro-polydipsique', domaine: 'Endocrinologie', definition: 'Polyurie (> 3 L/24 h) associée à une polydipsie.' },
+  { terme: 'Acanthosis nigricans', domaine: 'Endocrinologie', definition: 'Épaississement pigmenté et velouté des plis, marqueur d’insulinorésistance.' },
+];

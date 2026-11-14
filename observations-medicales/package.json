@@ -1,0 +1,39 @@
+{
+  "name": "observations-medicales",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Application professionnelle de rédaction d'observations médicales structurées",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "dev:client": "vite",
+    "dev:server": "node --watch --disable-warning=ExperimentalWarning server/index.ts",
+    "build": "tsc --noEmit -p tsconfig.json && vite build",
+    "start": "NODE_ENV=production node --disable-warning=ExperimentalWarning server/index.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "e2e": "node e2e/parcours.mjs"
+  },
+  "dependencies": {
+    "docx": "9.5.1",
+    "express": "4.21.2",
+    "immer": "^10.1.1",
+    "pdfmake": "0.2.20",
+    "react": "19.1.0",
+    "react-dom": "19.1.0"
+  },
+  "devDependencies": {
+    "@types/express": "4.17.21",
+    "@types/node": "22.15.3",
+    "@types/pdfmake": "0.2.11",
+    "@types/react": "19.1.2",
+    "@types/react-dom": "19.1.2",
+    "@vitejs/plugin-react": "4.4.1",
+    "typescript": "5.8.3",
+    "vite": "6.3.5",
+    "vitest": "3.1.3"
+  }
+}
