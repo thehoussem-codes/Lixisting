@@ -6,6 +6,7 @@ import { buildBuildings } from './Buildings';
 import { createAsphaltTexture, createPavementTexture, createRoadTexture, createCloudTexture } from './Textures';
 import { addPlant } from './Trees';
 import { Water } from './Water';
+import { STAIRS_APPROACH } from './SousTerrain';
 import { buildLandmarks, type LandmarkEdits } from './Landmarks';
 import type { WorldData } from './WorldData';
 
@@ -200,6 +201,8 @@ export function buildAnnabaWorld(scene: THREE.Scene, data: WorldData, terrain: T
       lampSide = -lampSide;
       const offset = (road.w / 2 + 1.0) * lampSide;
       const x = bx + (-(bn - an) / length) * offset, z = -(bn + ((bx - ax) / length) * offset);
+      const [cx0, cn0, cx1, cn1] = STAIRS_APPROACH;
+      if (x > cx0 && x < cx1 && -z > cn0 && -z < cn1) continue; // devant le grand escalier du Sous-Terrain
       const key = `${Math.floor(x / CHUNK)},${Math.floor(z / CHUNK)}`;
       let builder = lamps.get(key);
       if (!builder) { builder = new MeshBuilder(); lamps.set(key, builder); }

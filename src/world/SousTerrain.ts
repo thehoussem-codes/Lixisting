@@ -1,353 +1,428 @@
 import * as THREE from 'three';
 import type { Collider } from './Collider';
-import { type Ground, boxAt, canvasTexture, cap, extrude } from './LandmarkKit';
+import { type Ground, type Ring, boxAt, canvasTexture, cap } from './LandmarkKit';
 import { MeshBuilder } from './MeshBuilder';
 import type { Terrain } from './Terrain';
 
 /**
- * « Sous-Terrain » de la place au nord du Cours (ex-église Sainte-Monique), 36.9016, 7.7604.
+ * Complexe commercial surélevé de la place au nord du Cours (« Sous-Terrain », ex-église Sainte-Monique).
  *
- * Sources : vue satellite (édifice octogonal à toit rouge d'environ 19 × 21 m, au milieu de la place, entre la
- * rue Zighout Youcef et la rue du 24 Février) et description de Houssem : bâtiment jaune à angle arrondi, deux
- * entrées (une de chaque côté) qui descendent vers un passage commerçant semi-enterré, petites boutiques et
- * vendeurs. L'intérieur, les enseignes et la disposition des boutiques sont une reconstitution : aucune photo de
- * l'intérieur n'a été fournie et OpenStreetMap n'a que le point « rest_area » de la place.
+ * Emprise : toute la place vide entre le boulevard Zighout Youcef (ouest), la rue du 24 Février (est) et le
+ * chemin des Caroubiers (sud), trottoirs conservés (bords de chaussée OSM + 3 m). Organisation d'après l'image de
+ * conception de Houssem : esplanade surélevée bordée de garde-corps et de lampadaires à globes, grand bâtiment
+ * jaune aveugle au fond, grand escalier central depuis le trottoir, deux galeries semi-enterrées sous l'esplanade
+ * (une de chaque côté de l'escalier) avec boutiques de vêtements et de maillots de football, fresques et graffitis
+ * sur le mur de gauche (côté boulevard Zighout Youcef). Les détails sont une reconstitution, pas un relevé.
  */
 
-const CX = 135, CN = 690;          // centre (x, n) mesuré sur la vue satellite
-const A = 9, B = 10;               // demi-largeur est-ouest, demi-profondeur nord-sud
-const CHAMFER = 3.5, ROUND = 6;    // pans coupés ; angle arrondi au sud-ouest (côté Cours)
-const WALL = 0.35;
-const DOOR = 2;                    // portes : v de -2 à +2 sur les façades ouest et est
-const DOOR_H = 3.1;
-const LANDING = 1.5;
-const STAIR_SLOPE = 0.62;
-const SURFACE = 0.2;               // le joueur marche 20 cm au-dessus du terrain brut (comme dans Game)
+const X0 = 111, X1 = 149;            // faces ouest et est (bord de trottoir des deux rues)
+const N0 = 661, N1 = 712;            // façade sud (trottoir du chemin des Caroubiers) et fond
+const SX0 = 122, SX1 = 138;          // grand escalier central
+const HALLS = [                       // galeries sous l'esplanade : murs x0/x1, entrée d0/d1
+  { x0: 111.5, x1: 121.5, d0: 113.6, d1: 119.6 },
+  { x0: 138.5, x1: 148.5, d0: 140.4, d1: 146.4 },
+];
+/** Pied du grand escalier : aucun mobilier urbain générique (lampadaire) ne doit le masquer. x0, n0, x1, n1. */
+export const STAIRS_APPROACH = [SX0 - 2, N0 - 6, SX1 + 2, N0 + 1];
+const HALL_N1 = 687;                 // fond des galeries
+const DOOR_H = 3.3;
+const BUILDING = { x0: 112.5, x1: 147.5, n0: 690, n1: 711, h: 8.5 };
+const SURFACE = 0.2;
 
-const YELLOW = new THREE.Color(0xe9be45);
-const CREAM = new THREE.Color(0xeee3c8);
+const YELLOW = new THREE.Color(0xffffff);   // la texture d'enduit porte le jaune
+const CREAM = new THREE.Color(0xefe6cf);
+const STONE = new THREE.Color(0xcfc7b6);
 const WHITE = new THREE.Color(0xf4f1e8);
-const STONE = new THREE.Color(0xb9b2a4);
-const FLOOR = new THREE.Color(0xc9c1b2);
+const BLACK = new THREE.Color(0x1d1f22);
+const TILE = new THREE.Color(0xd9d3c6);
 
-/** Contour du bâtiment, en coordonnées locales (u vers l'est, v vers le nord), sens trigonométrique. */
-function outline(shrink = 0): [number, number][] {
-  const a = A - shrink, b = B - shrink, k = CHAMFER * (1 - shrink / A), r = ROUND - shrink;
-  const pts: [number, number][] = [
-    [-a + r, -b], [a - k, -b], [a, -b + k], [a, b - k], [a - k, b], [-a + k, b], [-a, b - k], [-a, -b + r],
-  ];
-  for (let i = 1; i < 6; i++) { // quart de cercle du coin sud-ouest
-    const t = Math.PI + (i / 6) * Math.PI / 2;
-    pts.push([-a + r + Math.cos(t) * r, -b + r + Math.sin(t) * r]);
-  }
-  return pts;
+function rand(seed: number): () => number {
+  let s = seed;
+  return () => { s = (s * 16807) % 2147483647; return s / 2147483647; };
 }
 
-const world = (u: number, v: number): [number, number] => [CX + u, CN + v];
-
-/** Enduit jaune légèrement taché, avec un soubassement de pierre. */
+/** Enduit jaune ocre, taché et un peu délavé, joints de dilatation tous les 4 m. */
 function plaster(): THREE.CanvasTexture {
   return canvasTexture(128, 128, (ctx) => {
-    ctx.fillStyle = '#e9be45'; ctx.fillRect(0, 0, 128, 128);
-    let seed = 5;
-    const r = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
-    for (let i = 0; i < 260; i++) {
-      ctx.fillStyle = r() > 0.5 ? 'rgba(255,240,190,0.18)' : 'rgba(150,110,30,0.10)';
-      ctx.fillRect(r() * 128, r() * 128, 2 + r() * 10, 2 + r() * 6);
+    ctx.fillStyle = '#f0c548'; ctx.fillRect(0, 0, 128, 128);
+    const r = rand(5);
+    for (let i = 0; i < 300; i++) {
+      ctx.fillStyle = r() > 0.5 ? 'rgba(255,236,170,0.20)' : 'rgba(140,100,25,0.12)';
+      ctx.fillRect(r() * 128, r() * 128, 2 + r() * 12, 2 + r() * 6);
     }
-    ctx.fillStyle = 'rgba(120,90,40,0.12)';
-    for (let x = 0; x < 128; x += 32) ctx.fillRect(x + r() * 20, 0, 2, 128); // coulures
+    ctx.fillStyle = 'rgba(110,80,30,0.25)'; ctx.fillRect(126, 0, 2, 128);
+    for (let x = 6; x < 128; x += 29) { ctx.fillStyle = 'rgba(120,90,40,0.10)'; ctx.fillRect(x + r() * 10, 30 + r() * 40, 2, 60); }
   });
 }
 
-function roofTiles(): THREE.CanvasTexture {
-  return canvasTexture(128, 128, (ctx) => {
-    ctx.fillStyle = '#b5532e'; ctx.fillRect(0, 0, 128, 128);
-    for (let y = 0; y < 128; y += 16) {
-      ctx.fillStyle = 'rgba(70,25,10,0.45)'; ctx.fillRect(0, y, 128, 3);
-      for (let x = (y / 16) % 2 ? 8 : 0; x < 128; x += 16) {
-        ctx.fillStyle = `rgba(${200 + (x * 7 + y) % 40},${90 + (x + y * 3) % 30},50,0.35)`;
-        ctx.fillRect(x + 1, y + 3, 14, 13);
-      }
+/** Grille en fer forgé noire à volutes, sur fond transparent. */
+function railingTexture(): THREE.CanvasTexture {
+  const texture = canvasTexture(128, 64, (ctx) => {
+    ctx.clearRect(0, 0, 128, 64);
+    ctx.fillStyle = '#1b1d20'; ctx.strokeStyle = '#1b1d20'; ctx.lineWidth = 2.5;
+    ctx.fillRect(0, 2, 128, 5); ctx.fillRect(0, 56, 128, 4); ctx.fillRect(0, 46, 128, 2);
+    for (let x = 0; x < 128; x += 8) ctx.fillRect(x, 2, 2, 58);
+    for (let x = 16; x < 128; x += 32) {
+      ctx.beginPath(); ctx.arc(x, 26, 9, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(x, 26, 4, 0, Math.PI * 2); ctx.stroke();
     }
   });
+  texture.wrapT = THREE.ClampToEdgeWrapping;
+  return texture;
 }
 
-interface ShopKind { ar: string; fr: string; sign: string; goods: string[]; }
-const SHOPS: ShopKind[] = [
-  { ar: 'هواتف', fr: 'TÉLÉPHONIE', sign: '#1d5fb8', goods: ['#222', '#3a3a3a', '#e8e8e8', '#2a6fd6', '#d63a3a'] },
-  { ar: 'ملابس', fr: 'VÊTEMENTS', sign: '#b8262f', goods: ['#e85d75', '#3d6cc9', '#f2d24b', '#2e9e5b', '#f4f4f4', '#7a4fc9'] },
-  { ar: 'أحذية', fr: 'CHAUSSURES', sign: '#3d3d3d', goods: ['#5a3a22', '#1e1e1e', '#f2f2f2', '#a0522d', '#c8102e'] },
-  { ar: 'عطور', fr: 'PARFUMERIE', sign: '#8a2fa0', goods: ['#f5d76e', '#e8a0c8', '#9fd8f0', '#f0f0f0', '#d4af37'] },
-  { ar: 'مجوهرات', fr: 'BIJOUX', sign: '#1f1f1f', goods: ['#d4af37', '#e6e6e6', '#d4af37', '#c0c0c0', '#b8860b'] },
-  { ar: 'لعب', fr: 'JOUETS', sign: '#e8731c', goods: ['#e83a3a', '#3ab0e8', '#f2d24b', '#4ccf6a', '#f08ad0'] },
-  { ar: 'مواد غذائية', fr: 'ALIMENTATION', sign: '#2e8b3e', goods: ['#f2c14b', '#c8442c', '#e8e0c8', '#5a8f3a', '#f08a2c'] },
+/** Dessins des maillots : couleurs, rayures, numéro (aucun écusson ni marque réels). */
+const JERSEYS: { body: string; stripe?: string; vertical?: boolean; sleeve: string; number: string }[] = [
+  { body: '#f4f4f4', stripe: '#0f7a3d', sleeve: '#0f7a3d', number: '#0f7a3d' },
+  { body: '#0f7a3d', sleeve: '#f4f4f4', number: '#f4f4f4' },
+  { body: '#c8102e', stripe: '#111111', vertical: true, sleeve: '#111111', number: '#ffffff' },
+  { body: '#1d4fa8', stripe: '#f4f4f4', vertical: true, sleeve: '#1d4fa8', number: '#f4f4f4' },
+  { body: '#f2c500', sleeve: '#1d4fa8', number: '#1d4fa8' },
+  { body: '#6fb5e8', sleeve: '#f4f4f4', number: '#1a1a1a' },
+  { body: '#c8102e', stripe: '#f4f4f4', vertical: true, sleeve: '#c8102e', number: '#1a1a1a' },
+  { body: '#151515', stripe: '#d4a017', sleeve: '#151515', number: '#d4a017' },
 ];
 
-/** Devanture : rideau métallique relevé, enseigne bilingue, rayonnages chargés de marchandises. */
-function shopFront(kind: ShopKind, seed: number): THREE.CanvasTexture {
-  return canvasTexture(256, 256, (ctx) => {
-    let s = seed * 7919 + 13;
-    const r = () => { s = (s * 16807) % 2147483647; return s / 2147483647; };
-    ctx.fillStyle = '#f3ecd9'; ctx.fillRect(0, 0, 256, 256);
-    // Intérieur éclairé.
-    ctx.fillStyle = '#efe9da'; ctx.fillRect(12, 70, 232, 186);
-    // Rayonnages.
-    for (let y = 92; y < 240; y += 36) {
-      ctx.fillStyle = '#9b8c74'; ctx.fillRect(16, y + 26, 224, 4);
-      for (let x = 18; x < 236;) {
-        const w = 8 + r() * 18;
-        ctx.fillStyle = kind.goods[Math.floor(r() * kind.goods.length)];
-        ctx.fillRect(x, y + 26 - (10 + r() * 16), w - 2, 26);
-        x += w;
-      }
-    }
-    // Comptoir vitré.
-    ctx.fillStyle = 'rgba(160,200,210,0.55)'; ctx.fillRect(30, 210, 196, 40);
-    ctx.fillStyle = '#6a6a6a'; ctx.fillRect(30, 246, 196, 10);
-    // Rideau métallique relevé et enseigne.
-    ctx.fillStyle = '#8d9295'; ctx.fillRect(8, 52, 240, 18);
-    ctx.fillStyle = 'rgba(0,0,0,0.25)'; for (let y = 54; y < 70; y += 4) ctx.fillRect(8, y, 240, 1);
-    ctx.fillStyle = kind.sign; ctx.fillRect(0, 0, 256, 52);
-    ctx.fillStyle = '#ffffff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.font = 'bold 26px "Noto Naskh Arabic", "Geeza Pro", Arial, sans-serif'; ctx.fillText(kind.ar, 128, 18);
-    ctx.font = 'bold 15px Arial, sans-serif'; ctx.fillText(kind.fr, 128, 41);
-    // Montants.
-    ctx.fillStyle = '#d8d0bc'; ctx.fillRect(0, 52, 10, 204); ctx.fillRect(246, 52, 10, 204);
+function drawJersey(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, k: number): void {
+  const j = JERSEYS[k % JERSEYS.length];
+  const shape = () => {
+    ctx.beginPath();
+    ctx.moveTo(x + w * 0.32, y); ctx.lineTo(x + w * 0.68, y);
+    ctx.lineTo(x + w, y + h * 0.16); ctx.lineTo(x + w * 0.9, y + h * 0.36); ctx.lineTo(x + w * 0.78, y + h * 0.3);
+    ctx.lineTo(x + w * 0.78, y + h); ctx.lineTo(x + w * 0.22, y + h); ctx.lineTo(x + w * 0.22, y + h * 0.3);
+    ctx.lineTo(x + w * 0.1, y + h * 0.36); ctx.lineTo(x, y + h * 0.16); ctx.closePath();
+  };
+  ctx.save(); shape(); ctx.fillStyle = j.body; ctx.fill(); ctx.clip();
+  if (j.stripe) {
+    ctx.fillStyle = j.stripe;
+    if (j.vertical) for (let s = x + w * 0.26; s < x + w * 0.78; s += w * 0.14) ctx.fillRect(s, y, w * 0.07, h);
+    else ctx.fillRect(x, y + h * 0.38, w, h * 0.12);
+  }
+  ctx.fillStyle = j.sleeve; ctx.fillRect(x, y, w * 0.22, h * 0.36); ctx.fillRect(x + w * 0.78, y, w * 0.22, h * 0.36);
+  ctx.fillStyle = j.number; ctx.font = `bold ${Math.round(h * 0.34)}px Arial, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(String([10, 7, 9, 11, 4, 8, 19, 22][k % 8]), x + w / 2, y + h * 0.62);
+  ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.fillRect(x + w * 0.4, y, w * 0.2, h * 0.05);
+  ctx.restore();
+  ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 1; shape(); ctx.stroke();
+}
+
+/** Planche de 8 maillots (un par case) pour les portants. */
+function jerseyAtlas(): THREE.CanvasTexture {
+  return canvasTexture(512, 80, (ctx) => {
+    ctx.clearRect(0, 0, 512, 80);
+    for (let k = 0; k < 8; k++) drawJersey(ctx, k * 64 + 3, 4, 58, 72, k);
   }, false);
 }
 
-export interface SousTerrain { ground: (x: number, z: number) => number | null; inside: (x: number, n: number) => boolean; }
+interface ShopKind { ar: string; fr: string; sign: string; }
+const SHOPS: ShopKind[] = [
+  { ar: 'ملابس رياضية', fr: 'SPORT', sign: '#0f7a3d' },
+  { ar: 'أقمصة', fr: 'MAILLOTS', sign: '#c8102e' },
+  { ar: 'ملابس', fr: 'VÊTEMENTS', sign: '#1d4fa8' },
+  { ar: 'موضة', fr: 'MODE', sign: '#7d2fa0' },
+  { ar: 'أحذية رياضية', fr: 'BASKETS', sign: '#222222' },
+];
+
+/** Fond de boutique : maillots accrochés en rangs sur un mur clair, enseigne bilingue en haut. */
+function shopWall(kind: ShopKind, seed: number): THREE.CanvasTexture {
+  return canvasTexture(256, 160, (ctx) => {
+    const r = rand(seed * 31 + 7);
+    ctx.fillStyle = '#efe9dc'; ctx.fillRect(0, 0, 256, 160);
+    ctx.fillStyle = kind.sign; ctx.fillRect(0, 0, 256, 34);
+    ctx.fillStyle = '#ffffff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = 'bold 17px "Noto Naskh Arabic", "Geeza Pro", Arial, sans-serif'; ctx.fillText(kind.ar, 86, 18);
+    ctx.font = 'bold 15px Arial, sans-serif'; ctx.fillText(kind.fr, 196, 18);
+    for (let row = 0; row < 3; row++) {
+      ctx.fillStyle = '#8f8f8f'; ctx.fillRect(4, 40 + row * 40, 248, 2);
+      for (let k = 0; k < 7; k++) drawJersey(ctx, 6 + k * 35.5, 43 + row * 40, 31, 35, Math.floor(r() * 8));
+    }
+  }, false);
+}
+
+/** Mur de street art : aplats, grandes lettres « bulles », personnages, tags, coulures et éclaboussures. */
+function graffitiTexture(): THREE.CanvasTexture {
+  const W = 2048, H = 192;
+  return canvasTexture(W, H, (ctx) => {
+    const r = rand(77);
+    ctx.fillStyle = '#e1b648'; ctx.fillRect(0, 0, W, H);
+    const fonds = ['#2a9dd8', '#e8457a', '#7ac943', '#f28c28', '#6b4fc8', '#19b39b', '#f2d22e', '#d93636'];
+    for (let x = 0; x < W;) {
+      const w = 120 + r() * 220;
+      const g = ctx.createLinearGradient(x, 0, x + w, H);
+      g.addColorStop(0, fonds[Math.floor(r() * fonds.length)]); g.addColorStop(1, fonds[Math.floor(r() * fonds.length)]);
+      ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(x, H);
+      for (let k = 0; k <= 8; k++) ctx.lineTo(x + (w * k) / 8, 10 + r() * 30);
+      ctx.lineTo(x + w, H); ctx.fill();
+      x += w * (0.85 + r() * 0.2);
+    }
+    for (let k = 0; k < 40; k++) {
+      ctx.fillStyle = `rgba(255,255,255,${0.15 + r() * 0.25})`;
+      ctx.beginPath(); ctx.arc(r() * W, 20 + r() * 150, 6 + r() * 26, 0, Math.PI * 2); ctx.fill();
+    }
+    const bubble = (text: string, x: number, size: number, fill: string, fill2: string, line: string) => {
+      ctx.font = `900 ${size}px "Arial Black", Impact, Arial, sans-serif`;
+      ctx.textBaseline = 'middle'; ctx.textAlign = 'left'; ctx.lineJoin = 'round';
+      ctx.lineWidth = size * 0.22; ctx.strokeStyle = '#111'; ctx.strokeText(text, x, H * 0.55);
+      ctx.lineWidth = size * 0.12; ctx.strokeStyle = line; ctx.strokeText(text, x, H * 0.55);
+      const g = ctx.createLinearGradient(0, H * 0.55 - size / 2, 0, H * 0.55 + size / 2);
+      g.addColorStop(0, fill); g.addColorStop(1, fill2);
+      ctx.fillStyle = g; ctx.fillText(text, x, H * 0.55);
+      ctx.save(); ctx.beginPath(); ctx.rect(0, 0, W, H * 0.55 - size * 0.18); ctx.clip();
+      ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.fillText(text, x + 2, H * 0.55 - 3); ctx.restore();
+    };
+    bubble('ANNABA', 40, 104, '#ffe14d', '#ff7a1a', '#ffffff');
+    bubble('BÔNE', 640, 110, '#7af0ff', '#2a5bd8', '#ffef5a');
+    bubble('23', 1080, 120, '#ff6fb0', '#b0157a', '#ffffff');
+    bubble('HIP HOP', 1500, 84, '#9cff57', '#1f9a2e', '#ff4fa3');
+    const face = (cx: number, cy: number, s: number, skin: string, capColor: string) => {
+      ctx.lineWidth = 4; ctx.strokeStyle = '#111';
+      ctx.fillStyle = skin; ctx.beginPath(); ctx.arc(cx, cy, s, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = capColor; ctx.beginPath(); ctx.arc(cx, cy - s * 0.2, s * 1.02, Math.PI, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillRect(cx - s * 1.4, cy - s * 0.26, s * 1.4, s * 0.16);
+      ctx.fillStyle = '#111'; ctx.fillRect(cx - s * 0.6, cy + s * 0.05, s * 0.5, s * 0.25); ctx.fillRect(cx + s * 0.1, cy + s * 0.05, s * 0.5, s * 0.25);
+      ctx.beginPath(); ctx.arc(cx, cy + s * 0.45, s * 0.32, 0.1, Math.PI - 0.1); ctx.stroke();
+    };
+    face(560, 96, 46, '#c98b5a', '#d93636');
+    face(1360, 92, 50, '#f0c08a', '#1d4fa8');
+    face(1960, 96, 44, '#8a5a3a', '#0f7a3d');
+    for (let k = 0; k < 26; k++) {
+      ctx.strokeStyle = ['#111', '#fff', '#d93636', '#1d4fa8', '#111'][k % 5]; ctx.lineWidth = 2 + r() * 3;
+      let x = r() * W, y = 30 + r() * 140;
+      ctx.beginPath(); ctx.moveTo(x, y);
+      for (let s = 0; s < 6; s++) { x += 8 + r() * 18; y += (r() - 0.5) * 30; ctx.quadraticCurveTo(x - 6, y - 20 * r(), x, y); }
+      ctx.stroke();
+    }
+    for (let k = 0; k < 140; k++) {
+      ctx.fillStyle = fonds[Math.floor(r() * fonds.length)];
+      const x = r() * W, y = 40 + r() * 120;
+      if (r() < 0.5) ctx.fillRect(x, y, 2 + r() * 2, 8 + r() * 30);
+      else { ctx.beginPath(); ctx.arc(x, y, 1 + r() * 4, 0, Math.PI * 2); ctx.fill(); }
+    }
+    const dirt = ctx.createLinearGradient(0, H - 26, 0, H);
+    dirt.addColorStop(0, 'rgba(60,50,40,0)'); dirt.addColorStop(1, 'rgba(60,50,40,0.45)');
+    ctx.fillStyle = dirt; ctx.fillRect(0, H - 26, W, 26);
+  }, false);
+}
+
+/** Poutre (section rectangulaire) entre deux points quelconques : rampes inclinées. */
+function beam(b: MeshBuilder, a: THREE.Vector3, c: THREE.Vector3, w: number, h: number, color: THREE.Color): void {
+  const dir = c.clone().sub(a).normalize();
+  const side = new THREE.Vector3(-dir.z, 0, dir.x).normalize().multiplyScalar(w / 2);
+  const up = new THREE.Vector3().crossVectors(side, dir).normalize().multiplyScalar(h / 2);
+  if (up.y < 0) up.negate();
+  const corners = (p: THREE.Vector3) => [p.clone().add(side).add(up), p.clone().sub(side).add(up), p.clone().sub(side).sub(up), p.clone().add(side).sub(up)];
+  const v = [...corners(a), ...corners(c)].map((p) => b.vertex(p.x, p.y, p.z, color));
+  for (let k = 0; k < 4; k++) {
+    const k2 = (k + 1) % 4;
+    b.triangle(v[k], v[k2], v[4 + k2]); b.triangle(v[k], v[4 + k2], v[4 + k]);
+  }
+}
+
+export interface SousTerrain {
+  /** Hauteur du sol ; `y` (hauteur actuelle du joueur) départage l'esplanade et les galeries situées dessous. */
+  ground: (x: number, z: number, y?: number) => number | null;
+  inside: (x: number, n: number) => boolean;
+}
 
 export function buildSousTerrain(scene: THREE.Scene, terrain: Terrain, ground: Ground, collider: Collider): SousTerrain {
-  const outer = outline(0).map(([u, v]) => world(u, v));
-  const inner = outline(WALL).map(([u, v]) => world(u, v));
-  const raw = (u: number, v: number) => ground(CX + u, -(CN + v));
-  let gMin = Infinity, gMax = -Infinity;
-  for (const [x, n] of outer) { const g = ground(x, -n); gMin = Math.min(gMin, g); gMax = Math.max(gMax, g); }
-  const floor = gMin + SURFACE - 1.9;           // niveau commerçant : 1,9 m sous le point bas de la place
-  const top = gMax + 4.4;                        // haut des murs
-  const west = raw(-A - 0.6, 0) + SURFACE, east = raw(A + 0.6, 0) + SURFACE; // seuils des deux portes
-  const stairs = [
-    { sign: -1, h: west, start: -A + WALL + LANDING, end: -A + WALL + LANDING + (west - floor) / STAIR_SLOPE },
-    { sign: 1, h: east, start: A - WALL - LANDING, end: A - WALL - LANDING - (east - floor) / STAIR_SLOPE },
-  ];
+  const sidewalk = (x: number) => ground(x, -(N0 - 0.6)) + SURFACE;
+  let frontMax = -Infinity, low = Infinity;
+  for (let x = X0; x <= X1; x += 1) frontMax = Math.max(frontMax, sidewalk(x));
+  for (let x = X0; x <= X1; x += 4) for (let n = N0; n <= N1; n += 4) low = Math.min(low, ground(x, -n));
+  const T = frontMax + 4.2;                         // niveau de l'esplanade
+  const base = low - 1;
+  const stairBottom = sidewalk((SX0 + SX1) / 2);
+  const steps = Math.ceil((T - stairBottom) / 0.165), rise = (T - stairBottom) / steps, RUN = 0.32;
+  const stairTop = N0 + steps * RUN;
+  const floors = HALLS.map((h) => sidewalk((h.d0 + h.d1) / 2));
+  const ceiling = T - 0.7;
 
-  terrain.cutHole(outline(WALL * 0.5).map(([u, v]) => world(u, v)));
+  for (const h of HALLS) terrain.cutHole([[h.x0 + 0.1, N0 + 0.2], [h.x1 - 0.1, N0 + 0.2], [h.x1 - 0.1, HALL_N1 - 0.1], [h.x0 + 0.1, HALL_N1 - 0.1]]);
 
-  const shell = new MeshBuilder(), inside = new MeshBuilder(), trim = new MeshBuilder();
-  const wallMaterial = new THREE.MeshLambertMaterial({ map: plaster(), side: THREE.DoubleSide });
-
-  // --- Murs : faces extérieures jaunes, faces intérieures crème, ouvertes aux deux portes.
-  const segments = (ring: [number, number][], local: [number, number][]) => ring.map((p, i) => ({ a: p, b: ring[(i + 1) % ring.length], la: local[i], lb: local[(i + 1) % ring.length] }));
-  const quad = (b: MeshBuilder, ax: number, an: number, bx: number, bn: number, y0: number, y1: number, color: THREE.Color, u0: number, u1: number) => {
-    const v0 = b.vertex(ax, y0, -an, color, 1, u0, y0 / 4), v1 = b.vertex(bx, y0, -bn, color, 1, u1, y0 / 4);
-    const v2 = b.vertex(bx, y1, -bn, color, 1, u1, y1 / 4), v3 = b.vertex(ax, y1, -an, color, 1, u0, y1 / 4);
+  const yellow = new MeshBuilder(), trim = new MeshBuilder(), inside = new MeshBuilder(), steel = new MeshBuilder();
+  const wallQuad = (b: MeshBuilder, ax: number, an: number, bx: number, bn: number, y0: number, y1: number, color: THREE.Color, u0 = 0) => {
+    const len = Math.hypot(bx - ax, bn - an);
+    const v0 = b.vertex(ax, y0, -an, color, 1, u0 / 4, y0 / 4), v1 = b.vertex(bx, y0, -bn, color, 1, (u0 + len) / 4, y0 / 4);
+    const v2 = b.vertex(bx, y1, -bn, color, 1, (u0 + len) / 4, y1 / 4), v3 = b.vertex(ax, y1, -an, color, 1, u0 / 4, y1 / 4);
     b.triangle(v0, v1, v2); b.triangle(v0, v2, v3);
   };
-  const doorOn = (la: [number, number], lb: [number, number]) => Math.abs(la[0] - lb[0]) < 0.01 && Math.abs(Math.abs(la[0]) - (A - 0)) < WALL + 0.01 && la[1] * lb[1] < 0;
-  const wallRing = (ring: [number, number][], local: [number, number][], b: MeshBuilder, color: THREE.Color, collide: boolean) => {
-    let along = 0;
-    for (const { a, b: e, la, lb } of segments(ring, local)) {
-      const length = Math.hypot(e[0] - a[0], e[1] - a[1]);
-      if (doorOn(la, lb)) {
-        // Façade à porte : trumeaux de part et d'autre, linteau au-dessus.
-        const dir = Math.sign(lb[1] - la[1]); // sens de parcours en v
-        const sill = la[0] < 0 ? west : east;
-        const cut = (v: number) => (v - la[1]) / (lb[1] - la[1]);
-        const t0 = cut(-DOOR * dir), t1 = cut(DOOR * dir);
-        const at = (t: number): [number, number] => [a[0] + (e[0] - a[0]) * t, a[1] + (e[1] - a[1]) * t];
-        const [px, pn] = at(t0), [qx, qn] = at(t1);
-        quad(b, a[0], a[1], px, pn, floor - 0.3, top, color, along / 4, (along + length * t0) / 4);
-        quad(b, qx, qn, e[0], e[1], floor - 0.3, top, color, (along + length * t1) / 4, (along + length) / 4);
-        quad(b, px, pn, qx, qn, sill + DOOR_H, top, color, (along + length * t0) / 4, (along + length * t1) / 4);
-        quad(b, px, pn, qx, qn, floor - 0.3, sill - 0.05, color, 0, 1);
-        if (collide) {
-          for (const [sx, sn, tx, tn] of [[a[0], a[1], px, pn], [qx, qn, e[0], e[1]]]) addWall(sx, sn, tx, tn);
-        }
-      } else {
-        quad(b, a[0], a[1], e[0], e[1], floor - 0.3, top, color, along / 4, (along + length) / 4);
-        if (collide) addWall(a[0], a[1], e[0], e[1]);
+  const LOW = -Infinity, wallTop = T - 0.6;
+  // Obstacles à hauteur limitée : les murs du socle ne gênent pas sur l'esplanade, les garde-corps seulement en haut.
+  const solid = (ax: number, an: number, bx: number, bn: number, yMax = wallTop) => {
+    const dx = bx - ax, dn = bn - an, l = Math.hypot(dx, dn), ox = (-dn / l) * 0.3, on = (dx / l) * 0.3;
+    collider.addBuilding([ax - ox, an - on, bx - ox, bn - on, bx + ox, bn + on, ax + ox, an + on], LOW, yMax);
+  };
+  const guard = (ax: number, an: number, bx: number, bn: number) => {
+    const dx = bx - ax, dn = bn - an, l = Math.hypot(dx, dn), ox = (-dn / l) * 0.25, on = (dx / l) * 0.25;
+    collider.addBuilding([ax - ox, an - on, bx - ox, bn - on, bx + ox, bn + on, ax + ox, an + on], T - 0.4, T + 4);
+  };
+
+  // --- Façade sud : murs jaunes, deux entrées de galerie, coupure du grand escalier.
+  const frontSegments: [number, number][] = [[X0, HALLS[0].d0], [HALLS[0].d1, SX0], [SX1, HALLS[1].d0], [HALLS[1].d1, X1]];
+  for (const [a, b] of frontSegments) { wallQuad(yellow, a, N0, b, N0, base, T, YELLOW, a); solid(a, N0, b, N0); }
+  HALLS.forEach((h, i) => {
+    wallQuad(yellow, h.d0, N0, h.d1, N0, floors[i] + DOOR_H, T, YELLOW, h.d0);
+    wallQuad(yellow, h.d0, N0, h.d1, N0, base, floors[i] - 0.02, YELLOW, h.d0);
+    boxAt(trim, (h.d0 + h.d1) / 2, -(N0 + 0.05), h.d1 - h.d0 + 0.6, 0.3, floors[i] + DOOR_H, floors[i] + DOOR_H + 0.3, STONE);
+    for (const x of [h.d0, h.d1]) boxAt(trim, x, -(N0 + 0.05), 0.3, 0.32, floors[i] - 0.02, floors[i] + DOOR_H + 0.3, STONE);
+  });
+  wallQuad(yellow, X1, N0, X1, N1, base, T, YELLOW); solid(X1, N0, X1, N1);
+  wallQuad(yellow, X1, N1, X0, N1, base, T, YELLOW); solid(X1, N1, X0, N1);
+  solid(X0, N1, X0, N0);
+  // Mur de gauche (boulevard Zighout Youcef) : fresques et graffitis sur toute sa longueur.
+  {
+    const texture = graffitiTexture();
+    const g = new MeshBuilder();
+    const vis = ground(X0 - 1, -((N0 + N1) / 2)) + SURFACE - 0.3; // pied visible du mur
+    const vb = -(vis - base) / (T - vis);                          // la fondation enterrée sort de la texture
+    const a = g.vertex(X0 - 0.02, base, -N1, WHITE, 1, 0, vb), b = g.vertex(X0 - 0.02, base, -N0, WHITE, 1, 1, vb);
+    const c = g.vertex(X0 - 0.02, T, -N0, WHITE, 1, 1, 1), d = g.vertex(X0 - 0.02, T, -N1, WHITE, 1, 0, 1);
+    g.triangle(a, b, c); g.triangle(a, c, d);
+    texture.wrapT = THREE.ClampToEdgeWrapping;
+    scene.add(new THREE.Mesh(g.build(), new THREE.MeshLambertMaterial({ map: texture, side: THREE.DoubleSide })));
+  }
+  // Couronnement : bandeau de pierre en haut des murs.
+  for (const [ax, an, bx, bn] of [[X0, N0, SX0, N0], [SX1, N0, X1, N0], [X1, N0, X1, N1], [X1, N1, X0, N1], [X0, N1, X0, N0]]) {
+    const mx = (ax + bx) / 2, mn = (an + bn) / 2, len = Math.hypot(bx - ax, bn - an);
+    boxAt(trim, mx, -mn, len + 0.6, 0.6, T - 0.25, T + 0.35, STONE, Math.atan2(-(bn - an), bx - ax));
+  }
+
+  // --- Esplanade : dallage clair, sauf la trémie de l'escalier.
+  const deck = new MeshBuilder();
+  const slab = (x0: number, n0: number, x1: number, n1: number) => cap(deck, [[x0, n0], [x1, n0], [x1, n1], [x0, n1]], T, TILE, 1);
+  slab(X0, N0, SX0, N1); slab(SX1, N0, X1, N1); slab(SX0, stairTop, SX1, N1);
+
+  // --- Grand escalier central : marches de pierre, joues jaunes, rampes en trois volées.
+  for (let k = 0; k < steps; k++) {
+    const n0 = N0 + k * RUN;
+    boxAt(trim, (SX0 + SX1) / 2, -(n0 + RUN / 2), SX1 - SX0, RUN + 0.01, base, stairBottom + (k + 0.5) * rise, k % 2 ? STONE : WHITE);
+  }
+  for (const x of [SX0, SX1]) { wallQuad(yellow, x, N0, x, stairTop, base, T, YELLOW); solid(x, N0, x, stairTop); guard(x, N0, x, stairTop); }
+  const railY = 0.95;
+  for (const x of [SX0 + 0.35, SX0 + (SX1 - SX0) / 3, SX0 + (2 * (SX1 - SX0)) / 3, SX1 - 0.35]) {
+    beam(steel, new THREE.Vector3(x, stairBottom + railY, -(N0 + 0.3)), new THREE.Vector3(x, T + railY, -stairTop), 0.07, 0.07, BLACK);
+    for (let t = 0; t <= 1.001; t += 0.25) {
+      const n = N0 + 0.3 + (stairTop - N0 - 0.3) * t, y = stairBottom + (T - stairBottom) * t;
+      boxAt(steel, x, -n, 0.05, 0.05, y - 0.1, y + railY, BLACK);
+    }
+  }
+
+  // --- Garde-corps en fer forgé et lampadaires à globes autour de l'esplanade.
+  const rails = new MeshBuilder();
+  const railRun = (ax: number, an: number, bx: number, bn: number) => {
+    const len = Math.hypot(bx - ax, bn - an);
+    const y0 = T + 0.35, y1 = T + 1.3;
+    const a = rails.vertex(ax, y0, -an, WHITE, 1, 0, 0), b = rails.vertex(bx, y0, -bn, WHITE, 1, len / 1.6, 0);
+    const c = rails.vertex(bx, y1, -bn, WHITE, 1, len / 1.6, 1), d = rails.vertex(ax, y1, -an, WHITE, 1, 0, 1);
+    rails.triangle(a, b, c); rails.triangle(a, c, d);
+    for (let s = 0; s <= len + 0.01; s += len / Math.max(1, Math.round(len / 3))) boxAt(trim, ax + (bx - ax) * s / len, -(an + (bn - an) * s / len), 0.35, 0.35, T + 0.35, T + 1.45, STONE);
+    guard(ax, an, bx, bn);
+  };
+  railRun(X0 + 0.3, N0 + 0.3, SX0 - 0.3, N0 + 0.3); railRun(SX1 + 0.3, N0 + 0.3, X1 - 0.3, N0 + 0.3);
+  railRun(X0 + 0.3, N0 + 0.3, X0 + 0.3, N1 - 0.3); railRun(X1 - 0.3, N0 + 0.3, X1 - 0.3, N1 - 0.3);
+  railRun(SX0 - 0.3, N0 + 0.3, SX0 - 0.3, stairTop); railRun(SX1 + 0.3, N0 + 0.3, SX1 + 0.3, stairTop);
+  const lamps: [number, number][] = [[X0 + 0.7, N0 + 0.7], [117, N0 + 0.7], [SX0 - 0.7, N0 + 0.7], [SX1 + 0.7, N0 + 0.7], [143, N0 + 0.7], [X1 - 0.7, N0 + 0.7],
+    [SX0 - 0.7, stairTop + 0.7], [SX1 + 0.7, stairTop + 0.7], [X0 + 0.7, 680], [X1 - 0.7, 680]];
+  const globes: THREE.Vector3[] = [];
+  for (const [x, n] of lamps) {
+    boxAt(steel, x, -n, 0.4, 0.4, T, T + 0.5, BLACK);
+    boxAt(steel, x, -n, 0.13, 0.13, T + 0.5, T + 4.2, BLACK);
+    boxAt(steel, x, -n, 1.2, 0.08, T + 4.1, T + 4.2, BLACK);
+    globes.push(new THREE.Vector3(x - 0.55, T + 4.45, -n), new THREE.Vector3(x + 0.55, T + 4.45, -n), new THREE.Vector3(x, T + 4.6, -n));
+    collider.addBuilding([x - 0.25, n - 0.25, x + 0.25, n - 0.25, x + 0.25, n + 0.25, x - 0.25, n + 0.25], T - 0.4, T + 5);
+  }
+  const globeMesh = new THREE.InstancedMesh(new THREE.SphereGeometry(0.28, 12, 8), new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0x9a958a }), globes.length);
+  globes.forEach((p, i) => globeMesh.setMatrixAt(i, new THREE.Matrix4().makeTranslation(p.x, p.y, p.z)));
+  scene.add(globeMesh);
+
+  // --- Grand bâtiment jaune aveugle au fond de l'esplanade : pilastres, soubassement, corniche.
+  const B = BUILDING, top = T + B.h;
+  const ring: Ring = [[B.x0, B.n0], [B.x1, B.n0], [B.x1, B.n1], [B.x0, B.n1]];
+  for (let k = 0; k < 4; k++) { const [ax, an] = ring[k], [bx, bn] = ring[(k + 1) % 4]; wallQuad(yellow, ax, an, bx, bn, T, top, YELLOW); }
+  cap(trim, ring, top + 0.6, new THREE.Color(0xd8d2c4), 1);
+  boxAt(trim, (B.x0 + B.x1) / 2, -(B.n0 + B.n1) / 2, B.x1 - B.x0 + 1.2, B.n1 - B.n0 + 1.2, top, top + 0.6, WHITE);
+  boxAt(trim, (B.x0 + B.x1) / 2, -(B.n0 + B.n1) / 2, B.x1 - B.x0 + 0.4, B.n1 - B.n0 + 0.4, T, T + 0.9, STONE);
+  for (let k = 0; k <= 6; k++) boxAt(yellow, B.x0 + (k * (B.x1 - B.x0)) / 6, -(B.n0 - 0.2), 1.1, 0.5, T, top, YELLOW);
+  boxAt(yellow, (B.x0 + B.x1) / 2, -(B.n0 - 0.15), B.x1 - B.x0, 0.35, top - 1.6, top - 1.0, YELLOW);
+  for (const x of [B.x0, B.x1]) for (let n = B.n0 + 5; n < B.n1; n += 5) boxAt(yellow, x + (x === B.x0 ? -0.2 : 0.2), -n, 0.5, 1.1, T, top, YELLOW);
+  collider.addBuilding([B.x0 - 0.6, B.n0 - 0.6, B.x1 + 0.6, B.n0 - 0.6, B.x1 + 0.6, B.n1, B.x0 - 0.6, B.n1], T - 0.4, Infinity);
+
+  // --- Galeries semi-enterrées : boutiques de vêtements et de maillots, portants, néons.
+  const jerseyMaterial = new THREE.MeshLambertMaterial({ map: jerseyAtlas(), transparent: true, alphaTest: 0.4, side: THREE.DoubleSide, emissive: 0x2a2a2a });
+  const jerseys = new MeshBuilder(), neon = new MeshBuilder();
+  const GREY = new THREE.Color(0x8a8a8a);
+  const hang = (x: number, y: number, n: number, k: number) => {
+    const w = 0.58, h = 0.75, u0 = (k % 8) / 8, u1 = u0 + 1 / 8;
+    const a = jerseys.vertex(x, y - h, -(n - w / 2), WHITE, 1, u0, 0), b = jerseys.vertex(x, y - h, -(n + w / 2), WHITE, 1, u1, 0);
+    const c = jerseys.vertex(x, y, -(n + w / 2), WHITE, 1, u1, 1), d = jerseys.vertex(x, y, -(n - w / 2), WHITE, 1, u0, 1);
+    jerseys.triangle(a, b, c); jerseys.triangle(a, c, d);
+  };
+  let shopIndex = 0;
+  HALLS.forEach((h, i) => {
+    const f = floors[i], cx = (h.x0 + h.x1) / 2;
+    const room: Ring = [[h.x0, N0], [h.x1, N0], [h.x1, HALL_N1], [h.x0, HALL_N1]];
+    cap(inside, room, f, TILE, 1);
+    cap(neon, room, ceiling, new THREE.Color(0xd9d6cf), 1, false); // plafond clair (non éclairé par le dessous)
+    for (const [ax, an, bx, bn] of [[h.x0, N0 + 0.3, h.x0, HALL_N1], [h.x1, N0 + 0.3, h.x1, HALL_N1], [h.x0, HALL_N1, h.x1, HALL_N1]]) {
+      wallQuad(inside, ax, an, bx, bn, f, ceiling, CREAM);
+      solid(ax, an, bx, bn, ceiling);
+    }
+    boxAt(inside, cx, -(N0 + 0.15), h.x1 - h.x0, 0.3, f + DOOR_H, ceiling, CREAM);
+    for (const side of [-1, 1]) {
+      const wallX = side < 0 ? h.x0 : h.x1, depth = 2.6, front = wallX - side * depth;
+      for (let n = N0 + 1.5; n + 4 <= HALL_N1 - 0.5; n += 4.4) {
+        const kind = SHOPS[shopIndex % SHOPS.length];
+        const plane = new THREE.Mesh(new THREE.PlaneGeometry(4, 2.6), new THREE.MeshLambertMaterial({ map: shopWall(kind, shopIndex), emissive: 0x3a3a3a }));
+        plane.position.set(wallX - side * 0.05, f + 1.5, -(n + 2));
+        plane.rotation.y = side < 0 ? Math.PI / 2 : -Math.PI / 2;
+        scene.add(plane);
+        for (const nn of [n, n + 4]) boxAt(inside, wallX - (side * depth) / 2, -nn, depth, 0.12, f, f + 2.9, CREAM);
+        boxAt(steel, front, -(n + 2), 0.04, 3.2, f + 1.62, f + 1.67, GREY);
+        for (const nn of [n + 0.45, n + 3.55]) boxAt(steel, front, -nn, 0.05, 0.05, f, f + 1.67, GREY);
+        for (let k = 0; k < 5; k++) hang(front + side * 0.02, f + 1.6, n + 0.75 + k * 0.62, shopIndex * 3 + k);
+        shopIndex++;
       }
-      along += length;
+      const xa = Math.min(wallX, front - side * 0.3), xb = Math.max(wallX, front - side * 0.3);
+      collider.addBuilding([xa, N0 + 1.4, xb, N0 + 1.4, xb, HALL_N1, xa, HALL_N1], LOW, ceiling);
     }
-  };
-  const addWall = (ax: number, an: number, bx: number, bn: number) => {
-    const dx = bx - ax, dn = bn - an, l = Math.hypot(dx, dn), ox = -dn / l * 0.5, on = dx / l * 0.5;
-    collider.addBuilding([ax - ox, an - on, bx - ox, bn - on, bx + ox, bn + on, ax + ox, an + on]);
-  };
-  wallRing(outer, outline(0), shell, new THREE.Color(0xffffff), true);
-  wallRing(inner, outline(WALL), inside, CREAM, false);
+    // Étal du vendeur dans l'allée : portant double de maillots, puis table de vêtements pliés.
+    const midN = (N0 + HALL_N1) / 2 - 1;
+    boxAt(steel, cx, -midN, 0.04, 2.6, f + 1.62, f + 1.67, GREY);
+    for (const nn of [midN - 1.3, midN + 1.3]) boxAt(steel, cx, -nn, 0.05, 0.05, f, f + 1.67, GREY);
+    for (let k = 0; k < 4; k++) { hang(cx + 0.02, f + 1.6, midN - 0.95 + k * 0.63, k + i * 4); hang(cx - 0.02, f + 1.6, midN - 0.95 + k * 0.63, k + 3 + i * 4); }
+    const table = midN + 5.5;
+    boxAt(inside, cx, -table, 1.2, 2.2, f, f + 0.8, new THREE.Color(0x7a5a3a));
+    for (let k = 0; k < 6; k++) boxAt(inside, cx - 0.3 + (k % 2) * 0.6, -(table - 0.75 + Math.floor(k / 2) * 0.75), 0.5, 0.5, f + 0.8, f + 0.95 + (k % 3) * 0.06, new THREE.Color(JERSEYS[(k + i) % 8].body));
+    collider.addBuilding([cx - 0.35, midN - 1.4, cx + 0.35, midN - 1.4, cx + 0.35, midN + 1.4, cx - 0.35, midN + 1.4], LOW, ceiling);
+    collider.addBuilding([cx - 0.7, table - 1.2, cx + 0.7, table - 1.2, cx + 0.7, table + 1.2, cx - 0.7, table + 1.2], LOW, ceiling);
+    for (let n = N0 + 3; n < HALL_N1 - 1; n += 4) boxAt(neon, cx, -n, 0.16, 1.4, ceiling - 0.12, ceiling - 0.02, WHITE);
+  });
 
-  // Soubassement de pierre, corniche blanche, embrasures et auvents des portes.
-  const base = new MeshBuilder();
-  for (const { a, b: e, la, lb } of segments(outer, outline(0))) {
-    if (doorOn(la, lb)) continue;
-    const g0 = Math.min(ground(a[0], -a[1]), ground(e[0], -e[1]));
-    const offset = (p: [number, number]): [number, number] => [p[0] + (p[0] - CX) * 0.012, p[1] + (p[1] - CN) * 0.012];
-    const [ax, an] = offset(a), [bx, bn] = offset(e);
-    quad(base, ax, an, bx, bn, g0 - 0.5, g0 + 0.7 + (Math.max(ground(a[0], -a[1]), ground(e[0], -e[1])) - g0), STONE, 0, 1);
-  }
-  extrude(trim, outer, top - 0.5, top, WHITE, 4, () => 1.035);
-  cap(trim, outer, top - 0.5, WHITE, 1.035, false);
-  for (const s of stairs) {
-    const u = s.sign * A;
-    // Embrasures blanches (couvrent l'épaisseur du mur) et auvent au-dessus de la porte.
-    for (const v of [-DOOR - 0.15, DOOR + 0.15]) boxAt(trim, CX + u - s.sign * WALL / 2, -(CN + v), WALL + 0.25, 0.3, s.h - 0.1, s.h + DOOR_H + 0.2, WHITE);
-    boxAt(trim, CX + u - s.sign * WALL / 2, -CN, WALL + 0.25, DOOR * 2 + 0.6, s.h + DOOR_H, s.h + DOOR_H + 0.35, WHITE);
-    boxAt(trim, CX + u + s.sign * 0.7, -CN, 1.5, DOOR * 2 + 1.4, s.h + DOOR_H + 0.35, s.h + DOOR_H + 0.55, WHITE);
-  }
-  // Fenêtres hautes (bandeau d'impostes qui éclaire la halle).
-  const glass = new THREE.Color(0x35505c);
-  for (const { a, b: e, la, lb } of segments(outer, outline(0))) {
-    const length = Math.hypot(e[0] - a[0], e[1] - a[1]);
-    const count = Math.floor(length / 2.6);
-    for (let k = 0; k < count; k++) {
-      const t = (k + 0.5) / count;
-      const lv = la[1] + (lb[1] - la[1]) * t;
-      if (doorOn(la, lb) && Math.abs(lv) < DOOR + 0.8) continue;
-      const x = a[0] + (e[0] - a[0]) * t, n = a[1] + (e[1] - a[1]) * t;
-      const ox = (x - CX) * 0.004, on = (n - CN) * 0.004;
-      const angle = Math.atan2(-(e[1] - a[1]), e[0] - a[0]);
-      boxAt(trim, x + ox, -(n + on), 1.5, 0.12, top - 2.4, top - 1.0, glass, angle);
-      boxAt(trim, x + ox * 1.3, -(n + on * 1.3), 1.7, 0.1, top - 2.5, top - 2.35, WHITE, angle);
-    }
-  }
-
-  // --- Toit en croupe de tuiles rouges (vu sur le satellite), débord de 0,6 m.
-  const roof = new MeshBuilder();
-  extrude(roof, outer, top, top + 2.6, new THREE.Color(0xffffff), 3, (t) => 1.07 - 0.8 * t);
-  cap(roof, outer, top + 2.6, new THREE.Color(0xffffff), 0.27); // petit plat au sommet de la croupe
-  cap(trim, outer, top, CREAM, 1.07, false);                 // sous-face du débord
-  cap(inside, inner, top - 0.25, WHITE, 1, false);            // plafond de la halle
-
-  // --- Niveau bas : sol, escaliers avec leurs murets, boutiques et étals.
-  cap(inside, inner, floor, FLOOR, 1, true);
-  const props = new MeshBuilder();
-  for (const s of stairs) {
-    const sill = s.h;
-    // Palier au niveau de la place, puis marches de 17 cm jusqu'au sol commerçant.
-    const landFrom = s.sign * (A - WALL), landTo = s.start;
-    boxAt(inside, CX + (landFrom + landTo) / 2, -CN, Math.abs(landTo - landFrom), DOOR * 2, floor, sill, STONE);
-    const steps = Math.max(1, Math.round((sill - floor) / 0.17)), rise = (sill - floor) / steps;
-    const run = Math.abs(s.end - s.start) / steps;
-    for (let k = 0; k < steps; k++) {
-      // Le nez de chaque marche suit la pente sur laquelle marche le joueur.
-      boxAt(inside, CX + s.start - s.sign * (k + 0.5) * run, -CN, run + 0.02, DOOR * 2, floor, sill - (k + 0.5) * rise, k % 2 ? STONE : FLOOR);
-    }
-    // Murets latéraux jaunes (garde-corps pleins), et rampe.
-    const uMid = (s.sign * (A - WALL) + s.end) / 2, length = Math.abs(s.sign * (A - WALL) - s.end);
-    for (const v of [-DOOR - 0.15, DOOR + 0.15]) {
-      boxAt(shell, CX + uMid, -(CN + v), length, 0.3, floor, sill + 1.0, YELLOW);
-      boxAt(trim, CX + uMid, -(CN + v), length + 0.1, 0.4, sill + 1.0, sill + 1.1, WHITE);
-      const [ax, an] = world(s.sign * (A - WALL), v - 0.15), [bx, bn] = world(s.end, v + 0.15);
-      collider.addBuilding([ax, an, bx, an, bx, bn, ax, bn]);
-    }
-  }
-  // Boutiques le long des murs nord et sud (devantures face au passage), une sur chaque pan coupé du nord.
-  const fronts: { u: number; v: number; width: number; facing: number; kind: number }[] = [];
-  for (let k = 0; k < 3; k++) fronts.push({ u: -3.7 + k * 3.7, v: B - WALL - 2.6, width: 3.5, facing: -1, kind: k });
-  for (let k = 0; k < 2; k++) fronts.push({ u: -0.9 + k * 4.0, v: -B + WALL + 2.6, width: 3.8, facing: 1, kind: 3 + k });
-  const shopMaterials = new Map<number, THREE.MeshLambertMaterial>();
-  for (const f of fronts) {
-    const kind = f.kind % SHOPS.length;
-    let material = shopMaterials.get(f.kind);
-    if (!material) {
-      material = new THREE.MeshLambertMaterial({ map: shopFront(SHOPS[kind], f.kind + 3), emissive: 0x3a3a3a, emissiveMap: null });
-      shopMaterials.set(f.kind, material);
-    }
-    const plane = new THREE.Mesh(new THREE.PlaneGeometry(f.width, 3.2), material);
-    plane.position.set(CX + f.u, floor + 1.6, -(CN + f.v));
-    plane.rotation.y = f.facing > 0 ? Math.PI : 0;
-    scene.add(plane);
-    // Volume de la boutique derrière la devanture (jusqu'au mur), cloisons et bandeau.
-    const depth = B - WALL - Math.abs(f.v);
-    const vc = f.v + Math.sign(f.v) * depth / 2;
-    boxAt(inside, CX + f.u, -(CN + vc), f.width + 0.2, depth, floor + 3.2, floor + 3.5, CREAM);
-    boxAt(inside, CX + f.u - f.width / 2 - 0.1, -(CN + vc), 0.2, depth, floor, floor + 3.5, CREAM);
-    boxAt(inside, CX + f.u + f.width / 2 + 0.1, -(CN + vc), 0.2, depth, floor, floor + 3.5, CREAM);
-    const [ax, an] = world(f.u - f.width / 2 - 0.2, f.v), [bx, bn] = world(f.u + f.width / 2 + 0.2, f.v + Math.sign(f.v) * depth);
-    collider.addBuilding([ax, an, bx, an, bx, bn, ax, bn]);
-  }
-  // Étals de vendeurs dans le passage : tréteaux, nappes de couleur, cageots et portants de vêtements.
-  const stalls: [number, number, number][] = [[-5.2, 4.2, 0], [3.0, 4.6, 1], [-1.8, -4.6, 2], [5.0, -4.4, 3], [0.6, 0, 4]];
-  const cloth = [0xc8342c, 0x2f6fb8, 0x3c9a4c, 0xe8a21c, 0x7d3fa0].map((c) => new THREE.Color(c));
-  const goods = [0xf2c14b, 0xe85d75, 0x3d6cc9, 0xf4f4f4, 0x2e9e5b, 0xd63a3a, 0x222222, 0xf08a2c].map((c) => new THREE.Color(c));
-  for (const [u, v, i] of stalls) {
-    const [x, n] = world(u, v), z = -n;
-    if (i === 4) {
-      // Portant de vêtements au pied des escaliers.
-      boxAt(props, x, z, 2.4, 0.06, floor + 1.7, floor + 1.76, new THREE.Color(0x777777));
-      for (const du of [-1.2, 1.2]) { boxAt(props, x + du, z, 0.06, 0.06, floor, floor + 1.76, new THREE.Color(0x777777)); boxAt(props, x + du, z, 0.08, 0.6, floor, floor + 0.05, new THREE.Color(0x777777)); }
-      for (let k = 0; k < 9; k++) boxAt(props, x - 1.05 + k * 0.26, z, 0.2, 0.5, floor + 0.75, floor + 1.68, goods[(k * 3) % goods.length]);
-      collider.addBuilding([x - 1.3, n - 0.4, x + 1.3, n - 0.4, x + 1.3, n + 0.4, x - 1.3, n + 0.4]);
-      continue;
-    }
-    boxAt(props, x, z, 2.0, 0.9, floor + 0.75, floor + 0.85, cloth[i]);
-    boxAt(props, x, z, 2.05, 0.95, floor + 0.35, floor + 0.75, cloth[i], 0);
-    for (let k = 0; k < 6; k++) boxAt(props, x - 0.8 + (k % 3) * 0.8, z - 0.2 + Math.floor(k / 3) * 0.4, 0.5, 0.3, floor + 0.85, floor + 0.95 + (k % 2) * 0.12, goods[(i * 2 + k) % goods.length]);
-    for (let k = 0; k < 3; k++) boxAt(props, x - 0.7 + k * 0.7, z + 0.8, 0.55, 0.4, floor, floor + 0.32 + k * 0.08, new THREE.Color(0x9a7b4f));
-    collider.addBuilding([x - 1.1, n - 0.6, x + 1.1, n - 0.6, x + 1.1, n + 1.1, x - 1.1, n + 1.1]);
-  }
-  // Néons au plafond.
-  const tubes = new MeshBuilder();
-  for (let k = -2; k <= 2; k++) for (const v of [-4.5, 0, 4.5]) boxAt(tubes, CX + k * 3.2, -(CN + v), 1.2, 0.12, top - 0.45, top - 0.3, WHITE);
-  scene.add(new THREE.Mesh(tubes.build(), new THREE.MeshBasicMaterial({ color: 0xfafff5 })));
-
-  // Deux vendeurs à parasol sur la place, à côté des entrées.
-  for (const [u, v, i] of [[-A - 3.5, 3.5, 0], [A + 3.2, -4.0, 3]] as [number, number, number][]) {
-    const [x, n] = world(u, v), z = -n, g = ground(x, z) + SURFACE;
-    boxAt(props, x, z, 1.8, 0.8, g + 0.75, g + 0.85, cloth[i]);
-    for (const [dx, dz] of [[-0.8, -0.3], [0.8, -0.3], [-0.8, 0.3], [0.8, 0.3]]) boxAt(props, x + dx, z + dz, 0.05, 0.05, g, g + 0.75, new THREE.Color(0x555555));
-    for (let k = 0; k < 4; k++) boxAt(props, x - 0.6 + k * 0.4, z, 0.3, 0.5, g + 0.85, g + 1.0, goods[(k + i) % goods.length]);
-    boxAt(props, x, z, 0.05, 0.05, g, g + 2.3, new THREE.Color(0x555555));
-    const umbrella = new THREE.Mesh(new THREE.ConeGeometry(1.5, 0.45, 8, 1, true), new THREE.MeshLambertMaterial({ color: i ? 0xf2f2ea : 0xd2382c, side: THREE.DoubleSide }));
-    umbrella.position.set(x, g + 2.45, z);
-    umbrella.castShadow = true;
-    scene.add(umbrella);
-    collider.addBuilding([x - 1.0, n - 0.5, x + 1.0, n - 0.5, x + 1.0, n + 0.5, x - 1.0, n + 0.5]);
-  }
-
-  const roofMaterial = new THREE.MeshLambertMaterial({ map: roofTiles(), side: THREE.DoubleSide });
-  const lit = (builder: MeshBuilder, material: THREE.Material, shadow = true) => {
+  const add = (builder: MeshBuilder, material: THREE.Material, shadow = true) => {
     const mesh = new THREE.Mesh(builder.build(), material);
     mesh.castShadow = shadow;
     scene.add(mesh);
+    return mesh;
   };
-  lit(shell, wallMaterial);
-  lit(roof, roofMaterial);
-  lit(base, new THREE.MeshLambertMaterial({ vertexColors: true }));
-  lit(trim, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }));
-  // Intérieur : éclairé par les néons (léger auto-éclairage), il ne reçoit pas l'ombre du toit.
-  lit(inside, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, emissive: 0x2e2a22 }), false);
-  lit(props, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, emissive: 0x1c1a16 }));
+  add(yellow, new THREE.MeshLambertMaterial({ map: plaster(), side: THREE.DoubleSide }));
+  add(trim, new THREE.MeshLambertMaterial({ vertexColors: true }));
+  add(steel, new THREE.MeshLambertMaterial({ vertexColors: true }));
+  add(rails, new THREE.MeshLambertMaterial({ map: railingTexture(), transparent: true, alphaTest: 0.4, side: THREE.DoubleSide }));
+  add(deck, new THREE.MeshLambertMaterial({ vertexColors: true })).receiveShadow = true;
+  add(inside, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, emissive: 0x2e2a22 }), false);
+  add(jerseys, jerseyMaterial, false);
+  add(neon, new THREE.MeshBasicMaterial({ color: 0xfafff5 }), false);
 
-  // --- Sol praticable : paliers, marches en pente douce pour le joueur, niveau bas partout ailleurs.
-  const innerLocal = outline(WALL * 0.5); // tout l'intérieur du trou percé dans le terrain
-  const insideLocal = (u: number, v: number) => {
-    let hit = false;
-    for (let i = 0, j = innerLocal.length - 1; i < innerLocal.length; j = i++) {
-      const [ui, vi] = innerLocal[i], [uj, vj] = innerLocal[j];
-      if ((vi > v) !== (vj > v) && u < ((uj - ui) * (v - vi)) / (vj - vi) + ui) hit = !hit;
+  // --- Sol praticable.
+  const patch = (x: number, z: number, y?: number): number | null => {
+    const n = -z;
+    if (x < X0 || x > X1 || n < N0 || n > N1) return null;
+    if (x >= SX0 && x <= SX1 && n <= stairTop) return stairBottom + ((T - stairBottom) * (n - N0)) / (stairTop - N0);
+    for (let i = 0; i < HALLS.length; i++) {
+      const h = HALLS[i];
+      if (x >= h.x0 && x <= h.x1 && n <= HALL_N1) return y !== undefined && y > T - 1.5 ? T : floors[i];
     }
-    return hit;
+    return T;
   };
-  const patch = (x: number, z: number): number | null => {
-    const u = x - CX, v = -z - CN;
-    if (Math.abs(u) > A + 0.2 || Math.abs(v) > B + 0.2) return null;
-    if (Math.abs(v) <= DOOR) {
-      for (const s of stairs) {
-        const from = s.sign * (A + 0.2), d = (u - from) * -s.sign; // distance depuis le seuil vers l'intérieur
-        if (d < 0) continue;
-        const landing = Math.abs(s.start - from), length = Math.abs(s.end - s.start);
-        if (d <= landing) return s.h;
-        if (d <= landing + length) return s.h + (floor - s.h) * (d - landing) / length;
-      }
-    }
-    return insideLocal(u, v) ? floor : null;
-  };
-  return {
-    ground: patch,
-    inside: (x, n) => Math.abs(x - CX) < A + 1.5 && Math.abs(n - CN) < B + 1.5,
-  };
+  return { ground: patch, inside: (x, n) => x > X0 - 1.5 && x < X1 + 1.5 && n > N0 - 1 && n < N1 + 1 };
 }

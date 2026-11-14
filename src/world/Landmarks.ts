@@ -388,7 +388,7 @@ function buildSeybouse(scene: THREE.Scene, ground: Ground, collider: Collider): 
 
 /** Ce que les lieux modélisés changent au reste du monde : sol praticable en contrebas, arbres retirés ou ajoutés. */
 export interface LandmarkEdits {
-  ground: (x: number, z: number) => number | null;
+  ground: (x: number, z: number, y?: number) => number | null;
   keepTree: (x: number, n: number) => boolean;
   /** Arbres ajoutés : [espèce, x, n, taille]. */
   trees: [string, number, number, number][];
@@ -405,7 +405,7 @@ export function buildLandmarks(scene: THREE.Scene, data: WorldData, ground: Grou
   buildPitchLines(scene, data, ground);
   const theatre = buildTheatre(scene, data, ground, collider);
   return {
-    ground: (x, z) => sousTerrain.ground(x, z) ?? theatre?.ground(x, z) ?? null,
+    ground: (x, z, y) => sousTerrain.ground(x, z, y) ?? theatre?.ground(x, z) ?? null,
     keepTree: (x, n) => grounds.keepTree(x, n) && !sousTerrain.inside(x, n) && (theatre?.keepTree(x, n) ?? true),
     trees: [...grounds.palms.map(([x, n, s]): [string, number, number, number] => ['palm', x, n, s]), ...(theatre?.extra ?? [])],
     labels: theatre ? [{ name: THEATRE_NAME, x: 100, n: 473, radius: 45 }] : [],

@@ -567,7 +567,7 @@ export class Car {
     const rx = -fz, rz = fx; // vecteur "à droite" de la voiture
     for (const l of [this.halfLength, 0, -this.halfLength]) {
       for (const w of [this.halfWidth, -this.halfWidth]) {
-        if (collider.inside(x + fx * l + rx * w, z + fz * l + rz * w)) return true;
+        if (collider.inside(x + fx * l + rx * w, z + fz * l + rz * w, this.object.position.y + 0.5)) return true;
       }
     }
     return false;

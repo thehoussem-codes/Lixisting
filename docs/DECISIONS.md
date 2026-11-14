@@ -272,12 +272,8 @@ Skills chargés : `physics-tuning`, `game-ai`, `audio-design`, `threejs-material
 
 ## Sous-Terrain de la place (ex-église Sainte-Monique) et abords du Sheraton
 
-- **Sous-Terrain** (`src/world/SousTerrain.ts`) : sur la place vide au nord du carrefour Zighout Youcef / Victor Hugo,
-  un édifice jaune de 18 × 20 m à pans coupés et angle arrondi (côté Cours), toit en croupe de tuiles rouges (vu sur
-  le satellite). Deux portes, à l'ouest et à l'est, donnent sur un palier puis un escalier qui descend vers une
-  halle commerçante 1,9 m sous le point bas de la place (plus profonde côté nord, la place montant vers le nord) :
-  boutiques à rideau métallique et enseignes bilingues, étals de vendeurs, néons. Deux vendeurs à parasol dehors.
-  Taille et position : satellite. Intérieur, enseignes et boutiques : **reconstitution** (aucune photo intérieure).
+- **Sous-Terrain** : la première version (petit édifice octogonal au milieu de la place) est remplacée, voir
+  « Complexe commercial surélevé » plus bas.
 - **Terrain percé** : `Terrain.cutHole()` découpe exactement le maillage du relief selon un polygone convexe, et le
   jeu remplace la hauteur du sol par celle des paliers, des marches et de la halle (`LandmarkEdits.ground`).
 - **Abords du Sheraton** (`src/world/SheratonGrounds.ts`, le modèle de l'hôtel n'est pas changé) : clôture muret
@@ -305,3 +301,22 @@ Skills chargés : `physics-tuning`, `game-ai`, `audio-design`, `threejs-material
 - Ficus : tronc chaulé au pied avec la même limite irrégulière que les palmiers (texture dédiée, écorce lisse).
   Appliqué à tous les ficus d'alignement, pour que les arbres de rue soient cohérents dans toute la ville.
 - Hauteurs estimées à vue sur les photos : façade 18 m, corps 13 m, pyramide 20,5 m.
+
+## Complexe commercial surélevé du Cours (remplace le petit Sous-Terrain octogonal)
+
+- `src/world/SousTerrain.ts`, d'après l'image de conception de Houssem, adaptée à la place réelle : toute la place
+  vide entre le boulevard Zighout Youcef, la rue du 24 Février et le chemin des Caroubiers (38 × 51 m), trottoirs et
+  chaussées conservés, circulation non bloquée.
+- Socle jaune (même jaune que le précédent modèle) portant une esplanade dallée à 4,2 m au-dessus du trottoir le
+  plus haut ; garde-corps en fer forgé à volutes et lampadaires à trois globes ; grand bâtiment jaune aveugle au fond
+  (35 × 21 m, 8,5 m au-dessus de l'esplanade, pilastres, soubassement, corniche, sans fenêtres).
+- Grand escalier central de 16 m de large depuis le trottoir, trois volées séparées par des rampes noires ; le
+  lampadaire générique qui tombait au pied de l'escalier est retiré.
+- De chaque côté de l'escalier, une entrée sous l'esplanade mène à une galerie semi-enterrée (sol au niveau du
+  trottoir, l'esplanade au-dessus) : boutiques de vêtements et de maillots de football (dessins génériques, aucun
+  écusson ni marque réels), enseignes bilingues, portants, étal de vendeur, néons.
+- Mur de gauche (côté boulevard Zighout Youcef) : fresque de street art dessinée par programme (lettres bulles
+  ANNABA, BÔNE, 23, HIP HOP, personnages, tags, coulures).
+- Deux niveaux superposés : les obstacles ont maintenant une plage de hauteur (`Collider.addBuilding(points, yMin,
+  yMax)`) et le sol tient compte de la hauteur du joueur, pour qu'on circule sur l'esplanade au-dessus des galeries
+  et dans les galeries en dessous.

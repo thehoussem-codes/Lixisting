@@ -28,7 +28,7 @@ function limb(w: number, h: number, d: number, color: number): THREE.Group {
 }
 
 /** Tout ce qui peut bloquer le personnage (bâtiments, voitures...). */
-export interface Obstacles { blocked(x: number, z: number, radius: number): boolean }
+export interface Obstacles { blocked(x: number, z: number, radius: number, y?: number): boolean }
 
 /** Personnage provisoire en blocs, animé par code (marche, course, saut). */
 export class Player {
@@ -329,11 +329,11 @@ export class Player {
       this.move.set(-sin * forward + cos * right, 0, -cos * forward - sin * right).normalize();
       const dx = this.move.x * speed * dt, dz = this.move.z * speed * dt;
       // Collision : on essaie le déplacement complet, sinon on glisse le long du mur.
-      if (!collider || !collider.blocked(position.x + dx, position.z + dz, RADIUS)) {
+      if (!collider || !collider.blocked(position.x + dx, position.z + dz, RADIUS, position.y + 0.6)) {
         position.x += dx; position.z += dz;
-      } else if (!collider.blocked(position.x + dx, position.z, RADIUS)) {
+      } else if (!collider.blocked(position.x + dx, position.z, RADIUS, position.y + 0.6)) {
         position.x += dx;
-      } else if (!collider.blocked(position.x, position.z + dz, RADIUS)) {
+      } else if (!collider.blocked(position.x, position.z + dz, RADIUS, position.y + 0.6)) {
         position.z += dz;
       }
       // Le personnage se tourne progressivement vers sa direction de marche.

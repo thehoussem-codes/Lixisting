@@ -86,8 +86,8 @@ export class Game {
   private driving: Car | null = null;
   /** Ce qui bloque le personnage à pied : bâtiments et voitures. */
   private obstacles = {
-    blocked: (x: number, z: number, radius: number): boolean =>
-      (this.collider?.blocked(x, z, radius) ?? false) || this.allCars().some((car) => car.contains(x, z, radius)),
+    blocked: (x: number, z: number, radius: number, y?: number): boolean =>
+      (this.collider?.blocked(x, z, radius, y) ?? false) || this.allCars().some((car) => car.contains(x, z, radius)),
   };
   private frameId = 0;
   private disposed = false;
@@ -120,6 +120,7 @@ export class Game {
     (window as unknown as Record<string, unknown>).lixitingTraffic = () => this.traffic?.snapshot() ?? [];
     (window as unknown as Record<string, unknown>).lixitingBoats = () => this.harbor?.census() ?? {};
     (window as unknown as Record<string, unknown>).lixitingGround = (x: number, n: number) => this.ground(x, -n);
+    (window as unknown as Record<string, unknown>).lixitingBlocked = (x: number, n: number, y?: number) => this.collider?.inside(x, -n, y);
     (window as unknown as Record<string, unknown>).lixitingDebug = () => ({
       traffic: this.traffic?.cars.filter((c) => c.object.visible).length ?? 0,
       nearestTraffic: Math.min(...(this.traffic?.cars ?? []).map((c) => c.object.position.distanceTo(this.player.object.position))),
@@ -194,7 +195,8 @@ export class Game {
       this.water = world.water;
       // Passage souterrain : sol en contrebas (paliers, marches, niveau commerçant) au lieu du terrain.
       const terrainGround = this.ground, patch = world.edits.ground;
-      this.ground = (x, z) => patch(x, z) ?? terrainGround(x, z);
+      // La hauteur actuelle du joueur départage les lieux à deux niveaux (esplanade au-dessus des galeries).
+      this.ground = (x, z) => patch(x, z, this.player?.object.position.y) ?? terrainGround(x, z);
       // Végétation : arbres retirés des lieux réaménagés, palmiers alignés ajoutés (abords du Sheraton).
       for (const [species, values] of Object.entries(trees)) {
         if (species === 'wall' || !Array.isArray(values)) continue;

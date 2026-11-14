@@ -5,13 +5,17 @@
  */
 const CELL = 40;
 
-interface Footprint { minX: number; maxX: number; minZ: number; maxZ: number; points: Float32Array }
+interface Footprint { minX: number; maxX: number; minZ: number; maxZ: number; points: Float32Array; yMin: number; yMax: number }
 
 export class Collider {
   private grid = new Map<string, Footprint[]>();
 
-  /** points : x, n, x, n... (comme dans le fichier de carte). */
-  addBuilding(points: number[]): void {
+  /**
+   * points : x, n, x, n... (comme dans le fichier de carte).
+   * yMin / yMax (facultatifs) : l'obstacle ne bloque qu'entre ces hauteurs, pour les lieux à deux niveaux
+   * (galerie sous une esplanade). Sans hauteur précisée par l'appelant, tous les obstacles comptent.
+   */
+  addBuilding(points: number[], yMin = -Infinity, yMax = Infinity): void {
     const count = points.length / 2;
     const xz = new Float32Array(points.length);
     let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
@@ -21,7 +25,7 @@ export class Collider {
       minX = Math.min(minX, x); maxX = Math.max(maxX, x);
       minZ = Math.min(minZ, z); maxZ = Math.max(maxZ, z);
     }
-    const footprint: Footprint = { minX, maxX, minZ, maxZ, points: xz };
+    const footprint: Footprint = { minX, maxX, minZ, maxZ, points: xz, yMin, yMax };
     for (let cx = Math.floor(minX / CELL); cx <= Math.floor(maxX / CELL); cx++) {
       for (let cz = Math.floor(minZ / CELL); cz <= Math.floor(maxZ / CELL); cz++) {
         const key = `${cx},${cz}`;
@@ -31,11 +35,12 @@ export class Collider {
     }
   }
 
-  inside(x: number, z: number): boolean {
+  inside(x: number, z: number, y?: number): boolean {
     const cell = this.grid.get(`${Math.floor(x / CELL)},${Math.floor(z / CELL)}`);
     if (!cell) return false;
     for (const f of cell) {
       if (x < f.minX || x > f.maxX || z < f.minZ || z > f.maxZ) continue;
+      if (y !== undefined && (y < f.yMin || y > f.yMax)) continue;
       const p = f.points;
       let hit = false;
       for (let i = 0, j = p.length - 2; i < p.length; j = i, i += 2) {
@@ -48,8 +53,8 @@ export class Collider {
   }
 
   /** Un disque (le joueur) touche-t-il un bâtiment ? */
-  blocked(x: number, z: number, radius: number): boolean {
-    return this.inside(x, z) || this.inside(x + radius, z) || this.inside(x - radius, z) ||
-           this.inside(x, z + radius) || this.inside(x, z - radius);
+  blocked(x: number, z: number, radius: number, y?: number): boolean {
+    return this.inside(x, z, y) || this.inside(x + radius, z, y) || this.inside(x - radius, z, y) ||
+           this.inside(x, z + radius, y) || this.inside(x, z - radius, y);
   }
 }
