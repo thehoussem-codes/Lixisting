@@ -91,6 +91,20 @@ try {
   await pdf.saveAs(`${CAP}/observation.pdf`);
   console.log('   PDF', statSync(`${CAP}/observation.pdf`).size, 'octets');
 
+  step('Modification manuelle d’un paragraphe');
+  const sec = page.locator('#sec-motif');
+  await sec.getByRole('button', { name: 'Modifier' }).click();
+  await sec.locator('textarea').fill('Le patient est hospitalisé pour une douleur thoracique constrictive avec sueurs (texte corrigé).');
+  await sec.getByRole('button', { name: 'Enregistrer le texte' }).click();
+  await sec.getByText('modifié manuellement').waitFor();
+  if (!(await page.locator('.preview').innerText()).includes('texte corrigé')) throw new Error('Texte modifié absent de l’aperçu');
+
+  step('Enregistrement comme modèle');
+  await page.getByRole('button', { name: 'Modèle' }).click();
+  await page.locator('.modal input').first().fill('Douleur thoracique — démo');
+  await page.locator('.modal').getByRole('button', { name: 'Enregistrer' }).click();
+  await page.getByText('Modèle enregistré').waitFor();
+
   step('Validation finale');
   await page.getByRole('main').getByRole('button', { name: 'Valider', exact: true }).click();
   await page.getByText('Validation finale de l’observation').waitFor();

@@ -25,3 +25,8 @@ npm run dev     # démarre le jeu, puis ouvrir l'adresse affichée
 | `docs` | Journal des décisions |
 
 Voir `docs/DECISIONS.md` pour les choix techniques et l'avancement.
+
+## Autre projet du dépôt
+
+`observations-medicales/` : application de rédaction d’observations médicales structurées
+(indépendante du jeu ; voir son propre [README](observations-medicales/README.md)).

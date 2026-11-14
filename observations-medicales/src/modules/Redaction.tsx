@@ -12,6 +12,23 @@ import { empreinte } from '../engine/fr.ts';
 import { exportPDF, exportTexte, exportWord, enteteTexte, type ExportMeta } from '../export/exports.ts';
 import { DocNodeView, DocView, ModuleHeader } from './common.tsx';
 import { ValidationDialog } from './Validation.tsx';
+import { EditeurModele } from '../pages/Admin.tsx';
+import type { Observation, TemplateContent } from '../../shared/types.ts';
+
+/** Extrait la structure réutilisable d'une observation (jamais les constatations cliniques). */
+function structureModele(o: Observation): TemplateContent {
+  return {
+    motif: { principal: o.motif.principal, caractere: o.motif.caractere },
+    service: o.admission.service || undefined,
+    symptomes: o.hdm.symptomes.map((s) => ({ type: s.type, principal: s.principal, libelle: s.libelle })),
+    appareilsNonPertinents: Object.entries(o.appareils).filter(([, a]) => a.statut === 'na').map(([k]) => k),
+    scores: Object.entries(o.scores).filter(([, v]) => v.inclure).map(([k]) => k),
+    examensDemandes: o.cat.examensDemandes,
+    surveillance: o.cat.surveillance,
+    mesures: o.cat.mesures,
+    differentiels: o.discussion.differentiels.map((d) => d.diagnostic).filter(Boolean),
+  };
+}
 import { ageLabel, fmtDate } from '../engine/calc.ts';
 
 export const FORMATS: { id: FormatObs; l: string; d: string }[] = [
@@ -37,6 +54,7 @@ export function Redaction() {
   const [valider, setValider] = useState(false);
   const [exportAsk, setExportAsk] = useState<null | 'pdf' | 'word' | 'print'>(null);
   const [printing, setPrinting] = useState(false);
+  const [modele, setModele] = useState(false);
   const doc = useMemo(() => generate(data, format), [data, format]);
   const meta: ExportMeta = { obs: { ...st.full, data }, prefs, auteur: session.user.nom };
   useEffect(() => { try { sessionStorage.setItem('obs-format', format); } catch { /* ignoré */ } }, [format]);
@@ -77,6 +95,7 @@ export function Redaction() {
     <div className="stack">
       <ModuleHeader title="Rédaction et export" desc="Observation générée automatiquement à partir des données saisies. Chaque paragraphe peut être vérifié et corrigé ; une validation finale précède l’export définitif.">
         <div className="row">
+          {!readOnly && <button className="btn" onClick={() => setModele(true)} title="Enregistrer la structure de cette observation comme modèle réutilisable"><Icon name="template" />Modèle</button>}
           <button className="btn" onClick={copier}><Icon name="copy" />Copier</button>
           <button className="btn" onClick={() => demander('print')}><Icon name="print" />Imprimer</button>
           <button className="btn" onClick={() => demander('word')}><Icon name="doc" />Word</button>
@@ -92,11 +111,11 @@ export function Redaction() {
 
       <div className="card">
         <div className="card-b">
-          <div className="row">
-            <div className="tabs" style={{ marginBottom: 0, borderBottom: 0, flex: 1 }}>
+          <div className="col">
+            <div className="tabs" style={{ marginBottom: 0 }}>
               {FORMATS.map((f) => <button key={f.id} className={format === f.id ? 'on' : ''} onClick={() => setFormat(f.id)} title={f.d}>{f.l}</button>)}
             </div>
-            <div className="seg">
+            <div className="seg" style={{ alignSelf: 'flex-start' }}>
               <button className={mode === 'edition' ? 'on' : ''} onClick={() => setMode('edition')}>Vérification</button>
               <button className={mode === 'apercu' ? 'on' : ''} onClick={() => setMode('apercu')}>Aperçu du document</button>
             </div>
@@ -117,6 +136,7 @@ export function Redaction() {
       )}
 
       {valider && <ValidationDialog onClose={() => setValider(false)} />}
+      {modele && <EditeurModele onClose={() => setModele(false)} onDone={() => { setModele(false); toast('Modèle enregistré (structure uniquement, sans constatation clinique).'); }} initial={structureModele(data)} />}
       {exportAsk && (
         <Modal title="Observation non validée" onClose={() => setExportAsk(null)} footer={<>
           <button className="btn" onClick={() => setExportAsk(null)}>Annuler</button>

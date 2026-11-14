@@ -236,7 +236,7 @@ table.tbl tr.flag-haut td.val input, table.tbl tr.flag-bas td.val input { font-w
 .progress.ok > span { background: var(--ok); }
 .progress.warn > span { background: var(--warning); }
 .ring { --v: 0; width: 34px; height: 34px; border-radius: 50%; background: conic-gradient(var(--primary) calc(var(--v) * 1%), var(--surface-3) 0); display: grid; place-items: center; font-size: 10px; font-weight: 700; flex-shrink: 0; }
-.ring::before { content: attr(data-v); width: 26px; height: 26px; border-radius: 50%; background: var(--surface); display: grid; place-items: center; }
+.ring::before { content: attr(data-v); width: calc(100% - 8px); height: calc(100% - 8px); border-radius: 50%; background: var(--surface); display: grid; place-items: center; }
 
 /* ------------------------------------------------------------------ */
 /* Mise en page                                                         */
