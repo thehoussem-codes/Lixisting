@@ -37,6 +37,9 @@ MAX_GRADE = 0.035                          # pente maximale d'une rue taillée (
 WALLS = []                                 # murs de soutènement produits : x0, n0, x1, n1, bas0, haut0, bas1, haut1
 
 CLIFF_RUN = 7.0      # même chose au pied d'une côte rocheuse ou d'un quai
+# Ports : le bord de l'eau est un quai vertical, même bas (sinon le fond marin remonte en plage et affleure
+# dans les bassins). Cercles (x, n, rayon) : port de pêche (36.90375, 7.77451) et port de commerce.
+HARBOURS = [(1392.0, 920.0, 380.0), (700.0, -250.0, 900.0)]
 
 COLORS = {  # couleurs du sol (rouge, vert, bleu de 0 à 1)
     "land": (0.74, 0.69, 0.53), "beach": (0.93, 0.85, 0.63), "wood": (0.24, 0.48, 0.23),
@@ -238,6 +241,8 @@ def main():
     index_list = [triangles]
     offset = len(points)
     start = 0
+    beach_rings = [densify(pairs(a["p"]), 10) for a in world["areas"] if a["k"] == "beach"]
+    beach_tree = cKDTree(np.vstack(beach_rings)) if beach_rings else None
     for ring in coast:
         count = len(ring)
         top = np.arange(start, start + count)
@@ -249,6 +254,12 @@ def main():
         outward = np.column_stack([tangent[:, 1], -tangent[:, 0]]) * (1 if doubled > 0 else -1)
         ring_heights = heights[start:start + count]
         run = np.where(ring_heights < 2.5, SHORE_RUN, CLIFF_RUN)
+        in_port = np.zeros(count, dtype=bool)
+        for hx, hn, hr in HARBOURS:
+            in_port |= np.hypot(ring[:, 0] - hx, ring[:, 1] - hn) < hr
+        if beach_tree is not None:
+            in_port &= beach_tree.query(ring)[0] > 25   # une vraie plage dans un port reste une plage
+        run[in_port] = CLIFF_RUN * 0.5
         # Sur le bord de la carte (qui n'est pas une vraie côte), le mur reste vertical.
         on_edge = (np.abs(ring[:, 0] - x0) < 1) | (np.abs(ring[:, 0] - x1) < 1) | (np.abs(ring[:, 1] - n0) < 1) | (np.abs(ring[:, 1] - n1) < 1)
         run[on_edge] = 0

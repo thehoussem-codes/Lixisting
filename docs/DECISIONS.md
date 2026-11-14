@@ -239,3 +239,22 @@ Skills chargés : `physics-tuning`, `game-ai`, `audio-design`, `threejs-material
 - **Squares voisins** (place du théâtre) : pelouses plantées sobrement de palmiers isolés, d'araucarias (nouvelle
   espèce) et de massifs bas, comme sur les photos.
 
+## 14 novembre 2026 (2 h 40) — Port de pêche et de plaisance
+
+- **Bateaux** (src/world/Harbor.ts) : quatre familles modélisées d'après les photos du port — hors-bord (4 variantes
+  de couleurs, majoritaires), barque de pêche traditionnelle, sardinier (lamparo : timonerie arrière, mât à lampes,
+  filets), chalutier (coque bleue à pavois blanc, timonerie avant, portique arrière). Tailles variées (± 15 %).
+- **Placement** : amarrés côte à côte, poupe au quai, le long du vrai trait de côte, uniquement dans les bassins
+  abrités (la terre est proche dans au moins 10 directions sur 12) et hors des plages. Résultat : 162 bateaux
+  (122 hors-bord, 22 barques, 13 sardiniers, 5 chalutiers).
+- **Flottaison** : la houle est une onde qui traverse le bassin, donc deux bateaux voisins bougent presque
+  ensemble ; un grand bateau monte, roule et tangue moins et plus lentement qu'un petit ; légère rotation sur les
+  amarres. Amplitudes : 9 cm et 3° pour un hors-bord, environ moitié moins pour un chalutier.
+- **Performance** : un tracé par modèle (InstancedMesh), soit 16 appels de dessin pour tout le port ; rien n'est
+  animé ni affiché à plus de 1,3 km.
+- **Conduite à venir** : chaque bateau est un objet `Boat` avec son gabarit, sa vitesse maximale et sa vitesse de
+  giration ; `moored = false` le sortira du balancement pour le confier à un pilote.
+- **Quais** : dans les ports (cercles `HARBOURS` de tools/build_terrain.py), le bord de l'eau devient un quai
+  vertical au lieu d'une pente de plage : le fond marin ne remonte plus dans les bassins (avant, du sable
+  affleurait sous l'eau le long des quais). Les vraies plages ne sont pas touchées.
+

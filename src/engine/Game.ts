@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { Sound } from './Sound';
+import { Harbor } from '../world/Harbor';
 import { Input } from './Input';
 import { Player } from '../player/Player';
 import { ThirdPersonCamera } from '../player/ThirdPersonCamera';
@@ -59,6 +60,8 @@ export class Game {
   private cars: Car[] = [];
   private map: MapView | null = null;
   private traffic: Traffic | null = null;
+  /** Port de pêche et de plaisance (bateaux amarrés qui flottent). */
+  private harbor: Harbor | null = null;
   private lights: TrafficLights | null = null;
   private sky: THREE.Mesh | null = null;
   private water: Water | null = null;
@@ -114,6 +117,8 @@ export class Game {
     };
     // Petit accès de diagnostic, utilisé par les vérifications automatiques.
     (window as unknown as Record<string, unknown>).lixitingTraffic = () => this.traffic?.snapshot() ?? [];
+    (window as unknown as Record<string, unknown>).lixitingBoats = () => this.harbor?.census() ?? {};
+    (window as unknown as Record<string, unknown>).lixitingGround = (x: number, n: number) => this.ground(x, -n);
     (window as unknown as Record<string, unknown>).lixitingDebug = () => ({
       traffic: this.traffic?.cars.filter((c) => c.object.visible).length ?? 0,
       nearestTraffic: Math.min(...(this.traffic?.cars ?? []).map((c) => c.object.position.distanceTo(this.player.object.position))),
@@ -186,6 +191,8 @@ export class Game {
       this.collider = world.collider;
       this.sky = world.sky;
       this.water = world.water;
+      // Port de pêche d'Annaba (36.90375, 7.77451) : bassin abrité par les jetées, rayon 330 m.
+      this.harbor = new Harbor(this.scene, data, 1392, 920, 330, this.ground);
       const treeCount = buildTrees(this.scene, trees, terrain.heightAt);
       buildWalls(this.scene, trees.wall, this.collider);
       Locations.load(data).then((locations) => { this.locations = locations; });
@@ -416,6 +423,7 @@ export class Game {
     }
     this.time += dt;
     this.water?.update(this.time, this.camera.position);
+    this.harbor?.update(this.time, this.camera.position);
     // Résolution automatique : on allège le calcul si le jeu rame, on le raffine s'il a de la marge.
     this.scaleTimer -= elapsed;
     if (AUTO_SCALE && this.scaleTimer <= 0) {
