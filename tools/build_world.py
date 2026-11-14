@@ -294,8 +294,9 @@ def main():
     gare = next(w for w in ways if w.get("tags", {}).get("building") == "train_station")
     g = [node_ll[n] for n in gare["nodes"]]
     lat0, lon0 = sum(p[0] for p in g) / len(g), sum(p[1] for p in g) / len(g)
-    south, west, north, east = 36.880, 7.730, 36.980, 7.800
-    project = Projection(lat0, lon0, (south + north) / 2)
+    south, west, north, east = 36.845, 7.685, 36.980, 7.815  # toute la ville (voir extract_osm.py)
+    # Latitude de référence FIXE (celle de la première zone) : les lieux modélisés à la main gardent leurs coordonnées.
+    project = Projection(lat0, lon0, 36.93)
     xy = {i: project(*ll) for i, ll in node_ll.items()}
     rx0, ry0 = project(south, west)
     rx1, ry1 = project(north, east)
