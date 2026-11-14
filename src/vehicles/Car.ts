@@ -448,6 +448,14 @@ export class Car {
     // Plus on roule vite, moins les roues braquent (sinon la voiture est incontrôlable).
     const steerAngle = steer * MAX_STEER / (1 + Math.abs(this.speed) / 12);
     this.steerAngle = steerAngle;
+    // Sous-pas : on n'avance jamais de plus de 50 cm d'un coup, sinon une voiture très rapide (ou une image lente)
+    // saute par-dessus un mur ou une autre voiture au lieu de la percuter (skill physics-tuning : effet tunnel).
+    const steps = Math.min(40, Math.max(1, Math.ceil(Math.abs(this.speed) * dt / 0.5)));
+    for (let i = 0; i < steps; i++) if (!this.step(dt / steps, steerAngle, collider, others)) return;
+  }
+
+  /** Un pas de déplacement ; false si la voiture a heurté quelque chose. */
+  private step(dt: number, steerAngle: number, collider: Collider | null, others: Car[]): boolean {
     const heading = this.heading - (this.speed / this.wheelbase) * Math.tan(steerAngle) * dt;
     const fx = Math.sin(heading), fz = Math.cos(heading);
     const position = this.object.position;
@@ -459,12 +467,13 @@ export class Car {
       // La voiture percutée est poussée dans le sens du choc.
       if (other) other.shove(this.speed * 0.5 * Math.cos(other.heading - heading));
       this.speed *= -0.3; // choc : la voiture rebondit légèrement
-      return;
+      return false;
     }
     position.x = x;
     position.z = z;
     this.heading = heading;
     this.object.rotation.y = heading;
+    return true;
   }
 
   private hitCar(others: Car[], x: number, z: number, heading: number): Car | null {
