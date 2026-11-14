@@ -362,3 +362,15 @@ Skills chargés : `physics-tuning`, `game-ai`, `audio-design`, `threejs-material
   pas dans OSM restent à faire lieu par lieu d'après des vues satellite.
 - `locations.json` (fiches de lieux) reconstruit sur la nouvelle emprise.
 - Non traité dans cette étape : la passe « netteté des arêtes et surfaces » (section 4 de la demande).
+
+## Forêts, troncs, lissage général (retour de Houssem)
+
+- **Forêts** : tout terrain naturel (à plus de 45 m des bâtiments, hors plages / terrains / parkings / parcs) est
+  boisé, un arbre pour 150 m² : pins de forêt et chênes (modèles allégés), cyprès, buissons ; bois OSM 1 pour 80 m².
+  437 000 plantes au total, construites au fur et à mesure autour du joueur. Sol naturel vert sombre, pour que les
+  collines lointaines (au-delà des 520 m d'affichage des arbres) se lisent comme boisées. Emplacements tirés au
+  hasard (décor plausible) ; la plaine agricole du sud est boisée aussi, à corriger si besoin.
+- **Tronc chaulé** seulement à moins de 12 m d'une rue (ficus et palmiers d'alignement) ; tronc nu ailleurs.
+- **Lissage** : angles des bâtiments arrondis (`roundCorners` dans Buildings.ts : coins de 35° à 145° entre deux murs
+  d'au moins 5 m, rayon ≈ 1,2 m), textures filtrées (plus de gros pixels), anticrénelage activé.
+  Coût à surveiller sur l'Intel UHD 630 : l'anticrénelage et les forêts ; la résolution automatique compense.

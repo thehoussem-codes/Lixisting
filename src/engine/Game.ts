@@ -47,7 +47,8 @@ export interface GameEvents {
 
 /** Le moteur : crée la scène, fait tourner la boucle de jeu, nettoie à la fin. */
 export class Game {
-  private renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
+  private renderer = new THREE.WebGLRenderer({ antialias: true, // arêtes lissées
+    powerPreference: 'high-performance' });
   private scene = new THREE.Scene();
   private camera = new THREE.PerspectiveCamera(60, 1, 0.5, 7000);
   private clock = new THREE.Clock();

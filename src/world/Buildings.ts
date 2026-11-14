@@ -34,6 +34,38 @@ function wallQuad(b: MeshBuilder, ax: number, az: number, bx: number, bz: number
   b.triangle(a, c, d); b.triangle(a, d, e);
 }
 
+/**
+ * Adoucit les angles d'une emprise : un coin entre deux murs d'au moins 5 m, tournant de 35° à 145°, devient un
+ * arrondi de trois segments (rayon ≈ 1,2 m). Renvoie le nouveau contour et, pour chaque segment, le rang du mur
+ * d'origine (-1 pour un segment d'arrondi) : commerces et balcons restent attachés aux bons murs.
+ */
+function roundCorners(p: number[]): { points: number[]; wall: number[] } {
+  const n = p.length / 2;
+  const points: number[] = [], wall: number[] = [];
+  const cut: number[] = [];
+  for (let i = 0; i < n; i++) {
+    const h = (i + n - 1) % n, j = (i + 1) % n;
+    const inX = p[i * 2] - p[h * 2], inN = p[i * 2 + 1] - p[h * 2 + 1], outX = p[j * 2] - p[i * 2], outN = p[j * 2 + 1] - p[i * 2 + 1];
+    const a = Math.hypot(inX, inN), b = Math.hypot(outX, outN);
+    const turn = Math.abs(Math.atan2(inX * outN - inN * outX, inX * outX + inN * outN));
+    cut.push(n >= 3 && a >= 5 && b >= 5 && turn > 0.61 && turn < 2.53 ? Math.min(1.2, a * 0.22, b * 0.22) : 0);
+  }
+  for (let i = 0; i < n; i++) {
+    const h = (i + n - 1) % n, j = (i + 1) % n;
+    const x = p[i * 2], y = p[i * 2 + 1], d = cut[i];
+    if (d === 0) { points.push(x, y); wall.push(i); continue; }
+    const a = Math.hypot(x - p[h * 2], y - p[h * 2 + 1]), b = Math.hypot(p[j * 2] - x, p[j * 2 + 1] - y);
+    const sx = x - ((x - p[h * 2]) / a) * d, sy = y - ((y - p[h * 2 + 1]) / a) * d;
+    const ex = x + ((p[j * 2] - x) / b) * d, ey = y + ((p[j * 2 + 1] - y) / b) * d;
+    for (let k = 0; k <= 3; k++) { // courbe de Bézier du 2e degré, le coin d'origine pour point de contrôle
+      const t = k / 3, u = 1 - t;
+      points.push(u * u * sx + 2 * u * t * x + t * t * ex, u * u * sy + 2 * u * t * y + t * t * ey);
+      wall.push(k < 3 ? -1 : i);
+    }
+  }
+  return { points, wall };
+}
+
 const ROOF_EDGE = new THREE.Color(0xbdb6a6), TANK_LEG = new THREE.Color(0x77736b), TANK_BLUE = new THREE.Color(0x3f6fae), TANK_GREY = new THREE.Color(0xc9c9c4), DISH = new THREE.Color(0xeeeeea);
 const SLAB = new THREE.Color(0xd9d4c6), WHITE = new THREE.Color(0xffffff);
 type Point = [number, number, number];
@@ -216,13 +248,21 @@ export function buildBuildings(scene: THREE.Scene, data: WorldData, ground: (x: 
     const upperFrom = hasGround ? base + GROUND_FLOOR : base;
     const floors = Math.max(1, Math.round((top - upperFrom) / FLOOR_HEIGHT));
     const upper = builderIn(walls, `${look.style}|${cell}`);
+    const plain = builderIn(roofs, cell); // murs unis (couleur seule), dans le même maillage que les toits
 
-    for (let i = 0; i < count; i++) {
-      const j = (i + 1) % count;
-      const ax = p[i * 2], az = -p[i * 2 + 1], bx = p[j * 2], bz = -p[j * 2 + 1];
+    // Angles adoucis : chaque coin franc est remplacé par un petit arrondi (murs unis, sans fenêtre).
+    const soft = roundCorners(p);
+    const q = soft.points, qCount = q.length / 2;
+    for (let k = 0; k < qCount; k++) {
+      const j = (k + 1) % qCount, i = soft.wall[k];
+      const ax = q[k * 2], az = -q[k * 2 + 1], bx = q[j * 2], bz = -q[j * 2 + 1];
       const length = Math.hypot(bx - ax, bz - az);
       // Soubassement uni, du point bas du terrain jusqu'au niveau du rez-de-chaussée.
       wallQuad(upper, ax, az, bx, bz, low - 1, base, wall, 0.6, 0.7, 0, 0, 0);
+      if (i < 0) { // segment d'arrondi : mur uni sur toute la hauteur
+        wallQuad(plain, ax, az, bx, bz, base, top, wall, hasGround ? 0.86 : 0.75, 1, 0, 0, 0);
+        continue;
+      }
       if (hasGround) {
         // Commerces seulement sur les murs qui donnent sur une grande rue ; entrées ailleurs.
         const groundStyle: FacadeStyle = colonial ? (shopWalls.has(i) ? 'arcade' : 'ground') : shopWalls.has(i) ? 'shop' : 'ground';
@@ -273,13 +313,13 @@ export function buildBuildings(scene: THREE.Scene, data: WorldData, ground: (x: 
     if (building.t === 'house') {
       // Toit de tuiles à pentes : chaque mur rejoint le faîte au centre.
       const apex = roof.vertex(cx, top + 1.9, cz, roofColor, 1.05);
-      for (let i = 0; i < count; i++) {
-        const j = (i + 1) % count;
-        roof.triangle(roof.vertex(p[i * 2], top, -p[i * 2 + 1], roofColor, 0.82), roof.vertex(p[j * 2], top, -p[j * 2 + 1], roofColor, 0.82), apex);
+      for (let i = 0; i < qCount; i++) {
+        const j = (i + 1) % qCount;
+        roof.triangle(roof.vertex(q[i * 2], top, -q[i * 2 + 1], roofColor, 0.82), roof.vertex(q[j * 2], top, -q[j * 2 + 1], roofColor, 0.82), apex);
       }
     } else {
       // Toit plat ; les murs dépassent pour former l'acrotère.
-      roof.flatPolygon(p, building.t === 'industrial' ? top : top - PARAPET, roofColor);
+      roof.flatPolygon(q, building.t === 'industrial' ? top : top - PARAPET, roofColor);
     }
 
     // Toits-terrasses habités : édicule d'escalier, citernes d'eau et paraboles, comme sur les toits d'Annaba.

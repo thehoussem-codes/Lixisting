@@ -230,9 +230,9 @@ def main():
     # (Les photos d'Annaba montrent des collines couvertes de maquis, pas du sable.)
     built = cKDTree(np.vstack([pairs(b["p"]) for b in world["buildings"]]))
     away = built.query(points)[0]
-    town, edge, wild = np.array([0.60, 0.58, 0.54]), np.array([0.62, 0.60, 0.44]), np.array([0.40, 0.52, 0.29])
+    town, edge, wild = np.array([0.60, 0.58, 0.54]), np.array([0.50, 0.55, 0.33]), np.array([0.27, 0.43, 0.20])  # sous-bois vert sombre
     t1 = np.clip((away - 30) / 40, 0, 1)[:, None]     # 30 à 70 m des bâtiments : ville -> lisière
-    t2 = np.clip((away - 70) / 80, 0, 1)[:, None]     # 70 à 150 m : lisière -> nature
+    t2 = np.clip((away - 45) / 45, 0, 1)[:, None]     # 70 à 150 m : lisière -> nature
     colors = (town * (1 - t1) + edge * t1) * (1 - t2) + wild * t2
     patchy = np.sin(points[:, 0] * 0.031) * np.cos(points[:, 1] * 0.027)   # nuances larges, pour éviter l'aplat
     colors = colors * (1 + 0.06 * patchy[:, None])
@@ -319,7 +319,7 @@ def build_trees(world, grid=None, grid_origin=None):
     roads, buildings = cKDTree(road_points), cKDTree(building_points)
     land = [Polygon(pairs(r)) for r in world["land"] if len(r) >= 6]
     coast = cKDTree(np.vstack([densify(pairs(r), 20) for r in world["land"] if len(r) >= 6]))
-    out = {"pine": [], "palm": [], "ficus": [], "cypress": [], "bush": [], "araucaria": []}
+    out = {"pine": [], "palm": [], "ficus": [], "cypress": [], "bush": [], "araucaria": [], "fpine": [], "oak": []}
 
     def add(kind, x, n, low=0.75, high=1.35):
         out[kind] += [round(float(x), 1), round(float(n), 1), round(float(low + rng.random() * (high - low)), 2)]
@@ -327,8 +327,9 @@ def build_trees(world, grid=None, grid_origin=None):
     # 1. Zones vertes OSM
     # Densité (m² par arbre) et espèces. Annaba a peu de palmiers dans ses espaces verts (retour de Houssem) :
     # surtout ficus, pins d'Alep, cyprès et massifs ; les zones vertes de la carte sont plantées plus densément.
-    mixes = {"wood": (110, [("pine", 0.6), ("cypress", 0.15), ("bush", 0.25)]),
-             "scrub": (170, [("bush", 0.65), ("pine", 0.35)]),
+    # Bois et maquis : de vraies forêts (pins d'Alep et chênes de l'Edough), serrées, sans clairières vides.
+    mixes = {"wood": (80, [("fpine", 0.55), ("oak", 0.25), ("cypress", 0.05), ("bush", 0.15)]),
+             "scrub": (120, [("bush", 0.55), ("fpine", 0.3), ("oak", 0.15)]),
              "grass": (160, [("palm", 0.04), ("ficus", 0.38), ("pine", 0.2), ("cypress", 0.08), ("bush", 0.3)])}
     for area in world["areas"]:
         if area["k"] not in mixes:
@@ -353,19 +354,28 @@ def build_trees(world, grid=None, grid_origin=None):
         for (x, n), kind in zip(candidates, rng.choice(names, len(candidates), p=weights)):
             add(kind, x, n)
 
-    # 2. Collines non bâties : maquis
-    if grid is not None:
-        gx0, gn0 = grid_origin
-        rows, cols = grid.shape
-        gx, gn = np.meshgrid(gx0 + np.arange(cols) * STEP, gn0 + np.arange(rows) * STEP)
-        nodes = np.column_stack([gx.ravel(), gn.ravel()])
-        nodes = nodes[grid.ravel() > 35] + (rng.random((int((grid > 35).sum()), 2)) - 0.5) * STEP
-        on_land = np.zeros(len(nodes), dtype=bool)
-        for polygon in land:
-            on_land |= polygon.contains_points(nodes)
-        wild = on_land & (buildings.query(nodes)[0] > 35) & (roads.query(nodes)[0] > 12)
-        for x, n in nodes[wild]:
-            add(rng.choice(["pine", "pine", "bush", "bush", "cypress"]), x, n)
+    # 2. Tout terrain naturel (vert sur la carte du jeu : loin des bâtiments, hors zones déjà traitées) : forêt.
+    # Retour de Houssem : la végétation d'Annaba, ce sont des forêts ; aucun grand espace vert ne reste nu.
+    rect = world["meta"]["rect_m"]
+    per_tree = 150.0
+    count = int((rect[2] - rect[0]) * (rect[3] - rect[1]) / per_tree)
+    spots = np.column_stack([rect[0] + rng.random(count) * (rect[2] - rect[0]), rect[1] + rng.random(count) * (rect[3] - rect[1])])
+    on_land = np.zeros(len(spots), dtype=bool)
+    for polygon in land:
+        on_land |= polygon.contains_points(spots)
+    spots = spots[on_land]
+    spots = spots[(buildings.query(spots)[0] > 45) & (roads.query(spots)[0] > 9) & (coast.query(spots)[0] > 14)]
+    taken = np.zeros(len(spots), dtype=bool)
+    for area in world["areas"]:   # plages, terrains de sport, parkings, parcs et bois ont leur propre traitement
+        ring = pairs(area["p"])
+        lo, hi = ring.min(axis=0), ring.max(axis=0)
+        near = np.where((spots[:, 0] >= lo[0]) & (spots[:, 0] <= hi[0]) & (spots[:, 1] >= lo[1]) & (spots[:, 1] <= hi[1]))[0]
+        if len(near):
+            taken[near[Polygon(ring).contains_points(spots[near], radius=4) | Polygon(ring).contains_points(spots[near], radius=-4)]] = True
+    spots = spots[~taken]
+    kinds = rng.choice(["fpine", "oak", "cypress", "bush"], len(spots), p=[0.5, 0.25, 0.07, 0.18])
+    for (x, n), kind in zip(spots, kinds):
+        add(kind, x, n, 1.1, 1.9) if kind in ("fpine", "oak") else add(kind, x, n, 0.9, 1.6)
 
     # 3. Arbres d'alignement le long des rues à trottoir
     side = 1
@@ -458,6 +468,14 @@ def build_trees(world, grid=None, grid_origin=None):
             if rng.random() < (0.04 if sandy else 0.45):
                 inland = (centre - point) / max(np.hypot(*(centre - point)), 1)
                 add("rock", *(point + inland * rng.uniform(-1.5, 2.5) + rng.normal(0, 1.2, 2)), 0.5, 1.9)
+
+    # Tronc chaulé seulement pour les arbres de bord de rue ; ailleurs (parcs, jardins), tronc nu.
+    for kind in ("ficus", "palm"):
+        values = np.array(out[kind]).reshape(-1, 3)
+        if len(values):
+            street = roads.query(values[:, :2])[0] <= 12
+            out[kind] = [float(v) for v in values[street].ravel()]
+            out[kind + "_plain"] = [float(v) for v in values[~street].ravel()]
 
     counts = {k: len(v) // 3 for k, v in out.items()}
     out["wall"] = WALLS

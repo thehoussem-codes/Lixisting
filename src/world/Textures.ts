@@ -9,7 +9,10 @@ function finish(canvas: HTMLCanvasElement): THREE.CanvasTexture {
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
-  texture.magFilter = THREE.NearestFilter;
+  // Rendu lissé (retour de Houssem : « tout doit être lisse ») : plus de gros pixels vus de près, et un filtrage
+  // qui garde les façades nettes en vue rasante.
+  texture.magFilter = THREE.LinearFilter;
+  texture.anisotropy = 8;
   return texture;
 }
 
