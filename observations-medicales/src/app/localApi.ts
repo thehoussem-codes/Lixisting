@@ -11,16 +11,17 @@ import { appliquerModele, sanitiserModele } from '../../shared/modeles.ts';
 interface PRow { id: number; identity: PatientIdentity; fictif: boolean; createdAt: string; updatedAt: string; deleted?: boolean }
 interface ORow { id: number; patientId: number; data: Observation; statut: 'brouillon' | 'validee'; rev: number; createdAt: string; updatedAt: string; valideLe: string | null; deleted?: boolean }
 interface TRow { id: number; nom: string; description: string; partage: boolean; content: TemplateRecord['content']; createdAt: string }
-interface Base { seq: number; patients: PRow[]; observations: ORow[]; templates: TRow[]; prefs: Preferences }
+interface Base { seq: number; patients: PRow[]; observations: ORow[]; templates: TRow[]; prefs: Preferences; v?: number }
 
 const CLE = 'obs-demo-base-v1';
-const NOM = 'Dr Démo';
-const USER: UserInfo = { id: 1, username: 'demo', nom: NOM, role: 'medecin', actif: true, createdAt: new Date().toISOString(), lastLogin: null };
+const NOM_DEFAUT = 'Dr ARAR';
+const nomMedecin = () => (memoire?.prefs.nom || '').trim() || NOM_DEFAUT;
+const user = (): UserInfo => ({ id: 1, username: 'medecin', nom: nomMedecin(), role: 'medecin', actif: true, createdAt: new Date().toISOString(), lastLogin: null });
 
 let memoire: Base | null = null;
 
 function nouvelleBase(): Base {
-  const b: Base = { seq: 0, patients: [], observations: [], templates: [], prefs: { etablissement: '', service: '', enTete: '', signature: NOM } };
+  const b: Base = { seq: 0, patients: [], observations: [], templates: [], prefs: { nom: memoire?.prefs.nom || NOM_DEFAUT, etablissement: '', service: '', enTete: '', signature: memoire?.prefs.nom || NOM_DEFAUT }, v: 2 };
   chargerDemo(b);
   return b;
 }
@@ -32,6 +33,14 @@ function lire(): Base {
     if (s) memoire = JSON.parse(s) as Base;
   } catch { /* stockage indisponible */ }
   if (!memoire) { memoire = nouvelleBase(); ecrire(); }
+  if (memoire.v !== 2) {
+    // Migration : remplace le médecin fictif des premières versions par le nom du médecin
+    memoire.prefs.nom ||= NOM_DEFAUT;
+    if (/Démo/.test(memoire.prefs.signature)) memoire.prefs.signature = memoire.prefs.nom;
+    for (const o of memoire.observations) if (/Démo/.test(o.data.admission.medecin)) o.data.admission.medecin = memoire.prefs.nom;
+    memoire.v = 2;
+    ecrire();
+  }
   return memoire;
 }
 
@@ -50,6 +59,7 @@ function chargerDemo(b: Base) {
   for (const c of demoCases()) {
     const pid = ++b.seq;
     b.patients.push({ id: pid, identity: c.identity, fictif: true, createdAt: now(), updatedAt: now() });
+    c.observation.admission.medecin = b.prefs.nom || NOM_DEFAUT;
     b.observations.push({ id: ++b.seq, patientId: pid, data: c.observation, statut: 'brouillon', rev: 1, createdAt: now(), updatedAt: now(), valideLe: null });
   }
 }
@@ -67,7 +77,7 @@ function summary(b: Base, p: PRow): PatientSummary {
 function meta(o: ORow): ObservationMeta {
   return {
     id: o.id, patientId: o.patientId, statut: o.statut, rev: o.rev, titre: o.data.motif.principal || 'Observation sans motif', dateAdmission: o.data.admission.date,
-    createdAt: o.createdAt, updatedAt: o.updatedAt, auteur: NOM, validePar: o.statut === 'validee' ? NOM : null, valideLe: o.valideLe,
+    createdAt: o.createdAt, updatedAt: o.updatedAt, auteur: nomMedecin(), validePar: o.statut === 'validee' ? nomMedecin() : null, valideLe: o.valideLe,
   };
 }
 
@@ -104,11 +114,20 @@ function router(method: string, path: string, body: Record<string, unknown>): un
   const M = method.toUpperCase();
 
   if (seg[0] === 'auth') {
-    if (seg[1] === 'status') return { setupRequired: false, user: USER, idleMinutes: 0 };
-    return { ok: true, user: USER };
+    if (seg[1] === 'status') return { setupRequired: false, user: user(), idleMinutes: 0 };
+    return { ok: true, user: user() };
   }
   if (seg[0] === 'preferences') {
-    if (M === 'PUT') b.prefs = { ...b.prefs, ...(body as Partial<Preferences>) };
+    if (M === 'PUT') {
+      const ancien = nomMedecin();
+      b.prefs = { ...b.prefs, ...(body as Partial<Preferences>) };
+      const nouveau = nomMedecin();
+      if (ancien !== nouveau) {
+        // Le médecin responsable des observations existantes suit le changement de nom
+        for (const o of b.observations) if (o.data.admission.medecin === ancien) o.data.admission.medecin = nouveau;
+        if (b.prefs.signature === ancien) b.prefs.signature = nouveau;
+      }
+    }
     return b.prefs;
   }
   if (seg[0] === 'demo') { chargerDemo(b); return { ok: true }; }
@@ -136,7 +155,7 @@ function router(method: string, path: string, body: Record<string, unknown>): un
         if (data.atcd.traitements.statut === 'aucun') data.atcd.traitements.statut = 'non_verifies';
       }
       if (body.modele) appliquerModele(data, sanitiserModele(body.modele));
-      data.admission.medecin ||= NOM;
+      data.admission.medecin ||= nomMedecin();
       return full(b, creerObs(b, pr.id, data));
     }
     if (M === 'DELETE') { pr.deleted = true; return { ok: true }; }
@@ -179,7 +198,7 @@ function router(method: string, path: string, body: Record<string, unknown>): un
     return full(b, o);
   }
   if (seg[0] === 'templates') {
-    const rec = (t: TRow): TemplateRecord => ({ ...t, auteur: NOM, ownerId: 1 });
+    const rec = (t: TRow): TemplateRecord => ({ ...t, auteur: nomMedecin(), ownerId: 1 });
     if (M === 'POST') {
       const t: TRow = { id: ++b.seq, nom: String(body.nom ?? ''), description: String(body.description ?? ''), partage: !!body.partage, content: sanitiserModele(body.content), createdAt: now() };
       b.templates.push(t);

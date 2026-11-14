@@ -495,6 +495,8 @@ export interface TemplateContent {
 }
 
 export interface Preferences {
+  /** Nom du médecin (version autonome uniquement) */
+  nom?: string;
   etablissement: string;
   service: string;
   enTete: string;

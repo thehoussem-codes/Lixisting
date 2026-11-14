@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { Preferences, Role, TemplateContent, TemplateRecord, UserInfo } from '../../shared/types.ts';
-import { api, ApiError } from '../app/api.ts';
+import { api, ApiError, MODE_LOCAL } from '../app/api.ts';
 import { applyTheme, getTheme, useSession, useToast } from '../app/context.tsx';
 import { Area, Card, Chips, Confirm, Field, Modal, Seg, Select, Text } from '../ui/controls.tsx';
 import { Icon } from '../ui/icons.tsx';
@@ -106,15 +106,22 @@ export function Parametres() {
   const [theme, setTheme] = useState(getTheme());
   const [pw, setPw] = useState({ ancien: '', nouveau: '', confirm: '' });
   useEffect(() => { api<Preferences>('/preferences').then(setPrefs).catch(() => {}); }, []);
-  const save = async () => { await api('/preferences', { method: 'PUT', body: prefs }); toast('Préférences enregistrées.'); };
+  const save = async () => { await api('/preferences', { method: 'PUT', body: prefs }); await session.refresh(); toast('Préférences enregistrées.'); };
   const changerMdp = async () => {
     if (pw.nouveau !== pw.confirm) return toast('Les mots de passe ne correspondent pas.', true);
     try { await api('/auth/password', { method: 'POST', body: { ancien: pw.ancien, nouveau: pw.nouveau } }); toast('Mot de passe modifié.'); setPw({ ancien: '', nouveau: '', confirm: '' }); } catch (e) { toast(e instanceof ApiError ? e.message : 'Erreur', true); }
   };
   return (
     <div className="page">
-      <div className="page-h"><div className="t"><h1>Paramètres</h1><p>Compte : {session.user.nom} ({session.user.username}) — rôle {session.user.role}.</p></div></div>
+      <div className="page-h"><div className="t"><h1>Paramètres</h1><p>{MODE_LOCAL ? `Connecté en tant que ${session.user.nom}.` : `Compte : ${session.user.nom} (${session.user.username}) — rôle ${session.user.role}.`}</p></div></div>
       <div className="stack">
+        {MODE_LOCAL && (
+          <Card title="Votre nom" actions={<button className="btn primary sm" onClick={save}>Enregistrer</button>}>
+            <Field label="Nom du médecin" help="Affiché en haut de l’écran, utilisé comme médecin responsable des observations et pour la validation.">
+              <Text value={prefs.nom ?? ''} onChange={(v) => setPrefs({ ...prefs, nom: v })} placeholder="ex. Dr ARAR" />
+            </Field>
+          </Card>
+        )}
         <Card title="Apparence">
           <Seg value={theme} options={[{ v: 'light', l: 'Mode clair' }, { v: 'dark', l: 'Mode sombre' }]} onChange={(v) => { const t = (v || 'light') as 'light' | 'dark'; setTheme(t); applyTheme(t); }} />
         </Card>
@@ -126,14 +133,14 @@ export function Parametres() {
             <Field label="Signature" className="spanall"><Text value={prefs.signature} onChange={(v) => setPrefs({ ...prefs, signature: v })} /></Field>
           </div>
         </Card>
-        <Card title="Mot de passe">
+        {!MODE_LOCAL && <Card title="Mot de passe">
           <div className="grid g3">
             <Field label="Mot de passe actuel"><Text type="password" value={pw.ancien} onChange={(v) => setPw({ ...pw, ancien: v })} /></Field>
             <Field label="Nouveau mot de passe"><Text type="password" value={pw.nouveau} onChange={(v) => setPw({ ...pw, nouveau: v })} /></Field>
             <Field label="Confirmation"><Text type="password" value={pw.confirm} onChange={(v) => setPw({ ...pw, confirm: v })} /></Field>
           </div>
           <button className="btn mt12" onClick={changerMdp} disabled={!pw.ancien || pw.nouveau.length < 10}>Modifier le mot de passe</button>
-        </Card>
+        </Card>}
       </div>
     </div>
   );
