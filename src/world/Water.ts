@@ -37,8 +37,7 @@ const fragmentShader = /* glsl */ `
   uniform vec3 uSky;
   uniform vec3 uSun;
   uniform vec3 uFogColor;
-  uniform float uFogNear;
-  uniform float uFogFar;
+  uniform float uFogDensity;
   varying vec3 vWorld;
   varying float vFade;
 
@@ -62,9 +61,11 @@ const fragmentShader = /* glsl */ `
     float glint = pow(max(dot(reflect(-normalize(uSun), normal), view), 0.0), 90.0);
     color += vec3(1.0, 0.95, 0.8) * glint * 0.9;
 
-    float fog = smoothstep(uFogNear, uFogFar, distanceToEye);
+    float fogDepth = uFogDensity * distanceToEye;
+    float fog = 1.0 - exp(-fogDepth * fogDepth); // même formule que le brouillard exponentiel de la scène
     color = mix(color, uFogColor, fog);
     gl_FragColor = vec4(color, mix(0.72, 1.0, max(fresnel, fog)));
+    #include <tonemapping_fragment>
     #include <colorspace_fragment>
   }
 `;
@@ -73,7 +74,7 @@ export class Water {
   private near: THREE.Mesh;
   private material: THREE.ShaderMaterial;
 
-  constructor(scene: THREE.Scene, fogColor: number, fogNear: number, fogFar: number) {
+  constructor(scene: THREE.Scene, fogColor: number, fogDensity: number) {
     const uniforms = {
       uTime: { value: 0 },
       uCenter: { value: new THREE.Vector3() },
@@ -82,8 +83,7 @@ export class Water {
       uSky: { value: new THREE.Color(0xcfe8f2) },
       uSun: { value: new THREE.Vector3(400, 500, 150) },
       uFogColor: { value: new THREE.Color(fogColor) },
-      uFogNear: { value: fogNear },
-      uFogFar: { value: fogFar },
+      uFogDensity: { value: fogDensity },
     };
     this.material = new THREE.ShaderMaterial({ uniforms, vertexShader, fragmentShader, transparent: true, depthWrite: false });
     const geometry = new THREE.PlaneGeometry(NEAR_SIZE, NEAR_SIZE, NEAR_CELLS, NEAR_CELLS);

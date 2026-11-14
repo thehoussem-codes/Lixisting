@@ -71,6 +71,8 @@ export interface InstanceOptions {
   /** Couleur de carrosserie à appliquer au matériau de peinture. */
   paint?: number;
   paintMaterial?: string;
+  /** Véhicules : peinture vernie et vitres qui reflètent le ciel (matériaux physiques). */
+  glossy?: boolean;
 }
 
 export interface AssetCatalog {
@@ -161,6 +163,20 @@ class AssetLibrary {
         let material = this.flat.get(key);
         if (!material) {
           const from = source as THREE.MeshStandardMaterial;
+          if (options.glossy) {
+            // Carrosserie vernie, vitres sombres et brillantes, pneus mats : reflets du ciel (scene.environment).
+            const glass = /glass|vitre|window|windshield|verre/i.test(source.name) || (source.transparent && source.opacity < 0.9);
+            const rubber = /tyre|tire|rubber|pneu|wheel|rim|roue/i.test(source.name);
+            material = new THREE.MeshStandardMaterial({
+              name: source.name, map: from.map ?? null, color: painted ? options.paint : from.color ?? 0xffffff,
+              roughness: glass ? 0.06 : painted ? 0.3 : rubber ? 0.85 : 0.5,
+              metalness: glass ? 0.6 : painted ? 0.3 : 0.08,
+              transparent: source.transparent, opacity: source.opacity, alphaTest: source.alphaTest, side: source.side,
+              vertexColors: source.vertexColors,
+            });
+            this.flat.set(key, material);
+            return material;
+          }
           material = new THREE.MeshLambertMaterial({
             name: source.name, map: from.map ?? null, color: painted ? options.paint : from.color ?? 0xffffff,
             transparent: source.transparent, opacity: source.opacity, alphaTest: source.alphaTest, side: source.side,

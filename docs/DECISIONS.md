@@ -178,3 +178,19 @@ sans limite ; le BRI monte plus vite que les autres jusqu'à 100 km/h.
 
 - Piétons : tout en bas de la liste, à ne pas proposer avant que tout le reste soit fait (demande de Houssem).
 - Mode histoire, missions, poursuite policière, menu : aussi à la fin. Priorité actuelle : environnement et visuel uniquement.
+
+## 14 novembre 2026 (1 h) — Lumière, ciel, reflets
+
+Skill chargé : `threejs-materials-lighting`.
+- Rendu filmique (ACES, exposition 1,05) ; soleil 3,4 plus chaud, lumière du ciel 1,05 plus bleue : plus de contraste
+  entre soleil et ombre. L'eau applique aussi le rendu filmique (sinon elle tranchait).
+- Ciel : halo chaud du côté du soleil près de l'horizon, dôme plus fin (48 × 24).
+- Brouillard exponentiel (densité 0,00105) au lieu de linéaire : voile progressif dès les premières centaines de
+  mètres ; l'eau utilise la même formule.
+- Reflets : une petite copie du ciel (sol sombre, soleil très lumineux) devient la carte d'environnement. Seuls les
+  véhicules passent en matériaux physiques (peinture vernie, vitres brillantes, pneus mats) ; les façades restent en
+  Lambert pour ne pas coûter plus cher.
+- Façades : le crépi photographié ne fait plus que nuancer la couleur (opacité 0,4 au lieu de 0,75) ; palettes
+  d'immeubles et de maisons élargies (ocre clair, saumon pâle, jaune pâle).
+- Gendarmerie ré-exportée avec une simplification plus fine (54 000 triangles) : la carrosserie n'est plus déchirée.
+

@@ -420,7 +420,7 @@ export function createCarVisual(spec: CarSpec, color: number): CarVisual {
   let geometry = geometryCache.get(shape.id);
   if (!geometry) { geometry = buildGeometry(shape); geometryCache.set(shape.id, geometry); }
   let paint = paints.get(color);
-  if (!paint) { paint = new THREE.MeshLambertMaterial({ color, vertexColors: true }); paints.set(color, paint); }
+  if (!paint) { paint = new THREE.MeshStandardMaterial({ color, vertexColors: true, roughness: 0.32, metalness: 0.3 }); paints.set(color, paint); }
 
   if (spec.moto) {
     // Deux-roues : tout est placé dans un nœud qui penche en virage.
@@ -475,7 +475,7 @@ export function createCarVisual(spec: CarSpec, color: number): CarVisual {
   }
   if (asset) {
     // Modèle 3D fourni : dès qu'il est chargé, il remplace la carrosserie calculée.
-    assets.instance(asset, { length: spec.length, paint: color }).then((model) => {
+    assets.instance(asset, { length: spec.length, paint: color, glossy: true }).then((model) => {
       for (const mesh of builtIn) mesh.visible = false;
       group.add(model);
       if (asset.plates) addPlates(group, model, spec);

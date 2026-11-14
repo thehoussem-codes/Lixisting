@@ -61,7 +61,8 @@ export function createFacadeTexture(style: FacadeStyle): THREE.CanvasTexture {
   const width = wide ? 256 : 64, detail = photos.size ? 4 : 1;
   const [element, ctx] = canvas(width, 64, detail);
   // Fond de crépi photographié (les cités ont un crépi plus fatigué), sous les fenêtres dessinées.
-  for (let x = 0; x < width; x += 64) photo(ctx, style === 'apartment' || style === 'industrial' ? 'plaster_old' : 'plaster', x, 0, 64, 64, 0.75);
+  // Le crépi ne fait que nuancer la couleur du mur : trop opaque, il salissait toutes les façades en gris.
+  for (let x = 0; x < width; x += 64) photo(ctx, style === 'apartment' || style === 'industrial' ? 'plaster_old' : 'plaster', x, 0, 64, 64, style === 'industrial' ? 0.6 : 0.4);
   const rect = (color: string, x: number, y: number, w: number, h: number) => { ctx.fillStyle = color; ctx.fillRect(x, y, w, h); };
   switch (style) {
     case 'apartment': // fenêtre + balcon à garde-corps

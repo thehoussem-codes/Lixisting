@@ -11,8 +11,8 @@ const PARAPET = 0.6;      // rebord du toit plat
 
 /** Apparence de chaque usage : texture des étages, couleurs de murs et de toit. */
 const LOOK: Record<string, { style: FacadeStyle; walls: number[]; roofs: number[] }> = {
-  apartment: { style: 'apartment', walls: [0xf3ead8, 0xe9d3ae, 0xf5f1e6, 0xd9c7a3, 0xf0dcc0, 0xe2ddd0, 0xead9b8], roofs: [0xb9b2a3, 0xa9a394, 0xc2bcae] },
-  house: { style: 'house', walls: [0xfaf5ea, 0xf3e2c0, 0xf7efe0, 0xe8c9a0, 0xf2d9b0, 0xffffff], roofs: [0xb55d3f, 0xc0694a, 0xa9523a, 0xbb6a48] },
+  apartment: { style: 'apartment', walls: [0xf6efe0, 0xecd2a4, 0xfaf6ec, 0xe7c08e, 0xf1d9b8, 0xebe6dc, 0xf3dfa8, 0xe8c2ae, 0xf2ecdf], roofs: [0xb9b2a3, 0xa9a394, 0xc2bcae] },
+  house: { style: 'house', walls: [0xfaf5ea, 0xf3e2c0, 0xf7efe0, 0xe8c9a0, 0xf2d9b0, 0xffffff, 0xeec7a6, 0xf5e6b0], roofs: [0xb55d3f, 0xc0694a, 0xa9523a, 0xbb6a48] },
   tower: { style: 'tower', walls: [0xf4f1ea, 0xe9e4d8, 0xdfe6ea, 0xf0e6d2], roofs: [0x9a9c9e, 0xaeb0b2] },
   hotel: { style: 'tower', walls: [0xf3ede0, 0xe8dccb], roofs: [0xa9a394] },
   school: { style: 'school', walls: [0xf0dfb0, 0xecd9a8, 0xf3e6c2], roofs: [0xb8b0a0] },

@@ -8,9 +8,11 @@ import { addPlant } from './Trees';
 import { Water } from './Water';
 import type { WorldData } from './WorldData';
 
-const HORIZON = 0xcfe3ea;
-const FOG_NEAR = 260, FOG_FAR = 1400;
-const ZENITH = 0x2f7fcf;
+const HORIZON = 0xd4e2e6;   // brume claire de bord de mer (même teinte que le brouillard)
+const FOG_DENSITY = 0.00105; // brouillard exponentiel : 30 % de voile à 500 m, 70 % à 1 km, presque plein à 1,6 km
+const ZENITH = 0x2c6fc4;
+const SUN_GLOW = 0xffd7a0;   // le ciel se réchauffe du côté du soleil, près de l'horizon
+const SUN_POSITION = new THREE.Vector3(400, 380, 150);
 const CHUNK = 400;         // les bâtiments sont regroupés par blocs de 400 m
 
 const WITH_SIDEWALK = new Set(['primary', 'secondary', 'tertiary', 'residential', 'unclassified', 'living_street']);
@@ -50,15 +52,24 @@ function createSunTexture(): THREE.CanvasTexture {
   return texture;
 }
 
-/** Dôme de ciel : bleu soutenu en haut, brume claire à l'horizon (même teinte que le brouillard). */
-function createSky(): THREE.Mesh {
-  const geometry = new THREE.SphereGeometry(2000, 24, 12);
+/**
+ * Dôme de ciel : bleu soutenu en haut, brume claire à l'horizon (même teinte que le brouillard),
+ * halo chaud du côté du soleil. `ground` : couleur sous l'horizon (utile pour le ciel des reflets).
+ */
+export function createSky(radius = 2000, ground?: number): THREE.Mesh {
+  const geometry = new THREE.SphereGeometry(radius, 48, 24);
   const position = geometry.getAttribute('position');
   const colors: number[] = [];
-  const low = new THREE.Color(HORIZON), high = new THREE.Color(ZENITH), mixed = new THREE.Color();
+  const low = new THREE.Color(HORIZON), high = new THREE.Color(ZENITH), warm = new THREE.Color(SUN_GLOW), mixed = new THREE.Color();
+  const sun = SUN_POSITION.clone().normalize(), dir = new THREE.Vector3();
+  const below = ground === undefined ? null : new THREE.Color(ground);
   for (let i = 0; i < position.count; i++) {
-    const t = Math.min(1, Math.max(0, position.getY(i) / 2000));
-    mixed.copy(low).lerp(high, Math.pow(t, 0.6));
+    dir.set(position.getX(i), position.getY(i), position.getZ(i)).normalize();
+    const t = Math.min(1, Math.max(0, dir.y));
+    mixed.copy(low).lerp(high, Math.pow(t, 0.55));
+    const facing = Math.max(0, dir.dot(sun));
+    mixed.lerp(warm, Math.pow(facing, 6) * (1 - t) * 0.75);
+    if (below && dir.y < 0) mixed.lerp(below, Math.min(1, -dir.y * 6));
     colors.push(mixed.r, mixed.g, mixed.b);
   }
   geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
@@ -79,11 +90,12 @@ export interface World {
 export function buildAnnabaWorld(scene: THREE.Scene, data: WorldData, terrain: Terrain): World {
   const ground = terrain.heightAt;
   scene.background = new THREE.Color(HORIZON);
-  scene.fog = new THREE.Fog(HORIZON, FOG_NEAR, FOG_FAR);
-  // Lumière méditerranéenne de fin d'après-midi : soleil chaud, ombres bleutées par le ciel.
-  scene.add(new THREE.HemisphereLight(0xd6e8ff, 0xa89878, 1.25));
-  const sun = new THREE.DirectionalLight(0xffe6b8, 2.5);
-  sun.position.set(400, 500, 150);
+  scene.fog = new THREE.FogExp2(HORIZON, FOG_DENSITY);
+  // Lumière méditerranéenne de fin d'après-midi : soleil chaud et franc, ombres nettement bleutées par le ciel.
+  // Avec le rendu filmique (tone mapping), il faut plus de contraste entre soleil et ombre qu'avant.
+  scene.add(new THREE.HemisphereLight(0xb9d4ff, 0x8e7d62, 1.05));
+  const sun = new THREE.DirectionalLight(0xffe0b0, 3.4);
+  sun.position.copy(SUN_POSITION);
   scene.add(sun);
   const sky = createSky();
   scene.add(sky);
@@ -109,7 +121,7 @@ export function buildAnnabaWorld(scene: THREE.Scene, data: WorldData, terrain: T
   };
 
   // Mer animée au niveau 0 ; le terrain descend en pente sous la surface le long du rivage.
-  const water = new Water(scene, HORIZON, FOG_NEAR, FOG_FAR);
+  const water = new Water(scene, HORIZON, FOG_DENSITY);
 
   // Terre ferme en relief ; plages, bois et pelouses sont peints dans ses couleurs.
   scene.add(terrain.mesh);

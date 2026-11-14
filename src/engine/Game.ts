@@ -8,7 +8,7 @@ import { CAR_CATALOG, MOTO_CATALOG, applyVehicleAssets } from '../vehicles/CarMo
 import { assets } from '../assets/AssetLibrary';
 import { Traffic } from '../vehicles/Traffic';
 import { TrafficLights } from '../world/TrafficLights';
-import { buildAnnabaWorld } from '../world/AnnabaWorld';
+import { buildAnnabaWorld, createSky } from '../world/AnnabaWorld';
 import { buildTestTrack } from '../world/TestTrack';
 import type { Water } from '../world/Water';
 import type { Collider } from '../world/Collider';
@@ -90,6 +90,9 @@ export class Game {
 
   constructor(private container: HTMLElement, private events: GameEvents) {
     this.renderer.setPixelRatio(1);
+    // Rendu filmique : hautes lumières adoucies, couleurs plus denses (skill threejs-materials-lighting).
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.05;
     container.appendChild(this.renderer.domElement);
 
     this.input = new Input(this.renderer.domElement);
@@ -220,6 +223,7 @@ export class Game {
       });
       this.goToPlace(0);
       this.setupShadows();
+      this.setupReflections();
       // Adresse du type ...?at=x,n : démarre à ce point de la carte (mètres depuis la gare, n = nord).
       const at = new URLSearchParams(window.location.search).get('at')?.split(',').map(Number);
       if (at && at.length === 2 && at.every(Number.isFinite)) this.player.teleport(at[0], this.ground(at[0], -at[1]), -at[1]);
@@ -309,6 +313,22 @@ export class Game {
   }
 
   /** Ombres portées du soleil (bâtiments, arbres, véhicules) dans un rayon autour du joueur. Désactivables : ?ombres=0. */
+  /**
+   * Ciel des reflets : une petite copie du ciel (avec un sol sombre et un soleil très lumineux) est convertie en
+   * carte d'environnement. Seuls les matériaux physiques (carrosseries, vitres) l'utilisent : les façades n'en paient pas le prix.
+   */
+  private setupReflections(): void {
+    const room = new THREE.Scene();
+    room.add(createSky(50, 0x5f574c));
+    const sun = new THREE.Mesh(new THREE.SphereGeometry(3, 12, 8), new THREE.MeshBasicMaterial({ color: new THREE.Color(6, 5.4, 4.4) }));
+    sun.position.copy(this.sun ? this.sun.position : new THREE.Vector3(0.6, 0.6, 0.25)).normalize().multiplyScalar(40);
+    room.add(sun);
+    const pmrem = new THREE.PMREMGenerator(this.renderer);
+    this.scene.environment = pmrem.fromScene(room, 0.02, 0.1, 100).texture;
+    this.scene.environmentIntensity = 0.9;
+    pmrem.dispose();
+  }
+
   private setupShadows(): void {
     this.scene.traverse((node) => { if ((node as THREE.DirectionalLight).isDirectionalLight) this.sun = node as THREE.DirectionalLight; });
     if (!this.sun || !SHADOWS) return;
