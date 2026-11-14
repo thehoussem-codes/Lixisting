@@ -3,6 +3,7 @@ import type { Collider } from './Collider';
 import { MeshBuilder } from './MeshBuilder';
 import { buildSheratonGrounds } from './SheratonGrounds';
 import { buildSousTerrain } from './SousTerrain';
+import { THEATRE_CENTROID, THEATRE_NAME, buildTheatre } from './Theatre';
 import type { Terrain } from './Terrain';
 import type { WorldData } from './WorldData';
 import { type Ground, type Ring, boxAt, canvasTexture, cap, centroid, extrude, findFootprint, lowestGround, ringOf } from './LandmarkKit';
@@ -24,6 +25,7 @@ import { type Ground, type Ring, boxAt, canvasTexture, cap, centroid, extrude, f
 const OWNED: [number, number][] = [
   [328.6, 774.8], [281.8, 755.8], [303.9, 765.8], [323.3, 823.5], // Sheraton
   [206.0, 935.5], // Hôtel Seybouse International (OSM way 165582442, 18 niveaux)
+  THEATRE_CENTROID, // Théâtre Azzedine Medjoubi (OSM way 341076691)
 ];
 
 /** Ce bâtiment de la carte est-il remplacé par un modèle sur mesure ? */
@@ -388,7 +390,10 @@ function buildSeybouse(scene: THREE.Scene, ground: Ground, collider: Collider): 
 export interface LandmarkEdits {
   ground: (x: number, z: number) => number | null;
   keepTree: (x: number, n: number) => boolean;
-  palms: [number, number, number][];
+  /** Arbres ajoutés : [espèce, x, n, taille]. */
+  trees: [string, number, number, number][];
+  /** Noms affichés en bas de l'écran près d'un lieu (prioritaires sur le quartier). */
+  labels: { name: string; x: number; n: number; radius: number }[];
 }
 
 export function buildLandmarks(scene: THREE.Scene, data: WorldData, ground: Ground, collider: Collider, terrain: Terrain): LandmarkEdits {
@@ -398,9 +403,11 @@ export function buildLandmarks(scene: THREE.Scene, data: WorldData, ground: Grou
   buildSeybouse(scene, ground, collider);
   buildFerryTerminal(scene, ground, collider);
   buildPitchLines(scene, data, ground);
+  const theatre = buildTheatre(scene, data, ground, collider);
   return {
-    ground: sousTerrain.ground,
-    keepTree: (x, n) => grounds.keepTree(x, n) && !sousTerrain.inside(x, n),
-    palms: grounds.palms,
+    ground: (x, z) => sousTerrain.ground(x, z) ?? theatre?.ground(x, z) ?? null,
+    keepTree: (x, n) => grounds.keepTree(x, n) && !sousTerrain.inside(x, n) && (theatre?.keepTree(x, n) ?? true),
+    trees: [...grounds.palms.map(([x, n, s]): [string, number, number, number] => ['palm', x, n, s]), ...(theatre?.extra ?? [])],
+    labels: theatre ? [{ name: THEATRE_NAME, x: 100, n: 473, radius: 45 }] : [],
   };
 }

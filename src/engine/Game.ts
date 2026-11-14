@@ -57,6 +57,7 @@ export class Game {
   /** Hauteur du sol en un point (0 partout tant que le terrain n'est pas chargé). */
   private ground: (x: number, z: number) => number = () => 0;
   private places: WorldPlace[] = [];
+  private labels: { name: string; x: number; n: number; radius: number }[] = [];
   private cars: Car[] = [];
   private map: MapView | null = null;
   private traffic: Traffic | null = null;
@@ -201,7 +202,8 @@ export class Game {
         for (let i = 0; i < values.length; i += 3) if (world.edits.keepTree(values[i], values[i + 1])) kept.push(values[i], values[i + 1], values[i + 2]);
         (trees as unknown as Record<string, number[]>)[species] = kept;
       }
-      (trees as unknown as Record<string, number[]>).palm.push(...world.edits.palms.flat());
+      for (const [species, x, n, size] of world.edits.trees) ((trees as unknown as Record<string, number[]>)[species] ??= []).push(x, n, size);
+      this.labels = world.edits.labels;
       // Port de pêche d'Annaba (36.90375, 7.77451) : bassin abrité par les jetées, rayon 330 m.
       this.harbor = new Harbor(this.scene, data, 1392, 920, 330, this.ground);
       const treeCount = buildTrees(this.scene, trees, terrain.heightAt);
@@ -283,6 +285,7 @@ export class Game {
   /** Nom du repère le plus proche (à moins de 700 m), façon "nom de quartier". */
   private nearestPlace(): string {
     const { x, z } = this.player.object.position;
+    for (const label of this.labels) if (Math.hypot(label.x - x, -label.n - z) < label.radius) return label.name;
     let best = 700, name = '';
     for (const place of this.places) {
       const d = Math.hypot(place.x - x, -place.n - z);

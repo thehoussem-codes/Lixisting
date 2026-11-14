@@ -126,20 +126,27 @@ const BARK_SPAN = 12; // m de tronc couverts par la texture d'écorce (de bas en
  * cicatrices de palmes en losanges brun-gris, et pied blanchi à la chaux. La limite du blanc est irrégulière :
  * hauteur différente sur chaque colonne, coulures, éclaboussures, et taches d'écorce qui transparaissent.
  */
-export function createPalmBarkTexture(): THREE.CanvasTexture {
+export function createPalmBarkTexture(kind: 'palm' | 'ficus' = 'palm'): THREE.CanvasTexture {
   const W = 128, H = 512; // H couvre BARK_SPAN mètres ; ligne 0 du canevas = haut du tronc
   const element = document.createElement('canvas');
   element.width = W; element.height = H;
   const ctx = element.getContext('2d')!;
-  let seed = 23;
+  let seed = kind === 'palm' ? 23 : 41;
   const r = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
-  // Fond d'écorce : brun chaud en haut, plus gris et fibreux vers le bas.
+  const palmBark = kind === 'palm';
+  // Fond d'écorce : palmier brun chaud en haut, plus gris vers le bas ; ficus brun-gris lisse.
   const g = ctx.createLinearGradient(0, 0, 0, H);
-  g.addColorStop(0, '#94704c'); g.addColorStop(0.55, '#86684c'); g.addColorStop(1, '#8f8170');
+  if (palmBark) { g.addColorStop(0, '#94704c'); g.addColorStop(0.55, '#86684c'); g.addColorStop(1, '#8f8170'); }
+  else { g.addColorStop(0, '#8a7a66'); g.addColorStop(0.6, '#867664'); g.addColorStop(1, '#8c806f'); }
   ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  if (!palmBark) {
+    // Ficus : écorce lisse, plis horizontaux et longues veines verticales (contreforts du tronc).
+    for (let k = 0; k < 40; k++) { ctx.fillStyle = `rgba(70,58,45,${0.15 + r() * 0.2})`; ctx.fillRect(r() * W, 0, 1 + r() * 3, H); }
+    for (let k = 0; k < 300; k++) { ctx.fillStyle = `rgba(60,50,40,${0.12 + r() * 0.2})`; ctx.fillRect(r() * W, r() * H, 4 + r() * 10, 1); }
+  }
   // Cicatrices des anciennes palmes : losanges en quinconce, bord clair en haut, ombre en bas.
   const rowH = 14;
-  for (let y = 0, row = 0; y < H + rowH; y += rowH, row++) {
+  for (let y = 0, row = 0; palmBark && y < H + rowH; y += rowH, row++) {
     for (let x = (row % 2) * 8 - 8; x < W + 16; x += 16) {
       const jitter = (r() - 0.5) * 3;
       ctx.fillStyle = `rgba(${70 + r() * 25},${52 + r() * 15},${36 + r() * 10},0.5)`;
@@ -182,7 +189,7 @@ export function createPalmBarkTexture(): THREE.CanvasTexture {
   }
   // L'écorce transparaît sous la chaux usée (relief des losanges), surtout près de la limite.
   for (let y = H - 2.1 * metre; y < H; y += rowH) {
-    for (let x = 0; x < W; x += 16) {
+    for (let x = 0; palmBark && x < W; x += 16) {
       const near = 1 - (H - y) / (2.1 * metre);
       ctx.fillStyle = `rgba(120,100,78,${0.05 + near * 0.18 * r()})`;
       ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 8, y + rowH / 2); ctx.lineTo(x, y + rowH); ctx.lineTo(x - 8, y + rowH / 2); ctx.closePath(); ctx.fill();
@@ -256,10 +263,13 @@ function palm(b: MeshBuilder, i: number, x: number, y: number, z: number, s: num
 }
 
 /** Ficus d'alignement : tronc court et large, houppier dense et arrondi. */
-function ficus(b: MeshBuilder, i: number, x: number, y: number, z: number, s: number): void {
+function ficus(b: MeshBuilder, i: number, x: number, y: number, z: number, s: number, bark?: MeshBuilder): void {
   const color = GREENS.ficus[i % GREENS.ficus.length];
   const height = (2.6 + noise(i, 1) * 0.9) * s;
-  const [tx, ty, tz] = trunk(b, x, y, z, 0.3 * s, height, (noise(i, 2) - 0.5) * 0.4, (noise(i, 3) - 0.5) * 0.4, 6, FICUS_BARK);
+  const leanX = (noise(i, 2) - 0.5) * 0.4, leanZ = (noise(i, 3) - 0.5) * 0.4;
+  // Tronc chaulé au pied comme dans les rues d'Annaba (même chaux irrégulière que les palmiers).
+  const [tx, ty, tz] = bark ? palmStem(bark, x, y, z, 0.3 * s, height, leanX, leanZ)
+    : trunk(b, x, y, z, 0.3 * s, height, leanX, leanZ, 6, FICUS_BARK);
   const r = (2.3 + noise(i, 4) * 0.8) * s;
   crown(b, i, tx, ty + r * 0.62, tz, r, r * 0.8, 5, color, LIGHT(color));
   // Deux grosses branches visibles sous le feuillage.
@@ -336,6 +346,7 @@ const SHAPES: Record<string, (b: MeshBuilder, i: number, x: number, y: number, z
 export function buildTrees(scene: THREE.Scene, data: TreeData, ground: (x: number, z: number) => number): number {
   const chunks = new Map<string, MeshBuilder>();
   const barks = new Map<string, MeshBuilder>();
+  const ficusBarks = new Map<string, MeshBuilder>();
   let count = 0;
   for (const [species, values] of Object.entries(data)) {
     const shape = SHAPES[species];
@@ -349,6 +360,10 @@ export function buildTrees(scene: THREE.Scene, data: TreeData, ground: (x: numbe
         let bark = barks.get(key);
         if (!bark) { bark = new MeshBuilder(); barks.set(key, bark); }
         palm(builder, count, x, ground(x, -n), -n, values[i + 2], bark);
+      } else if (species === 'ficus') {
+        let bark = ficusBarks.get(key);
+        if (!bark) { bark = new MeshBuilder(); ficusBarks.set(key, bark); }
+        ficus(builder, count, x, ground(x, -n), -n, values[i + 2], bark);
       } else shape(builder, count, x, ground(x, -n), -n, values[i + 2]);
       count++;
     }
@@ -361,8 +376,9 @@ export function buildTrees(scene: THREE.Scene, data: TreeData, ground: (x: numbe
     scene.add(mesh);
   }
   const barkMaterial = new THREE.MeshLambertMaterial({ vertexColors: true, map: createPalmBarkTexture() });
-  for (const builder of barks.values()) {
-    const mesh = new THREE.Mesh(builder.build(), barkMaterial);
+  const ficusMaterial = new THREE.MeshLambertMaterial({ vertexColors: true, map: createPalmBarkTexture('ficus') });
+  for (const [builder, material] of [...[...barks.values()].map((v) => [v, barkMaterial] as const), ...[...ficusBarks.values()].map((v) => [v, ficusMaterial] as const)]) {
+    const mesh = new THREE.Mesh(builder.build(), material);
     mesh.userData.viewDistance = VIEW_DISTANCE;
     mesh.castShadow = true;
     scene.add(mesh);

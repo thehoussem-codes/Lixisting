@@ -290,3 +290,18 @@ Skills chargés : `physics-tuning`, `game-ai`, `audio-design`, `threejs-material
   affichait un immeuble générique de 22 m à sa place. Le socle de 9 m prévu est maintenant construit, et le court
   de tennis que montre le satellite est posé sur son toit (la piscine, qui y était, est descendue au sol, au
   nord-ouest, là où le satellite la montre).
+
+## Théâtre régional Azzedine Medjoubi
+
+- `src/world/Theatre.ts`, à la place de l'immeuble générique sur l'emprise OSM (way 341076691), façade vers le
+  Cours (est). D'après les photos : volume ivoire années 1950 aux angles avant arrondis et à corniche mince,
+  cadre blanc en saillie avec cinq hautes baies bleues à petits bois, cartouche doré au-dessus (motif ornemental,
+  pas de texte inventé), rez-de-chaussée jaune en retrait sur quatre colonnes jaunes, marquise noire à bord arrondi
+  portant « المسرح الجهوي عز الدين مجوبي » en doré, perron praticable, comble en pyramide gris (carte postale).
+- Parvis dallé dégagé : aucun arbre devant la façade (filtre des arbres). Les deux arbres des côtés (OSM) sont
+  dans des massifs bas ; celui du nord est décalé de 4 m pour laisser la façade dégagée. Potelets à chaînes et deux
+  lanternes au bord du trottoir (photo panoramique).
+- Le nom en arabe s'affiche aussi en bas de l'écran à moins de 45 m du parvis.
+- Ficus : tronc chaulé au pied avec la même limite irrégulière que les palmiers (texture dédiée, écorce lisse).
+  Appliqué à tous les ficus d'alignement, pour que les arbres de rue soient cohérents dans toute la ville.
+- Hauteurs estimées à vue sur les photos : façade 18 m, corps 13 m, pyramide 20,5 m.
