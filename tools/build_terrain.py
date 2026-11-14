@@ -45,8 +45,12 @@ COLORS = {  # couleurs du sol (rouge, vert, bleu de 0 à 1)
     "land": (0.74, 0.69, 0.53), "beach": (0.93, 0.85, 0.63), "wood": (0.24, 0.48, 0.23),
     "scrub": (0.49, 0.59, 0.33), "grass": (0.53, 0.71, 0.38), "pitch": (0.37, 0.63, 0.32),
     "rock": (0.60, 0.59, 0.55), "hill": (0.42, 0.55, 0.30), "cliff": (0.52, 0.47, 0.40),
+    "parking": (0.47, 0.46, 0.45),  # enrobé des parkings cartographiés
     "plaza": (0.80, 0.78, 0.73),  # dallage clair de la promenade du Cours (photo)
 }
+
+
+from build_world import edge_shore  # noqa: E402
 
 
 def cours_promenade(world):
@@ -113,6 +117,12 @@ def main():
 
     gx, gn = np.meshgrid(x0 + np.arange(cols) * STEP, n0 + np.arange(rows) * STEP)
     grid = np.maximum(sample_source(gx, gn), MIN_HEIGHT)
+    # Bord de carte traité en côte (voir build_world.edge_shore) : le relief descend vers le faux rivage,
+    # sur 350 m en plaine et jusqu'à 900 m au pied de l'Edough, au lieu de finir en mur vertical.
+    rect = (x0, n0, x1, n1)
+    shore_distance = np.vectorize(lambda x, n: edge_shore(x, n, rect))(gx, gn)
+    fall = np.clip(shore_distance / np.clip(350 + 1.2 * grid, 350, 900), 0, 1)
+    grid = grid * fall ** 1.5
 
     def height(x, n):
         """Même calcul que dans le jeu (Terrain.heightAt) : interpolation dans la grille à 30 m."""
@@ -209,6 +219,8 @@ def main():
     # L'effet s'efface entre 40 et 100 m du rivage : plus loin, les collines gardent leur vraie hauteur.
     fade = np.clip((reach - 40) / 60, 0, 1)
     heights = np.where(lowered, limit * (1 - fade) + heights * fade, heights)
+    # Plaine très basse (Seybouse, faux rivage) : la terre reste au-dessus de l'eau, sans flaques de mer dans les terres.
+    heights = np.where(reach > 2, np.maximum(heights, np.minimum(0.25 + 0.02 * reach, 0.9)), heights)
     if graded_count:
         heights[-graded_count:] = np.concatenate(graded_heights)
     print("rivage abaissé :", int(lowered.sum()), "points du terrain")

@@ -4,6 +4,7 @@ import { MeshBuilder } from './MeshBuilder';
 import { buildSheratonGrounds } from './SheratonGrounds';
 import { buildSousTerrain } from './SousTerrain';
 import { buildGrandePoste } from './GrandePoste';
+import { buildStreetDetails } from './StreetDetails';
 import { THEATRE_CENTROID, THEATRE_NAME, buildTheatre } from './Theatre';
 import type { Terrain } from './Terrain';
 import type { WorldData } from './WorldData';
@@ -406,9 +407,10 @@ export function buildLandmarks(scene: THREE.Scene, data: WorldData, ground: Grou
   buildPitchLines(scene, data, ground);
   const theatre = buildTheatre(scene, data, ground, collider);
   const poste = buildGrandePoste(scene, ground);
+  const details = buildStreetDetails(scene, data, ground, collider);
   return {
     ground: (x, z, y) => sousTerrain.ground(x, z, y) ?? theatre?.ground(x, z) ?? null,
-    keepTree: (x, n) => grounds.keepTree(x, n) && !sousTerrain.inside(x, n) && (theatre?.keepTree(x, n) ?? true) && poste.keepTree(x, n),
+    keepTree: (x, n) => grounds.keepTree(x, n) && !sousTerrain.inside(x, n) && (theatre?.keepTree(x, n) ?? true) && poste.keepTree(x, n) && details.keepTree(x, n),
     trees: [...grounds.palms.map(([x, n, s]): [string, number, number, number] => ['palm', x, n, s]), ...(theatre?.extra ?? []), ...poste.trees],
     labels: theatre ? [{ name: THEATRE_NAME, x: 100, n: 473, radius: 45 }] : [],
   };

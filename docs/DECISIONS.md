@@ -331,3 +331,34 @@ Skills chargés : `physics-tuning`, `game-ai`, `audio-design`, `threejs-material
   palmier, pavillons d'angle, toits de tuiles orange en croupe, ≈ 40 × 66 m) et, au nord, un grand immeuble à toit
   plat autour d'une cour plantée ; entre le complexe et la Poste, stationnement et grands arbres. Emprises calées sur
   le satellite (±2 m), hauteurs estimées (13 à 15 m), façades du générateur colonial.
+
+## Extension à toute la ville d'Annaba (point 16)
+
+- **Emprise** : sans la capture annotée (non reçue), lecture retenue = toute la ville. Rectangle 36,845–36,980 N,
+  7,685–7,815 E (≈ 11,6 × 15 km) : du Cap de Garde à El Bouni et à l'embouchure de la Seybouse, de la Plaine Ouest /
+  Oued Forcha et des pentes de l'Edough à la mer et Sidi Salem. Avant : 6,2 × 11 km.
+- **Données** : nouvelle extraction OpenStreetMap (par l'action GitHub) et relief Terrain Tiles sur cette emprise.
+  19 579 bâtiments (10 403 avant), 3 218 tronçons de voies (1 834), 103 000 plantes. La latitude de référence de la
+  projection reste 36,93 : les lieux modélisés à la main gardent leurs coordonnées (vérifié : 9 520 bâtiments de
+  l'ancienne zone inchangés, Sheraton / théâtre / complexe / port intacts).
+- **« Entourée par la mer »** : Annaba n'a la mer qu'au nord et à l'est. À la demande de Houssem, les bords sud et
+  ouest de la carte deviennent une **côte inventée** (`edge_shore` dans `tools/build_world.py`) : rivage ondulé 20 à
+  180 m à l'intérieur du rectangle, relief qui descend vers lui (350 m en plaine, jusqu'à 900 m au pied de l'Edough),
+  bâtiments et voies coupés avant l'eau. Ce n'est pas la géographie réelle : à corriger si Houssem préfère un bord
+  terrestre noyé dans la brume.
+- **Secteurs et chargement progressif** :
+  - les grands maillages d'un seul tenant (terrain, chaussées, trottoirs, marquages…) sont découpés en secteurs de
+    400 m (`src/world/Sectors.ts`) et affichés seulement à moins de 1 400 m ;
+  - la végétation est construite au fur et à mesure autour du joueur (`TreeStream` dans `Trees.ts` : construction à
+    680 m, affichage à 520 m, libération à 1 420 m) ;
+  - mesuré ici (rendu logiciel) à la place du Cours : chargement 16 s (15 s avec l'ancienne petite carte, 27 s avant
+    ces deux mesures), 463 000 triangles affichés (668 000 avec l'ancienne carte), mémoire 530 Mo (490 Mo).
+  - Limite : les bâtiments et les voies sont encore tous construits au chargement (≈ 7 s ici) ; seul leur affichage
+    est progressif. Pas encore de modèles simplifiés au loin : au-delà de 1 400 m, la brume cache tout.
+- **Détails de rue réels** (`src/world/StreetDetails.ts`, données dans `annaba.json`) : uniquement ce qui est
+  cartographié dans OSM, à sa place : 121 murs / clôtures / remparts / murs de soutènement, 25 portails en travers
+  d'une voie (piliers et vantaux ouverts), 33 parkings (enrobé et places tracées), bancs et arrêts de bus tournés
+  vers la chaussée. Hauteurs et aspect : valeurs types (OSM ne les décrit pas). Les clôtures et parkings qui ne sont
+  pas dans OSM restent à faire lieu par lieu d'après des vues satellite.
+- `locations.json` (fiches de lieux) reconstruit sur la nouvelle emprise.
+- Non traité dans cette étape : la passe « netteté des arêtes et surfaces » (section 4 de la demande).

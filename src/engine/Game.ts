@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { splitIntoSectors } from '../world/Sectors';
 import { Sound } from './Sound';
 import { Harbor } from '../world/Harbor';
 import { Input } from './Input';
@@ -14,7 +15,7 @@ import { buildTestTrack } from '../world/TestTrack';
 import type { Water } from '../world/Water';
 import type { Collider } from '../world/Collider';
 import { loadTerrain } from '../world/Terrain';
-import { buildTrees, loadTrees } from '../world/Trees';
+import { type TreeStream, buildTrees, loadTrees } from '../world/Trees';
 import { buildWalls } from '../world/Walls';
 import { loadPhotoTextures } from '../world/Textures';
 import { Locations } from '../world/Locations';
@@ -31,6 +32,7 @@ const SHADOWS = new URLSearchParams(window.location.search).get('ombres') !== '0
 const SHADOW_RANGE = 85; // demi-largeur de la zone ombrée autour du joueur, en mètres
 const AUTO_SCALE = !new URLSearchParams(window.location.search).has('res');
 const ENTER_DISTANCE = 4.5;
+const SECTOR = 400;          // taille des secteurs du monde (m)
 const VIEW_DISTANCE = 1400; // au-delà, tout est noyé dans le brouillard
 const ROAD_SURFACE = 0.2;
 
@@ -57,6 +59,7 @@ export class Game {
   /** Hauteur du sol en un point (0 partout tant que le terrain n'est pas chargé). */
   private ground: (x: number, z: number) => number = () => 0;
   private places: WorldPlace[] = [];
+  private trees: TreeStream | null = null;
   private labels: { name: string; x: number; n: number; radius: number }[] = [];
   private cars: Car[] = [];
   private map: MapView | null = null;
@@ -121,6 +124,22 @@ export class Game {
     (window as unknown as Record<string, unknown>).lixitingBoats = () => this.harbor?.census() ?? {};
     (window as unknown as Record<string, unknown>).lixitingGround = (x: number, n: number) => this.ground(x, -n);
     (window as unknown as Record<string, unknown>).lixitingBlocked = (x: number, n: number, y?: number) => this.collider?.inside(x, -n, y);
+    // Essais : les plus gros objets affichés (triangles, rayon, nom du matériau ou de la texture).
+    (window as unknown as Record<string, unknown>).lixitingMeshes = () => {
+      const rows: { tris: number; radius: number; chunked: boolean; name: string }[] = [];
+      this.scene.traverse((object) => {
+        const mesh = object as THREE.Mesh;
+        if (!mesh.isMesh || !mesh.visible || !mesh.geometry) return;
+        let shown = true;
+        for (let o: THREE.Object3D | null = mesh; o; o = o.parent) if (!o.visible) shown = false;
+        if (!shown) return;
+        const g = mesh.geometry, count = (g.index ? g.index.count : g.attributes.position?.count ?? 0) / 3;
+        const instances = (mesh as unknown as THREE.InstancedMesh).count ?? 1;
+        rows.push({ tris: Math.round(count * instances), radius: Math.round(g.boundingSphere?.radius ?? -1), chunked: this.chunks.some((c) => c.mesh === mesh), name: mesh.name || mesh.userData.kind || (mesh.material as THREE.Material).name || (mesh.material as THREE.Material).type });
+      });
+      rows.sort((a, b) => b.tris - a.tris);
+      return { total: rows.length, unchunked: rows.filter((r) => !r.chunked).reduce((s, r) => s + r.tris, 0), top: rows.slice(0, 25) };
+    };
     (window as unknown as Record<string, unknown>).lixitingDebug = () => ({
       traffic: this.traffic?.cars.filter((c) => c.object.visible).length ?? 0,
       nearestTraffic: Math.min(...(this.traffic?.cars ?? []).map((c) => c.object.position.distanceTo(this.player.object.position))),
@@ -189,7 +208,9 @@ export class Game {
       // En mer et sur la pente du rivage (sous 40 cm), pas de décalage : c'est le fond marin.
       this.ground = (x, z) => { const h = terrain.heightAt(x, z); return h > 0.39 ? h + ROAD_SURFACE : h; };
       Car.waterLevel = 0;
+      const t0 = performance.now();
       const world = buildAnnabaWorld(this.scene, data, terrain);
+      const t1 = performance.now();
       this.collider = world.collider;
       this.sky = world.sky;
       this.water = world.water;
@@ -208,17 +229,34 @@ export class Game {
       this.labels = world.edits.labels;
       // Port de pêche d'Annaba (36.90375, 7.77451) : bassin abrité par les jetées, rayon 330 m.
       this.harbor = new Harbor(this.scene, data, 1392, 920, 330, this.ground);
-      const treeCount = buildTrees(this.scene, trees, terrain.heightAt);
+      this.trees = buildTrees(this.scene, trees, terrain.heightAt);
+      const treeCount = this.trees.count;
       buildWalls(this.scene, trees.wall, this.collider);
+      const t2 = performance.now();
       Locations.load(data).then((locations) => { this.locations = locations; });
+      // Grands maillages d'un seul tenant (terrain, chaussées, trottoirs…) : découpés en secteurs de 400 m.
+      const whole: THREE.Mesh[] = [];
+      this.scene.traverse((object) => {
+        const mesh = object as THREE.Mesh;
+        if (!mesh.isMesh || mesh.parent !== this.scene || !mesh.frustumCulled || (mesh as unknown as THREE.InstancedMesh).isInstancedMesh) return;
+        if (Array.isArray(mesh.material) || !mesh.geometry.attributes.position) return;
+        mesh.geometry.computeBoundingSphere();
+        if ((mesh.geometry.boundingSphere?.radius ?? 0) >= 700) whole.push(mesh);
+      });
+      for (const mesh of whole) {
+        this.scene.remove(mesh);
+        for (const part of splitIntoSectors(mesh, SECTOR)) this.scene.add(part);
+        mesh.geometry.dispose();
+      }
       // Blocs de décor (bâtiments, arbres, lampadaires) : on notera lesquels sont assez proches pour être affichés.
       this.scene.traverse((object) => {
         const mesh = object as THREE.Mesh;
         if (!mesh.isMesh || mesh.parent !== this.scene || !mesh.frustumCulled) return; // ni la mer ni le ciel
         mesh.geometry.computeBoundingSphere();
         const sphere = mesh.geometry.boundingSphere;
-        if (sphere && sphere.radius > 20 && sphere.radius < 700) this.chunks.push({ mesh, x: sphere.center.x, z: sphere.center.z, reach: sphere.radius + ((mesh.userData.viewDistance as number | undefined) ?? VIEW_DISTANCE) });
+        if (sphere && sphere.radius > 6 && sphere.radius < 700) this.chunks.push({ mesh, x: sphere.center.x, z: sphere.center.z, reach: sphere.radius + ((mesh.userData.viewDistance as number | undefined) ?? VIEW_DISTANCE) });
       });
+      console.info(`Construction : ville ${Math.round(t1 - t0)} ms, végétation ${Math.round(t2 - t1)} ms, secteurs ${Math.round(performance.now() - t2)} ms, ${this.chunks.length} blocs`);
       this.places = data.places;
       this.traffic = new Traffic(data, (car) => this.scene.add(car.object));
       this.lights = new TrafficLights(this.scene, data, this.ground);
@@ -440,6 +478,7 @@ export class Game {
     this.time += dt;
     this.water?.update(this.time, this.camera.position);
     this.harbor?.update(this.time, this.camera.position);
+    this.trees?.update(this.camera.position.x, this.camera.position.z);
     // Résolution automatique : on allège le calcul si le jeu rame, on le raffine s'il a de la marge.
     this.scaleTimer -= elapsed;
     if (AUTO_SCALE && this.scaleTimer <= 0) {

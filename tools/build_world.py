@@ -223,6 +223,79 @@ def land_rings(pieces, rect):
     return rings
 
 
+# ---------------------------------------------------------------- bord de carte traité en côte
+
+EDGE_INSET = 100.0   # retrait moyen du faux rivage par rapport au bord du rectangle (m)
+
+
+def edge_wobble(along, length):
+    """Retrait du faux rivage à la position `along` (m) d'un bord de longueur `length` : une ligne
+    ondulée (20 à 180 m) au lieu d'une coupure droite, qui retombe à EDGE_INSET près des coins."""
+    corner = min(along, length - along)
+    wave = 50 * math.sin(along / 310) + 30 * math.sin(along / 97 + 1.3)
+    return EDGE_INSET + wave * max(0.0, min(1.0, corner / 300))
+
+
+def edge_shore(x, n, rect):
+    """Distance (m) au faux rivage qui longe l'intérieur du rectangle : négative au large, positive à terre.
+    La ville n'est entourée par la mer qu'au nord et à l'est ; au sud et à l'ouest, à la demande de Houssem
+    (ville « entourée par la mer, comme une île »), le bord de la carte devient une côte inventée."""
+    x0, n0, x1, n1 = rect
+    w, h = x1 - x0, n1 - n0
+    return min(n - n0 - edge_wobble(x - x0, w), x1 - x - edge_wobble(n - n0, h),
+               n1 - n - edge_wobble(x - x0, w), x - x0 - edge_wobble(n - n0, h))
+
+
+def inset_edges(ring, rect):
+    """Remplace les segments d'un contour de terre qui suivent le bord du rectangle par le faux rivage ondulé."""
+    x0, n0, x1, n1 = rect
+    w, h = x1 - x0, n1 - n0
+
+    def side(p):
+        return [abs(p[1] - n0) < 0.5, abs(p[0] - x1) < 0.5, abs(p[1] - n1) < 0.5, abs(p[0] - x0) < 0.5]
+
+    def inset(p, k):
+        cx = min(max(p[0], x0 + EDGE_INSET), x1 - EDGE_INSET)
+        cn = min(max(p[1], n0 + EDGE_INSET), n1 - EDGE_INSET)
+        if k == 0:
+            return (cx, n0 + edge_wobble(p[0] - x0, w))
+        if k == 1:
+            return (x1 - edge_wobble(p[1] - n0, h), cn)
+        if k == 2:
+            return (cx, n1 - edge_wobble(p[0] - x0, w))
+        return (x0 + edge_wobble(p[1] - n0, h), cn)
+
+    out = []
+    for i, a in enumerate(ring):
+        b = ring[(i + 1) % len(ring)]
+        sa, sb = side(a), side(b)
+        shared = [k for k in range(4) if sa[k] and sb[k]]
+        if not any(sa):
+            out.append(a)
+        if shared:
+            k = shared[0]
+            steps = max(1, int(math.hypot(b[0] - a[0], b[1] - a[1]) / 20))
+            for j in range(steps + 1):
+                t = j / steps
+                out.append(inset((a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t), k))
+    return out
+
+
+def keep_ashore(points, rect, margin):
+    """Découpe une ligne en morceaux situés à plus de `margin` mètres à l'intérieur du faux rivage."""
+    runs, run = [], []
+    for q in points:
+        if edge_shore(q[0], q[1], rect) >= margin:
+            run.append(q)
+        else:
+            if len(run) >= 2:
+                runs.append(run)
+            run = []
+    if len(run) >= 2:
+        runs.append(run)
+    return runs
+
+
 # ---------------------------------------------------------------- hauteurs
 
 def point_in_polygon(x, y, polygon):
@@ -316,7 +389,7 @@ def main():
                 islands.append(ring)
         else:
             pieces += clip_to_rect(p, rect)
-    land = [simplify(r, 1.0) for r in land_rings(pieces, rect)] + islands
+    land = [simplify(inset_edges(r, rect), 1.0) for r in land_rings(pieces, rect)] + islands
 
     # --- routes et voies ferrées
     roads, rails, road_points = [], [], []
@@ -334,7 +407,8 @@ def main():
                     width = max(width, float(tags["lanes"]) * 3.5)
             except ValueError:
                 pass
-            for piece in clip_to_rect(p, rect):  # on coupe ce qui dépasse de la zone
+            # On coupe ce qui dépasse de la zone, et ce qui arriverait à moins de 15 m du faux rivage.
+            for piece in [run for part in clip_to_rect(p, rect) for run in keep_ashore(densify(part, 10), rect, 15)]:
                 line = densify(simplify(smooth(simplify(piece, 0.3)), 0.12), 10)
                 road = {"k": kind, "w": width, "p": flat(line), "_line": line, "_way": w["id"]}
                 name = tags.get("name:fr") or tags.get("name")
@@ -349,7 +423,7 @@ def main():
         elif kind:
             skipped[kind] = skipped.get(kind, 0) + 1
         elif tags.get("railway") == "rail" and tags.get("tunnel") != "yes":
-            for piece in clip_to_rect(p, rect):
+            for piece in [run for part in clip_to_rect(p, rect) for run in keep_ashore(densify(part, 10), rect, 15)]:
                 rails.append({"p": flat(densify(simplify(piece, 0.3), 10))})
 
     # --- graphe routier pour la circulation : points reliés, avec le sens de circulation
@@ -380,6 +454,7 @@ def main():
         ("natural", "scrub"): "scrub", ("natural", "bare_rock"): "rock",
         ("landuse", "grass"): "grass", ("leisure", "park"): "grass", ("leisure", "garden"): "grass",
         ("leisure", "pitch"): "pitch", ("landuse", "cemetery"): "grass",
+        ("amenity", "parking"): "parking",
     }
     areas = []
     for w in ways:
@@ -442,6 +517,8 @@ def main():
         cx, cy = sum(v[0] for v in p) / len(p), sum(v[1] for v in p) / len(p)
         if abs(a) < 4 or not (rx0 <= cx <= rx1 and ry0 <= cy <= ry1):
             continue
+        if min(edge_shore(q[0], q[1], rect) for q in p) < 25:
+            continue  # sur le faux rivage du bord de carte, ou au large
         if a < 0:
             p.reverse()  # toujours dans le sens anti-horaire
         height, is_estimated = building_height(tags, abs(a), w["id"])
@@ -741,6 +818,68 @@ def main():
                        "cx": round(r[0] + dn * side + dx * 6, 1), "cn": round(r[1] - dx * side + dn * 6, 1),
                        "ch": round(math.atan2(dx, -dn), 3)})
 
+    # --- clôtures, murs, portails, bancs, arrêts de bus : uniquement ceux cartographiés dans OSM, à leur place réelle.
+    gate_nodes = {e["id"] for e in elements if e["type"] == "node" and e.get("tags", {}).get("barrier") in ("gate", "lift_gate", "entrance")}
+    BARRIER_KIND = {"wall": "wall", "fence": "fence", "city_wall": "city_wall", "retaining_wall": "retaining"}
+    barriers = []
+    for w in ways:
+        kind = BARRIER_KIND.get(w.get("tags", {}).get("barrier"))
+        if not kind:
+            continue
+        line = [xy[n] for n in w["nodes"] if n in xy]
+        line = [q for q in line if rx0 <= q[0] <= rx1 and ry0 <= q[1] <= ry1 and edge_shore(q[0], q[1], rect) > 20]
+        if len(line) < 2:
+            continue
+        gates = [v for n in w["nodes"] if n in gate_nodes and n in xy for v in (round(xy[n][0], 1), round(xy[n][1], 1))]
+        item = {"k": kind, "p": flat(line)}
+        if gates:
+            item["g"] = gates
+        barriers.append(item)
+
+    # Portails posés sur une voie (entrée de résidence, d'usine, de parking) : deux piliers et des vantaux ouverts.
+    on_barrier = {n for w in ways if w.get("tags", {}).get("barrier") for n in w["nodes"]}
+    road_gates = []  # x, n, direction de la voie (dx, dn), demi-largeur
+    for w in ways:
+        kind = w.get("tags", {}).get("highway")
+        if kind not in ROAD_WIDTH:
+            continue
+        ids = [n for n in w["nodes"] if n in xy]
+        for i, n in enumerate(ids):
+            if n in gate_nodes and n not in on_barrier:
+                a, b = xy[ids[max(0, i - 1)]], xy[ids[min(len(ids) - 1, i + 1)]]
+                l = math.hypot(b[0] - a[0], b[1] - a[1])
+                x, y = xy[n]
+                if l > 0.5 and rx0 <= x <= rx1 and ry0 <= y <= ry1 and edge_shore(x, y, rect) > 20:
+                    road_gates += [round(x, 1), round(y, 1), round((b[0] - a[0]) / l, 3), round((b[1] - a[1]) / l, 3), round(min(ROAD_WIDTH[kind], 8) / 2, 1)]
+                    gate_nodes.discard(n)
+
+    def toward_road(x, n):
+        """Angle (radians, 0 = est) depuis un point vers le segment de chaussée le plus proche."""
+        best, angle = 60.0, None
+        for ax, an, dx, dn, _ in road_points:
+            if abs(ax - x) > 60 or abs(an - n) > 60:
+                continue
+            l2 = dx * dx + dn * dn or 1
+            t = max(0.0, min(1.0, ((x - ax) * dx + (n - an) * dn) / l2))
+            qx, qn = ax + dx * t, an + dn * t
+            d = math.hypot(qx - x, qn - n)
+            if d < best:
+                best, angle = d, math.atan2(qn - n, qx - x)
+        return angle
+
+    furniture = []  # type, x, n, angle
+    FURNITURE = {("amenity", "bench"): 0, ("highway", "bus_stop"): 1}
+    for e in elements:
+        if e["type"] != "node" or e["id"] not in xy:
+            continue
+        tags = e.get("tags", {})
+        for (key, value), code in FURNITURE.items():
+            if tags.get(key) == value:
+                x, n = xy[e["id"]]
+                if rx0 <= x <= rx1 and ry0 <= n <= ry1 and edge_shore(x, n, rect) > 20:
+                    angle = toward_road(x, n)
+                    furniture += [code, round(x, 1), round(n, 1), round(angle if angle is not None else 0.0, 2)]
+
     world = {
         "meta": {
             "source": "OpenStreetMap contributors (ODbL)",
@@ -755,6 +894,8 @@ def main():
             "roads_narrowed_to_fit_buildings": narrowed,
             "junctions": len(junctions) // 4, "roundabouts": len(roundabouts) // 3, "traffic_signals": len(signals) // 3,
             "roads_skipped_by_type": skipped,
+            "barriers": len(barriers), "gates": len(road_gates) // 5, "furniture": len(furniture) // 4,
+            "parkings": sum(1 for a in areas if a["k"] == "parking"),
             "relief": "Terrain Tiles (AWS Open Data), environ 30 m de précision",
         },
         "places": places,
@@ -767,6 +908,9 @@ def main():
         "roundabouts": roundabouts,
         "signals": signals,
         "buildings": buildings,
+        "barriers": barriers,
+        "gates": road_gates,
+        "furniture": furniture,
     }
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(json.dumps(world, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")

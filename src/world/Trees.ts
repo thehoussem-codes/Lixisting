@@ -342,46 +342,82 @@ export function addPlant(b: MeshBuilder, species: string, i: number, x: number, 
 
 const SHAPES: Record<string, (b: MeshBuilder, i: number, x: number, y: number, z: number, s: number) => void> = { pine, palm: (b, i, x, y, z, s) => palm(b, i, x, y, z, s), ficus, cypress, araucaria, bush, parasol, rock };
 
-/** Ajoute toute la végétation à la scène, regroupée par blocs. Renvoie le nombre de plantes. */
-export function buildTrees(scene: THREE.Scene, data: TreeData, ground: (x: number, z: number) => number): number {
-  const chunks = new Map<string, MeshBuilder>();
-  const barks = new Map<string, MeshBuilder>();
-  const ficusBarks = new Map<string, MeshBuilder>();
+/** Végétation chargée au fur et à mesure : seuls les blocs proches du joueur sont construits et affichés. */
+export interface TreeStream {
+  count: number;
+  /** À appeler régulièrement : construit les blocs proches (au plus `budget` ms), libère les blocs lointains. */
+  update(x: number, z: number, budget?: number): void;
+}
+
+const BUILD_DISTANCE = VIEW_DISTANCE + 160;   // un bloc est construit un peu avant d'entrer dans le champ de vision
+const DROP_DISTANCE = VIEW_DISTANCE + 900;    // et libéré quand le joueur s'en est vraiment éloigné
+
+/**
+ * Range toute la végétation par blocs de 200 m. Rien n'est construit ici (104 000 plantes pour la ville entière :
+ * tout bâtir d'un coup prenait la moitié du temps de chargement) ; `update` s'en charge autour du joueur.
+ */
+export function buildTrees(scene: THREE.Scene, data: TreeData, ground: (x: number, z: number) => number): TreeStream {
+  interface Block { x: number; z: number; plants: number[]; meshes: THREE.Mesh[] | null }
+  const blocks = new Map<string, Block>();
+  const speciesNames = Object.keys(data).filter((name) => SHAPES[name]);
   let count = 0;
-  for (const [species, values] of Object.entries(data)) {
-    const shape = SHAPES[species];
-    if (!shape) continue;
+  speciesNames.forEach((species, speciesIndex) => {
+    const values = (data as unknown as Record<string, number[]>)[species];
     for (let i = 0; i < values.length; i += 3) {
       const x = values[i], n = values[i + 1];
-      const key = `${Math.floor(x / CHUNK)},${Math.floor(n / CHUNK)}`;
-      let builder = chunks.get(key);
-      if (!builder) { builder = new MeshBuilder(); chunks.set(key, builder); }
-      if (species === 'palm') {
-        let bark = barks.get(key);
-        if (!bark) { bark = new MeshBuilder(); barks.set(key, bark); }
-        palm(builder, count, x, ground(x, -n), -n, values[i + 2], bark);
-      } else if (species === 'ficus') {
-        let bark = ficusBarks.get(key);
-        if (!bark) { bark = new MeshBuilder(); ficusBarks.set(key, bark); }
-        ficus(builder, count, x, ground(x, -n), -n, values[i + 2], bark);
-      } else shape(builder, count, x, ground(x, -n), -n, values[i + 2]);
+      const kx = Math.floor(x / CHUNK), kn = Math.floor(n / CHUNK), key = `${kx},${kn}`;
+      let block = blocks.get(key);
+      if (!block) { block = { x: (kx + 0.5) * CHUNK, z: -(kn + 0.5) * CHUNK, plants: [], meshes: null }; blocks.set(key, block); }
+      block.plants.push(speciesIndex, count, x, n, values[i + 2]); // le rang global garde à chaque plante sa forme
       count++;
     }
-  }
+  });
   const material = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, map: createFoliageTexture(), alphaTest: 0.4 });
-  for (const builder of chunks.values()) {
-    const mesh = new THREE.Mesh(builder.build(), material);
-    mesh.userData.viewDistance = VIEW_DISTANCE;
-    mesh.castShadow = true;
-    scene.add(mesh);
-  }
   const barkMaterial = new THREE.MeshLambertMaterial({ vertexColors: true, map: createPalmBarkTexture() });
   const ficusMaterial = new THREE.MeshLambertMaterial({ vertexColors: true, map: createPalmBarkTexture('ficus') });
-  for (const [builder, material] of [...[...barks.values()].map((v) => [v, barkMaterial] as const), ...[...ficusBarks.values()].map((v) => [v, ficusMaterial] as const)]) {
-    const mesh = new THREE.Mesh(builder.build(), material);
-    mesh.userData.viewDistance = VIEW_DISTANCE;
-    mesh.castShadow = true;
-    scene.add(mesh);
-  }
-  return count;
+
+  const build = (block: Block) => {
+    const leaves = new MeshBuilder();
+    let bark: MeshBuilder | null = null, ficusBark: MeshBuilder | null = null;
+    const p = block.plants;
+    for (let i = 0; i < p.length; i += 5) {
+      const species = speciesNames[p[i]], rank = p[i + 1], x = p[i + 2], n = p[i + 3], size = p[i + 4];
+      const y = ground(x, -n);
+      if (species === 'palm') palm(leaves, rank, x, y, -n, size, (bark ??= new MeshBuilder()));
+      else if (species === 'ficus') ficus(leaves, rank, x, y, -n, size, (ficusBark ??= new MeshBuilder()));
+      else SHAPES[species](leaves, rank, x, y, -n, size);
+    }
+    block.meshes = [];
+    for (const [builder, mat] of [[leaves, material], [bark, barkMaterial], [ficusBark, ficusMaterial]] as const) {
+      if (!builder) continue;
+      const mesh = new THREE.Mesh(builder.build(), mat);
+      mesh.castShadow = true;
+      scene.add(mesh);
+      block.meshes.push(mesh);
+    }
+  };
+
+  const list = [...blocks.values()];
+  let first = true;
+  return {
+    count,
+    update(x, z, budget = 6) {
+      if (first) { budget = 700; first = false; } // à l'arrivée : tout le voisinage d'un coup, sans apparition visible
+      const start = performance.now();
+      // Les blocs à construire, du plus proche au plus lointain.
+      const wanted: [number, Block][] = [];
+      for (const block of list) {
+        const d = Math.hypot(block.x - x, block.z - z);
+        if (block.meshes) {
+          if (d > DROP_DISTANCE) { for (const mesh of block.meshes) { scene.remove(mesh); mesh.geometry.dispose(); } block.meshes = null; }
+          else for (const mesh of block.meshes) mesh.visible = d < VIEW_DISTANCE + CHUNK * 0.75;
+        } else if (d < BUILD_DISTANCE) wanted.push([d, block]);
+      }
+      wanted.sort((a, b) => a[0] - b[0]);
+      for (const [, block] of wanted) {
+        build(block);
+        if (performance.now() - start > budget) break;
+      }
+    },
+  };
 }
