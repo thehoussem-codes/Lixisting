@@ -351,6 +351,9 @@ table.tbl tr.flag-haut td.val input, table.tbl tr.flag-bas td.val input { font-w
 .mobile-only { display: none !important; }
 .drawer-bg { display: none; }
 
+.split { grid-template-columns: minmax(0, 1.6fr) minmax(260px, 1fr); align-items: start; }
+.sticky-side { position: sticky; top: 0; }
+
 /* ------------------------------------------------------------------ */
 /* Responsive                                                           */
 /* ------------------------------------------------------------------ */
@@ -361,6 +364,10 @@ table.tbl tr.flag-haut td.val input, table.tbl tr.flag-bas td.val input { font-w
   .editor { grid-template-columns: var(--sidebar) minmax(0, 1fr); }
   .preview { position: fixed; right: 0; top: var(--topbar); bottom: 0; width: min(520px, 100%); z-index: 40; box-shadow: var(--shadow-lg); }
   .editor.no-preview .preview { display: none; }
+}
+@media (max-width: 900px) {
+  .split { grid-template-columns: minmax(0, 1fr); }
+  .sticky-side { position: static; }
 }
 @media (max-width: 820px) {
   .editor, .editor.no-preview { grid-template-columns: minmax(0, 1fr); }
@@ -376,6 +383,9 @@ table.tbl tr.flag-haut td.val input, table.tbl tr.flag-bas td.val input { font-w
   .page { padding: 16px 12px 60px; }
 }
 @media (max-width: 560px) {
+  .obs-row { flex-wrap: wrap; }
+  .obs-row > .obs-main { flex-basis: calc(100% - 40px); }
+  .page-h .btn { flex: 1; }
   .g2, .g3, .g4 { grid-template-columns: minmax(0, 1fr); }
   .span2, .span3 { grid-column: auto; }
   .frow { grid-template-columns: minmax(0, 1fr); }
@@ -396,3 +406,4 @@ table.tbl tr.flag-haut td.val input, table.tbl tr.flag-bas td.val input { font-w
   .print-root .doc table th { background: #eee; }
   @page { size: A4; margin: 16mm 14mm; }
 }
+.field > .tri, .field > .seg { align-self: flex-start; }

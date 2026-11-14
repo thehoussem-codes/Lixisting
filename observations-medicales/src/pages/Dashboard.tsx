@@ -45,7 +45,7 @@ export function Dashboard() {
         <Card><div className="kpi"><span className="small muted">Observations récentes</span><span className="v">{recentes.length}</span></div></Card>
         <Card><div className="kpi"><span className="small muted">Brouillons à valider</span><span className="v" style={{ color: brouillons ? 'var(--warning)' : undefined }}>{brouillons}</span></div></Card>
       </div>
-      <div className="grid" style={{ gridTemplateColumns: 'minmax(0, 1.3fr) minmax(0, 1fr)', alignItems: 'start' }}>
+      <div className="grid split">
         <Card title="Patients" actions={<input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Nom, prénom ou identifiant…" style={{ maxWidth: 280 }} aria-label="Rechercher un patient" autoFocus />}>
           <div style={{ margin: '-14px -16px' }}>
             {patients === null && <div className="empty">Chargement…</div>}

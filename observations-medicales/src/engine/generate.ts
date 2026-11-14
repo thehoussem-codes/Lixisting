@@ -407,7 +407,7 @@ function limitesExamen(g: G): DocNode[] {
 /* 6. Examens complémentaires                                           */
 /* ================================================================== */
 
-const FLECHE = { haut: '↑', bas: '↓' } as const;
+const FLECHE = { haut: '> N', bas: '< N' } as const;
 
 function bioLignes(g: G, seulementAnormaux: boolean): { panel: string; date: string; lignes: { label: string; val: string; unite: string; ref: string; statut: string }[]; interpretation: string }[] {
   const sexe = g.obs.identite.sexe;

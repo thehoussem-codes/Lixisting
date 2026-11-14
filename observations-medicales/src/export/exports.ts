@@ -102,7 +102,7 @@ export async function exportPDF(doc: GeneratedDoc, m: ExportMeta, format: string
 
 function pdfNode(n: DocNode): unknown {
   if (n.t === 'p') return { text: n.label ? [{ text: `${n.label} : `, bold: true }, n.text] : n.text, alignment: 'justify', margin: [0, 0, 0, 4] };
-  if (n.t === 'ul') return { ul: n.items, margin: [4, 0, 0, 5] };
+  if (n.t === 'ul') return { ul: n.items.map((x) => ({ text: x })), margin: [4, 0, 0, 5] };
   const body = [n.head.map((h) => ({ text: h, bold: true, fillColor: '#eef2f7' })), ...n.rows.map((r) => r.map((c) => ({ text: c })))];
   return {
     stack: [

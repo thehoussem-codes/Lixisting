@@ -5,6 +5,7 @@ import { Area, Card, Field, Num, Seg } from '../ui/controls.tsx';
 import { Icon } from '../ui/icons.tsx';
 import { BlockView, ResumeAppareil } from '../ui/clinique.tsx';
 import { APPAREIL_BY_ID, ETAT_GENERAL } from '../knowledge/appareils.ts';
+import { FIELDS, FINDINGS } from '../knowledge/registry.ts';
 import { CONSTANTES_DEF, alertesConstantes, erreursSaisie } from '../knowledge/constantes.ts';
 import { buildContext } from '../engine/context.ts';
 import { classeIMC, fmtNum, imc, num, pam, surfaceCorporelle } from '../engine/calc.ts';
@@ -136,7 +137,6 @@ function Appareil({ appId }: { appId: string }) {
   );
 }
 
-import { FIELDS, FINDINGS } from '../knowledge/registry.ts';
 function labelOf(id: string) {
   return (FINDINGS[id]?.label ?? FIELDS[id]?.label ?? id).toLowerCase();
 }

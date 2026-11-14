@@ -80,9 +80,9 @@ export function PatientPage({ id }: { id: number }) {
         <div style={{ margin: '-14px -16px' }}>
           {p.observations.length === 0 && <div className="empty">Aucune observation pour ce patient.</div>}
           {p.observations.map((o) => (
-            <div key={o.id} className="list-item" style={{ cursor: 'default' }}>
+            <div key={o.id} className="list-item obs-row" style={{ cursor: 'default' }}>
               <Icon name="doc" />
-              <a href={href(`/obs/${o.id}/identite`)} style={{ flex: 1, minWidth: 0, color: 'inherit' }}>
+              <a className="obs-main" href={href(`/obs/${o.id}/identite`)} style={{ flex: 1, minWidth: 0, color: 'inherit' }}>
                 <div><strong>{o.titre}</strong></div>
                 <div className="small muted">Admission : {o.dateAdmission ? fmtDateTime(o.dateAdmission) : '—'} · Auteur : {o.auteur} · Modifiée le {new Date(o.updatedAt).toLocaleString('fr-FR')}</div>
                 {o.statut === 'validee' && <div className="small" style={{ color: 'var(--ok)' }}>Validée par {o.validePar} le {o.valideLe ? new Date(o.valideLe).toLocaleString('fr-FR') : ''}</div>}

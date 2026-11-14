@@ -19,7 +19,7 @@ export function Discussion() {
   return (
     <div className="stack">
       <ModuleHeader title="Discussion diagnostique" desc="Espace de réflexion médicale. L’application propose des éléments d’aide (signes documentés, diagnostics graves à évoquer) mais n’impose aucun diagnostic et ne rédige aucun argument à votre place." />
-      <div className="grid" style={{ gridTemplateColumns: 'minmax(0, 2fr) minmax(260px, 1fr)', alignItems: 'start' }}>
+      <div className="grid split">
         <div className="stack">
           <Card title="Raisonnement">
             <div className="grid g1 col">
@@ -83,7 +83,7 @@ export function Discussion() {
             </div>
           </Card>
         </div>
-        <div className="stack" style={{ position: 'sticky', top: 0 }}>
+        <div className="stack sticky-side">
           <Card title="Aide au raisonnement" sub="Éléments documentés dans ce dossier (cliquer pour les citer).">
             <h4 className="small mb8">Signes positifs documentés</h4>
             {elements.length === 0 && <p className="small faint">Aucun signe positif saisi.</p>}
