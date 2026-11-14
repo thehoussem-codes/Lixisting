@@ -16,9 +16,10 @@ from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 
-# Rectangle de travail PROVISOIRE (sud, ouest, nord, est), en degrés.
-# Il sera ajusté après vérification des repères trouvés dans les données.
-BBOX = (36.880, 7.730, 36.980, 7.800)
+# Rectangle de travail (sud, ouest, nord, est), en degrés : TOUTE la ville d'Annaba.
+# Du Cap de Garde (nord) à El Bouni et à l'embouchure de la Seybouse (sud), de la Plaine Ouest / Oued Forcha
+# et des pentes de l'Edough (ouest) à la mer et Sidi Salem (est). Ancienne zone : (36.880, 7.730, 36.980, 7.800).
+BBOX = (36.845, 7.685, 36.980, 7.815)
 
 SERVERS = [
     "https://overpass-api.de/api/interpreter",
@@ -32,7 +33,7 @@ OUT_DIR = Path(__file__).resolve().parent.parent / "data" / "osm"
 def build_query() -> str:
     b = ",".join(str(v) for v in BBOX)
     return f"""
-[out:json][timeout:240];
+[out:json][timeout:300][maxsize:1073741824];
 (
   way["highway"]({b});
   way["building"]({b});
@@ -44,6 +45,10 @@ def build_query() -> str:
   way["railway"]({b});
   way["barrier"]({b});
   way["man_made"]({b});
+  way["amenity"]({b});
+  way["waterway"]({b});
+  way["tourism"]({b});
+  node["barrier"]({b});
   node["railway"]({b});
   node["man_made"]({b});
   node["tourism"]({b});
