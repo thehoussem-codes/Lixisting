@@ -28,7 +28,31 @@ export interface Question {
   sex?: 'F' | 'M';
   /** Rédigé directement après le nom du symptôme (« dyspnée d’effort », « toux sèche ») */
   adj?: boolean;
+  /** Mini-courbe illustrant chaque option (points SVG dans un cadre 64 × 28) */
+  courbes?: Record<string, string>;
+  /** Seuil horizontal tracé en pointillés (ex. 38 °C) */
+  seuil?: { y: number; label: string };
+  /** Définition de chaque option (aide-mémoire) */
+  definitions?: Record<string, string>;
 }
+
+/** Courbes de l’évolution d’un symptôme (intensité en ordonnée) */
+const COURBES_EVOLUTION: Record<string, string> = {
+  'aggravation progressive': '2,24 62,4',
+  stabilité: '2,14 62,14',
+  'amélioration progressive': '2,4 62,22',
+  'évolution fluctuante': '2,14 10,7 18,19 26,8 34,18 42,6 50,17 58,9 62,13',
+  'évolution par poussées': '2,23 10,23 14,6 19,23 30,23 34,8 39,23 50,23 54,5 59,23 62,23',
+  'résolution complète': '2,4 26,16 42,24 62,25',
+};
+const DEF_EVOLUTION: Record<string, string> = {
+  'aggravation progressive': 'Intensité croissante depuis le début.',
+  stabilité: 'Intensité inchangée depuis le début.',
+  'amélioration progressive': 'Intensité décroissante, sans disparition complète.',
+  'évolution fluctuante': 'Alternance d’améliorations et d’aggravations, sans retour à la normale.',
+  'évolution par poussées': 'Épisodes aigus séparés par des périodes de rémission.',
+  'résolution complète': 'Disparition complète du symptôme.',
+};
 
 export interface SymptomDef {
   id: string;
@@ -69,7 +93,7 @@ export function chrono(opts: { caractere?: boolean } = {}): Question[] {
     { id: 'mode_debut', label: 'Mode de début', type: 'select', options: MODE_DEBUT, group: 'chrono', essentiel: true },
     { id: 'circonstances', label: 'Circonstances de survenue', type: 'text', group: 'chrono', placeholder: 'ex. au repos, au cours d’un effort, au réveil…' },
     {
-      id: 'evolution', label: 'Évolution depuis le début', type: 'select', group: 'chrono', essentiel: true,
+      id: 'evolution', label: 'Évolution depuis le début', type: 'select', group: 'chrono', essentiel: true, courbes: COURBES_EVOLUTION, definitions: DEF_EVOLUTION,
       options: ['aggravation progressive', 'stabilité', 'amélioration progressive', 'évolution fluctuante', 'évolution par poussées', 'résolution complète'],
     },
     { id: 'duree', label: 'Durée (ou durée des épisodes)', type: 'text', group: 'chrono', placeholder: 'ex. 3 jours, épisodes de 20 minutes' },
@@ -448,7 +472,27 @@ export const SYMPTOMES: SymptomDef[] = [
       ...chrono(),
       { id: 'tmax', label: 'Température maximale', type: 'number', unit: '°C', group: 'caract', essentiel: true, p: 'chiffrée au maximum à {v} °C' },
       { id: 'mesure', label: 'Mesure', type: 'select', group: 'caract', p: '{v}', options: ['mesurée au thermomètre', 'ressentie, non mesurée'] },
-      { id: 'profil', label: 'Profil', type: 'select', group: 'caract', p: 'd’allure {v}', options: ['continue (en plateau)', 'intermittente', 'rémittente', 'ondulante', 'irrégulière'] },
+      {
+        id: 'profil', label: 'Profil de la courbe thermique', type: 'select', group: 'caract', p: 'd’allure {v}',
+        options: ['continue (en plateau)', 'intermittente', 'rémittente', 'ondulante', 'récurrente', 'irrégulière'],
+        seuil: { y: 14, label: '38 °C' },
+        courbes: {
+          'continue (en plateau)': '2,8 9,6 16,9 23,7 30,9 37,6 44,8 51,6 58,9 62,7',
+          intermittente: '2,22 7,22 10,4 13,22 21,22 24,4 27,22 35,22 38,4 41,22 49,22 52,4 55,22 62,22',
+          rémittente: '2,10 7,3 12,11 17,4 22,12 27,3 32,11 37,4 42,12 47,3 52,11 57,4 62,10',
+          ondulante: '2,23 7,16 12,8 17,5 22,8 27,16 32,23 37,16 42,8 47,5 52,8 57,16 62,23',
+          récurrente: '2,22 6,22 8,6 11,5 14,7 17,6 19,22 31,22 33,6 36,5 39,7 42,6 44,22 62,22',
+          irrégulière: '2,18 6,10 10,20 15,7 19,16 24,5 28,19 33,12 38,21 43,8 49,16 54,6 58,20 62,12',
+        },
+        definitions: {
+          'continue (en plateau)': 'Fièvre permanente ≥ 38 °C, variations inférieures à 1 °C sur 24 h (typhoïde, pneumonie franche).',
+          intermittente: 'Pics fébriles avec retour à une température normale entre les accès (suppuration, bactériémie, paludisme).',
+          rémittente: 'Variations de plus de 1 °C sur 24 h sans retour à la normale (suppuration profonde).',
+          ondulante: 'Ondes fébriles de plusieurs jours, montant et descendant progressivement, séparées de périodes d’apyrexie (brucellose, lymphome).',
+          récurrente: 'Accès fébriles brefs et répétés, séparés de plusieurs jours d’apyrexie (borréliose, paludisme : fièvre tierce ou quarte).',
+          irrégulière: 'Variations sans rythme reconnaissable.',
+        },
+      },
       { id: 'contexte_fievre', label: 'Contexte', type: 'multi', group: 'facteurs', essentiel: true, p: 'dans un contexte de {v}', options: ['voyage récent en zone d’endémie', 'contage infectieux dans l’entourage', 'hospitalisation ou soins récents', 'matériel étranger (prothèse, cathéter)', 'contact avec des animaux', 'consommation de lait cru', 'immunodépression', 'chimiothérapie récente'] },
     ],
     associes: ['frissons', 'sueurs', 'toux', 'expectoration', 'dyspnee', 'brulures_mictionnelles', 'pollakiurie', 'douleur_lombaire', 'diarrhee', 'douleur_abdominale', 'cephalees', 'photophobie', 'eruption', 'arthralgies', 'myalgies', 'odynophagie', 'otalgie', 'rhinorrhee', 'asthenie', 'amaigrissement'],

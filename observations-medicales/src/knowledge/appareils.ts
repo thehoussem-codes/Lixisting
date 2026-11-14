@@ -53,7 +53,7 @@ export const ETAT_GENERAL: AppareilDef = A('eg', 'État général', 'État gén�
       hint: 'Significatif si ≥ 5 % en 1 mois ou ≥ 10 % en 6 mois (critère de dénutrition HAS).',
     }),
     F('fievre', 'Fièvre', 'f', { details: [D.num('tmax', 'Température maximale', '°C', 'chiffrée jusqu’à {v} °C'), D.depuis()] }),
-    F('frissons', 'Frissons', 'mp', { hint: 'Frissons solennels : évocateurs de bactériémie.' }),
+    F('frissons', 'Frissons', 'mp', { hint: 'Frissons solennels (intenses, avec claquement de dents) : évocateurs de bactériémie.', details: [D.sel('type', 'Type', ['solennels (claquement de dents)', 'simples'], '{v}'), D.text('moment', 'Moment', '{v}')] }),
     F('sueurs', 'Sueurs', 'fp', { details: [D.sel('horaire', 'Horaire', ['nocturnes', 'diurnes', 'profuses'], '{v}')] }),
     F('prise_poids', 'Prise de poids', 'f', { details: [D.num('kg', 'Gain', 'kg', 'de {v} kg'), D.depuis()] }),
   ]),

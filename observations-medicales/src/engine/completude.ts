@@ -118,7 +118,8 @@ export function bilan(obs: Observation): Bilan {
     const nom = def.id === 'autre' ? s.libelle || 'Symptôme' : def.label;
     for (const q of def.questions.filter((x) => x.essentiel)) {
       const v = s.a[q.id];
-      const ok = Array.isArray(v) ? v.length > 0 : v !== undefined && v !== '';
+      const autre = s.a[`${q.id}__autre`];
+      const ok = (Array.isArray(v) ? v.length > 0 : v !== undefined && v !== '') || (typeof autre === 'string' && autre.trim() !== '');
       const niveau: Niveau = s.principal && (q.id === 'debut_date' || (def.douleur && ['siege', 'type', 'intensite'].includes(q.id))) ? 'indispensable' : 'recommande';
       add('hdm', `${s.uid}_${q.id}`, `${nom} : ${q.label.replace(/^\d+\.\s*/, '')}`, niveau, ok, def.douleur && !ok && niveau === 'indispensable' ? 'Douleur non caractérisée.' : undefined);
     }

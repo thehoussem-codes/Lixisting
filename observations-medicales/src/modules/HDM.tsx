@@ -134,7 +134,8 @@ function SymptomeCard({ s }: { s: SymptomEntry }) {
             <div key={g.id}>
               <h4 className="mb8" style={{ color: 'var(--primary)' }}>{g.titre}</h4>
               <div className="grid g2">
-                {qs.map((q) => <QuestionInput key={q.id} q={q} v={s.a[q.id]} onChange={(v) => setA(q.id, v)} readOnly={readOnly} />)}
+                {qs.map((q) => <QuestionInput key={q.id} q={q} v={s.a[q.id]} onChange={(v) => setA(q.id, v)} readOnly={readOnly}
+                  autre={typeof s.a[`${q.id}__autre`] === 'string' ? (s.a[`${q.id}__autre`] as string) : ''} onAutre={(v) => setA(`${q.id}__autre`, v)} />)}
               </div>
             </div>
           );
@@ -159,7 +160,35 @@ function SymptomeCard({ s }: { s: SymptomEntry }) {
   );
 }
 
-function QuestionInput({ q, v, onChange, readOnly }: { q: Question; v: string | string[] | undefined; onChange: (v: string | string[] | undefined) => void; readOnly: boolean }) {
+function Courbe({ points, seuil, on }: { points: string; seuil?: Question['seuil']; on: boolean }) {
+  return (
+    <svg viewBox="0 0 64 28" width="64" height="28" aria-hidden="true" style={{ display: 'block' }}>
+      {seuil && <line x1="0" x2="64" y1={seuil.y} y2={seuil.y} stroke="var(--danger)" strokeWidth="0.8" strokeDasharray="2 2" opacity="0.7" />}
+      <polyline points={points} fill="none" stroke={on ? 'var(--primary)' : 'var(--text-2)'} strokeWidth="1.8" strokeLinejoin="round" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+/** Choix illustré par une mini-courbe et sa définition */
+function ChoixCourbes({ q, value, onChange, disabled }: { q: Question; value: string; onChange: (v: string | undefined) => void; disabled: boolean }) {
+  return (
+    <div className="col" style={{ gap: 6 }}>
+      <div className="courbes" role="radiogroup" aria-label={q.label}>
+        {(q.options ?? []).map((o) => (
+          <button type="button" key={o} role="radio" aria-checked={value === o} className={`courbe ${value === o ? 'on' : ''}`} disabled={disabled}
+            title={q.definitions?.[o]} onClick={() => onChange(value === o ? undefined : o)}>
+            <Courbe points={q.courbes![o]} seuil={q.seuil} on={value === o} />
+            <span>{o}</span>
+          </button>
+        ))}
+      </div>
+      {q.seuil && <div className="small faint">Ligne rouge pointillée : {q.seuil.label}.</div>}
+      {value && q.definitions?.[value] && <div className="small muted"><strong>{value}</strong> : {q.definitions[value]}</div>}
+    </div>
+  );
+}
+
+function QuestionInput({ q, v, onChange, readOnly, autre, onAutre }: { q: Question; v: string | string[] | undefined; onChange: (v: string | string[] | undefined) => void; readOnly: boolean; autre: string; onAutre: (v: string) => void }) {
   const str = typeof v === 'string' ? v : '';
   const full = q.type === 'multi' || (q.type === 'select' && (q.options?.join('').length ?? 0) > 120);
   let input: React.ReactNode;
@@ -176,13 +205,19 @@ function QuestionInput({ q, v, onChange, readOnly }: { q: Question; v: string | 
         </div>
       ); break;
     case 'yn': input = <YNInput label={q.label} value={str} onChange={(x) => onChange(x)} disabled={readOnly} />; break;
-    case 'multi': input = <Chips value={Array.isArray(v) ? v : []} options={q.options ?? []} onChange={onChange} disabled={readOnly} />; break;
-    case 'select': input = (q.options?.length ?? 0) <= 6 ? <Seg value={str} options={q.options ?? []} onChange={onChange} disabled={readOnly} /> : <Select value={str} options={q.options ?? []} onChange={onChange} disabled={readOnly} aria-label={q.label} />; break;
+    case 'multi':
+      input = (
+        <div className="col" style={{ gap: 6 }}>
+          <Chips value={Array.isArray(v) ? v : []} options={q.options ?? []} onChange={onChange} disabled={readOnly} />
+          <Text value={autre} onChange={onAutre} placeholder="Autre (préciser)" disabled={readOnly} aria-label={`${q.label} : autre`} />
+        </div>
+      ); break;
+    case 'select': input = q.courbes ? <ChoixCourbes q={q} value={str} onChange={onChange} disabled={readOnly} /> : (q.options?.length ?? 0) <= 6 ? <Seg value={str} options={q.options ?? []} onChange={onChange} disabled={readOnly} /> : <Select value={str} options={q.options ?? []} onChange={onChange} disabled={readOnly} aria-label={q.label} />; break;
     default: input = <Text value={str} onChange={onChange} placeholder={q.placeholder} disabled={readOnly} aria-label={q.label} />;
   }
-  const rempli = Array.isArray(v) ? v.length > 0 : str !== '';
+  const rempli = (Array.isArray(v) ? v.length > 0 : str !== '') || autre.trim() !== '';
   return (
-    <Field label={<>{q.label}{q.essentiel && !rempli && <span className="badge warn">essentiel</span>}</>} hint={q.hint} className={full ? 'spanall' : ''}>
+    <Field label={<>{q.label}{q.essentiel && !rempli && <span className="badge warn">essentiel</span>}</>} hint={q.hint} className={full || q.courbes ? 'spanall' : ''}>
       {input}
     </Field>
   );

@@ -42,6 +42,8 @@ const EVOLUTION: Record<string, string> = {
 };
 
 function valeur(a: SymptomEntry['a'], q: Question): string | string[] | undefined {
+  const autre = typeof a[`${q.id}__autre`] === 'string' ? (a[`${q.id}__autre`] as string).trim() : '';
+  if (q.type === 'multi' && autre) return [...((Array.isArray(a[q.id]) ? a[q.id] : []) as string[]), autre];
   const v = a[q.id];
   if (v === undefined || v === '' || (Array.isArray(v) && v.length === 0)) return undefined;
   return v;
@@ -57,7 +59,8 @@ export function texteQuestion(q: Question, v: string | string[] | undefined): st
   }
   if (Array.isArray(v)) {
     const opts = q.options ?? [];
-    const sorted = [...v].sort((x, y) => opts.indexOf(x) - opts.indexOf(y));
+    const rang = (x: string) => (opts.includes(x) ? opts.indexOf(x) : opts.length);
+    const sorted = [...v].sort((x, y) => rang(x) - rang(y));
     const sans = sorted.filter((x) => x.startsWith('sans ') || x.startsWith('non '));
     const avec = sorted.filter((x) => !sans.includes(x));
     const parts: string[] = [];

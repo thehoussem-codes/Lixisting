@@ -4,10 +4,12 @@ import type { FState, YN } from '../../shared/types.ts';
 import { Icon } from './icons.tsx';
 
 export function Hint({ text }: { text?: string }) {
+  const [open, setOpen] = useState(false);
   if (!text) return null;
   return (
-    <button type="button" className="hint" aria-label={`Aide : ${text}`} tabIndex={0}>
-      ?<span className="tip" role="tooltip">{text}</span>
+    <button type="button" className={`hint ${open ? 'open' : ''}`} aria-label={`Aide : ${text}`} aria-expanded={open} title="Aide sémiologique"
+      onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen(!open); }} onBlur={() => setOpen(false)}>
+      i<span className="tip" role="tooltip">{text}</span>
     </button>
   );
 }
