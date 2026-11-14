@@ -226,3 +226,16 @@ Skills chargés : `physics-tuning`, `game-ai`, `audio-design`, `threejs-material
 - **Végétation** : palmiers ramenés de 827 à 296 ; zones vertes OSM plantées environ deux fois plus densément
   (ficus, pins d'Alep, cyprès, massifs).
 
+## 14 novembre 2026 (2 h 20) — Cours de la Révolution d'après photos
+
+- **Bâtiment manquant** : l'îlot ouest du Cours (entre les rues Asla Hocine, Lamara Abdelkader, Zenine Larbi et la
+  chaussée ouest du Cours) est vide dans OSM. Ajout d'un immeuble colonial de 22 m à pans coupés côté Cours
+  (`MANUAL` dans tools/build_world.py), emprise calée sur les bords réels des rues. Ajout manuel, signalé comme tel.
+- **Promenade** : la bande entre les deux chaussées devient une allée dallée claire (zone « plaza » calculée depuis
+  les chaussées OSM, pas enregistrée dans la carte).
+- **Arbres du Cours** : plus de remplissage aléatoire (avant : 4 rangées tous les 7 m avec décalages, plus des
+  ficus au hasard dans les pelouses voisines et des palmiers). Maintenant deux alignements réguliers de grands
+  ficus à écorce grise, un tous les 9 m, de part et d'autre de l'allée centrale (87 arbres).
+- **Squares voisins** (place du théâtre) : pelouses plantées sobrement de palmiers isolés, d'araucarias (nouvelle
+  espèce) et de massifs bas, comme sur les photos.
+

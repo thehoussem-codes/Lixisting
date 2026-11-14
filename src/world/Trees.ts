@@ -8,6 +8,7 @@ export type TreeData = Record<string, number[]>;
 const CHUNK = 200;          // regroupement par blocs de 200 m
 const VIEW_DISTANCE = 520;  // au-delà, la végétation d'un bloc n'est plus affichée
 
+const FICUS_BARK = new THREE.Color(0x9a958a); // écorce grise et lisse des ficus (photo du Cours)
 const BARK = new THREE.Color(0x6b4f35), PALM_BARK = new THREE.Color(0x7a5a3c);
 const GREENS: Record<string, THREE.Color[]> = {
   pine: [0x2f6b34, 0x3d7a3a, 0x4a8040, 0x356f45].map((c) => new THREE.Color(c)),
@@ -258,13 +259,25 @@ function palm(b: MeshBuilder, i: number, x: number, y: number, z: number, s: num
 function ficus(b: MeshBuilder, i: number, x: number, y: number, z: number, s: number): void {
   const color = GREENS.ficus[i % GREENS.ficus.length];
   const height = (2.6 + noise(i, 1) * 0.9) * s;
-  const [tx, ty, tz] = trunk(b, x, y, z, 0.3 * s, height, (noise(i, 2) - 0.5) * 0.4, (noise(i, 3) - 0.5) * 0.4, 6, BARK);
+  const [tx, ty, tz] = trunk(b, x, y, z, 0.3 * s, height, (noise(i, 2) - 0.5) * 0.4, (noise(i, 3) - 0.5) * 0.4, 6, FICUS_BARK);
   const r = (2.3 + noise(i, 4) * 0.8) * s;
   crown(b, i, tx, ty + r * 0.62, tz, r, r * 0.8, 5, color, LIGHT(color));
   // Deux grosses branches visibles sous le feuillage.
   for (let k = 0; k < 2; k++) {
     const a = noise(i, 70 + k) * Math.PI * 2;
-    trunk(b, tx, ty - 0.3, tz, 0.13 * s, r * 0.55, Math.cos(a) * r * 0.45, Math.sin(a) * r * 0.45, 4, BARK);
+    trunk(b, tx, ty - 0.3, tz, 0.13 * s, r * 0.55, Math.cos(a) * r * 0.45, Math.sin(a) * r * 0.45, 4, FICUS_BARK);
+  }
+}
+
+/** Araucaria (pin de Norfolk), fréquent dans les squares d'Annaba (photo du Cours) : tronc droit, étages de branches plates. */
+function araucaria(b: MeshBuilder, i: number, x: number, y: number, z: number, s: number): void {
+  const color = GREENS.cypress[i % GREENS.cypress.length].clone().lerp(new THREE.Color(0x3d6b3a), 0.4);
+  const height = (13 + noise(i, 1) * 4) * s;
+  trunk(b, x, y, z, 0.22 * s, height, 0, 0, 6, BARK);
+  const TIERS = 8;
+  for (let k = 0; k < TIERS; k++) {
+    const t = k / (TIERS - 1), r = (3.0 - 2.5 * t) * s * (0.9 + noise(i, 10 + k) * 0.2);
+    blob(b, x, y + height * (0.25 + 0.72 * t), z, r, 0.45 * s, r, 9, 2, color, LIGHT(color), true);
   }
 }
 
@@ -317,7 +330,7 @@ export function addPlant(b: MeshBuilder, species: string, i: number, x: number, 
   SHAPES[species]?.(b, i, x, y, z, size);
 }
 
-const SHAPES: Record<string, (b: MeshBuilder, i: number, x: number, y: number, z: number, s: number) => void> = { pine, palm: (b, i, x, y, z, s) => palm(b, i, x, y, z, s), ficus, cypress, bush, parasol, rock };
+const SHAPES: Record<string, (b: MeshBuilder, i: number, x: number, y: number, z: number, s: number) => void> = { pine, palm: (b, i, x, y, z, s) => palm(b, i, x, y, z, s), ficus, cypress, araucaria, bush, parasol, rock };
 
 /** Ajoute toute la végétation à la scène, regroupée par blocs. Renvoie le nombre de plantes. */
 export function buildTrees(scene: THREE.Scene, data: TreeData, ground: (x: number, z: number) => number): number {

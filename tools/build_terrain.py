@@ -42,7 +42,32 @@ COLORS = {  # couleurs du sol (rouge, vert, bleu de 0 à 1)
     "land": (0.74, 0.69, 0.53), "beach": (0.93, 0.85, 0.63), "wood": (0.24, 0.48, 0.23),
     "scrub": (0.49, 0.59, 0.33), "grass": (0.53, 0.71, 0.38), "pitch": (0.37, 0.63, 0.32),
     "rock": (0.60, 0.59, 0.55), "hill": (0.42, 0.55, 0.30), "cliff": (0.52, 0.47, 0.40),
+    "plaza": (0.80, 0.78, 0.73),  # dallage clair de la promenade du Cours (photo)
 }
+
+
+def cours_promenade(world):
+    """Promenade centrale du Cours de la Révolution : bande entre ses deux chaussées réelles (OSM),
+    du bord du trottoir ouest au bord du trottoir est. Renvoie (anneau, ligne ouest, ligne est) ou None."""
+    hall = world["meta"].get("town_hall")
+    if not hall:
+        return None
+    sides = []
+    for road in world["roads"]:
+        line = pairs(road["p"])
+        span = np.hypot(*(line[-1] - line[0]))
+        if road["k"] == "primary" and span > 300 and np.ptp(line[:, 0]) < 60 and np.abs(line[:, 0] - hall[0]).min() < 80 and abs(line[:, 1].mean() - hall[1]) < 200:
+            sides.append((road, line))
+    sides = sorted(sides, key=lambda item: -len(item[1]))[:2]
+    if len(sides) != 2:
+        return None
+    (ra, la), (rb, lb) = sorted(sides, key=lambda item: item[1][:, 0].mean())  # ouest puis est
+    lo, hi = max(la[:, 1].min(), lb[:, 1].min()), min(la[:, 1].max(), lb[:, 1].max())
+    ns = np.arange(lo + 2, hi - 2, 6.0)
+    west = np.interp(ns, la[np.argsort(la[:, 1]), 1], la[np.argsort(la[:, 1]), 0]) + ra["w"] / 2 + ra.get("sw", 0) + 0.3
+    east = np.interp(ns, lb[np.argsort(lb[:, 1]), 1], lb[np.argsort(lb[:, 1]), 0]) - rb["w"] / 2 - rb.get("sw", 0) - 0.3
+    ring = np.vstack([np.column_stack([west, ns]), np.column_stack([east, ns])[::-1]])
+    return ring, np.column_stack([west, ns]), np.column_stack([east, ns])
 
 
 def pairs(flat):
@@ -61,6 +86,11 @@ def densify(ring, step):
 
 def main():
     world = json.loads(WORLD.read_text(encoding="utf-8"))
+    promenade = cours_promenade(world)
+    if promenade is not None:
+        # La promenade devient une zone dallée (couleur du sol) ; elle n'est pas enregistrée dans la carte.
+        world["areas"].append({"k": "plaza", "p": [round(float(v), 1) for v in promenade[0].ravel()]})
+        world["meta"]["cours_promenade"] = [promenade[1].tolist(), promenade[2].tolist()]
     with gzip.open(DEM, "rt", encoding="utf-8") as f:
         dem = json.load(f)
 
@@ -266,7 +296,7 @@ def build_trees(world, grid=None, grid_origin=None):
     roads, buildings = cKDTree(road_points), cKDTree(building_points)
     land = [Polygon(pairs(r)) for r in world["land"] if len(r) >= 6]
     coast = cKDTree(np.vstack([densify(pairs(r), 20) for r in world["land"] if len(r) >= 6]))
-    out = {"pine": [], "palm": [], "ficus": [], "cypress": [], "bush": []}
+    out = {"pine": [], "palm": [], "ficus": [], "cypress": [], "bush": [], "araucaria": []}
 
     def add(kind, x, n, low=0.75, high=1.35):
         out[kind] += [round(float(x), 1), round(float(n), 1), round(float(low + rng.random() * (high - low)), 2)]
@@ -282,10 +312,11 @@ def build_trees(world, grid=None, grid_origin=None):
             continue
         per_tree, mix = mixes[area["k"]]
         ring = pairs(area["p"])
-        # Le Cours de la Révolution : une voûte continue de ficus, quelques palmiers (d'après les photos).
+        # Squares du centre (Cours, place du théâtre) : pelouses plantées avec soin, comme sur les photos —
+        # quelques palmiers et araucarias isolés, massifs bas ; pas de forêt d'arbres tirés au hasard.
         hall = world["meta"].get("town_hall")
         if area["k"] == "grass" and hall and np.hypot(*(ring.mean(axis=0) - np.array(hall))) < 550:
-            per_tree, mix = 55, [("ficus", 0.88), ("palm", 0.12)]
+            per_tree, mix = 260, [("palm", 0.35), ("araucaria", 0.25), ("bush", 0.4)]
         lo, hi = ring.min(axis=0), ring.max(axis=0)
         count = int((hi[0] - lo[0]) * (hi[1] - lo[1]) / per_tree)
         if count == 0:
@@ -345,42 +376,26 @@ def build_trees(world, grid=None, grid_origin=None):
             else:
                 add("ficus", *point, 0.8, 1.15)
 
-    # 4. Le Cours de la Révolution : la promenade entre ses deux chaussées est couverte d'une voûte de ficus
-    #    (photos). OSM ne décrit pas les arbres : on plante des rangées régulières entre les deux voies réelles.
-    hall = world["meta"].get("town_hall")
-    if hall:
-        sides = []
-        for road in world["roads"]:
-            line = pairs(road["p"])
-            span = np.hypot(*(line[-1] - line[0]))
-            if road["k"] == "primary" and span > 300 and np.ptp(line[:, 0]) < 60 and np.abs(line[:, 0] - hall[0]).min() < 80 and abs(line[:, 1].mean() - hall[1]) < 200:
-                sides.append((road, line))
-        sides = sorted(sides, key=lambda item: -len(item[1]))[:2]
-        if len(sides) == 2:
-            (road_a, line_a), (road_b, line_b) = sides
-            # Un arbre tous les 7 m environ le long de la promenade.
-            steps = np.concatenate([[0], np.cumsum(np.hypot(*np.diff(line_a, axis=0).T))])
-            marks = np.arange(0, steps[-1], 7.0)
-            line_a = np.column_stack([np.interp(marks, steps, line_a[:, 0]), np.interp(marks, steps, line_a[:, 1])])
-            other = cKDTree(line_b)
-            planted = 0
-            for i in range(0, len(line_a)):
-                point = line_a[i]
-                gap, j = other.query(point)
-                across = (line_b[j] - point) / max(gap, 0.01)
-                if gap < 20 or gap > 70 or (i % 1):
+    # 4. Le Cours de la Révolution (photo de la promenade) : deux alignements réguliers de grands ficus, de part et
+    #    d'autre de l'allée centrale dallée, un arbre tous les 9 m, sans décalage aléatoire ; leurs houppiers se
+    #    rejoignent au-dessus de l'allée. Pas de palmier dans les alignements.
+    lines = world["meta"].get("cours_promenade")
+    if lines:
+        west, east = np.array(lines[0]), np.array(lines[1])
+        planted = 0
+        marks = np.arange(west[0, 1] + 4, west[-1, 1] - 4, 9.0)
+        wx = np.interp(marks, west[:, 1], west[:, 0]); ex = np.interp(marks, east[:, 1], east[:, 0])
+        for n, a, b in zip(marks, wx, ex):
+            width = b - a
+            if width < 14:
+                continue
+            for x in (a + 3.5, b - 3.5):          # près des bordures : l'allée centrale reste dégagée
+                spot = np.array([x, n])
+                if buildings.query(spot)[0] < 3 or roads.query(spot)[0] < 1.5:
                     continue
-                inner_a, inner_b = road_a["w"] / 2 + 3.5, gap - road_b["w"] / 2 - 3.5
-                rows = np.linspace(inner_a, inner_b, 4)
-                for row, distance in enumerate(rows):
-                    spot = point + across * distance + rng.normal(0, 0.5, 2)
-                    if buildings.query(spot)[0] < 2 or roads.query(spot)[0] < 1.3:
-                        continue
-                    add("palm" if (row in (1, 2) and planted % 9 == 0) else "ficus", *spot, 1.15, 1.5)
-                    planted += 1
-            print("Cours de la Révolution :", planted, "arbres plantés")
-        else:
-            print("Cours de la Révolution : chaussées non identifiées (", len(sides), ")")
+                add("ficus", *spot, 2.0, 2.2)   # grands sujets : les houppiers se rejoignent au-dessus de l'allée
+                planted += 1
+        print("Cours de la Révolution :", planted, "ficus en deux alignements")
 
     # 4 bis. Place devant la gare maritime : une rangée de palmiers des Canaries au pied chaulé (photo de Houssem),
     #        entre l'avenue et la clôture bleue du port.

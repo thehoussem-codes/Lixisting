@@ -494,6 +494,21 @@ def main():
             item["f"] = [round(focus[0], 1), round(focus[1], 1)]
         buildings.append(item)
 
+    # --- Bâtiments absents d'OSM, ajoutés à la demande de Houssem d'après ses photos et sa capture du jeu.
+    # Îlot ouest du Cours de la Révolution, entre la rue Asla Hocine, la rue Lamara Abdelkader, la rue Zenine Larbi
+    # et la chaussée ouest du Cours : un grand immeuble colonial, pans coupés côté Cours (comme sur les photos).
+    # L'emprise suit les bords réels des rues voisines (axe OSM + demi-largeur + trottoir).
+    MANUAL = [
+        {"h": 22.0, "t": "colonial", "p": [61.0, 222.5, 104.5, 222.5, 109.0, 227.0, 109.0, 283.0, 104.5, 287.5, 61.0, 287.5], "c": 1},
+    ]
+    for item in MANUAL:
+        q = list(zip(item["p"][0::2], item["p"][1::2]))
+        walls = shop_walls(q)
+        if walls:
+            item["s"] = walls
+        buildings.append(item)
+        kinds[item["t"]] = kinds.get(item["t"], 0) + 1
+
     # --- Bâtiments qui débordent sur la chaussée : la circulation suit l'axe des rues, avec une voie de chaque côté.
     # On repousse les murs à au moins CLEAR mètres de l'axe des rues carrossables (demande de Houssem : les voitures
     # se bloquaient contre des maisons). Seuls les points trop proches bougent ; le reste du bâtiment est conservé.
