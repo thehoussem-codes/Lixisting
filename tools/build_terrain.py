@@ -272,9 +272,11 @@ def build_trees(world, grid=None, grid_origin=None):
         out[kind] += [round(float(x), 1), round(float(n), 1), round(float(low + rng.random() * (high - low)), 2)]
 
     # 1. Zones vertes OSM
-    mixes = {"wood": (170, [("pine", 0.6), ("cypress", 0.15), ("bush", 0.25)]),
-             "scrub": (260, [("bush", 0.7), ("pine", 0.3)]),
-             "grass": (330, [("palm", 0.3), ("ficus", 0.3), ("pine", 0.15), ("bush", 0.25)])}
+    # Densité (m² par arbre) et espèces. Annaba a peu de palmiers dans ses espaces verts (retour de Houssem) :
+    # surtout ficus, pins d'Alep, cyprès et massifs ; les zones vertes de la carte sont plantées plus densément.
+    mixes = {"wood": (110, [("pine", 0.6), ("cypress", 0.15), ("bush", 0.25)]),
+             "scrub": (170, [("bush", 0.65), ("pine", 0.35)]),
+             "grass": (160, [("palm", 0.04), ("ficus", 0.38), ("pine", 0.2), ("cypress", 0.08), ("bush", 0.3)])}
     for area in world["areas"]:
         if area["k"] not in mixes:
             continue
@@ -338,7 +340,7 @@ def build_trees(world, grid=None, grid_origin=None):
             if any(road_owner[k] != road_index for k in near):
                 continue
             near_sea = coast.query(point)[0] < 160
-            if near_sea and road["k"] != "residential":
+            if near_sea and road["k"] != "residential" and rng.random() < 0.3:
                 add("palm", *point, 0.9, 1.3)
             else:
                 add("ficus", *point, 0.8, 1.15)
@@ -379,6 +381,13 @@ def build_trees(world, grid=None, grid_origin=None):
             print("Cours de la Révolution :", planted, "arbres plantés")
         else:
             print("Cours de la Révolution : chaussées non identifiées (", len(sides), ")")
+
+    # 4 bis. Place devant la gare maritime : une rangée de palmiers des Canaries au pied chaulé (photo de Houssem),
+    #        entre l'avenue et la clôture bleue du port.
+    for n in np.arange(-95.0, 101.0, 9.0):
+        spot = np.array([59.5, n])
+        if roads.query(spot)[0] > 2.5 and buildings.query(spot)[0] > 2:
+            add("palm", *spot, 1.1, 1.25)
 
     # 5. Détails du bord de mer : parasols de paille sur les plages (emplacements indicatifs),
     #    rochers au pied des côtes rocheuses et aux extrémités des plages.

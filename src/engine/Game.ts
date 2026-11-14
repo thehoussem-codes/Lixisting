@@ -113,6 +113,7 @@ export class Game {
       this.toggleCar(Infinity);
     };
     // Petit accès de diagnostic, utilisé par les vérifications automatiques.
+    (window as unknown as Record<string, unknown>).lixitingTraffic = () => this.traffic?.snapshot() ?? [];
     (window as unknown as Record<string, unknown>).lixitingDebug = () => ({
       traffic: this.traffic?.cars.filter((c) => c.object.visible).length ?? 0,
       nearestTraffic: Math.min(...(this.traffic?.cars ?? []).map((c) => c.object.position.distanceTo(this.player.object.position))),
@@ -200,6 +201,7 @@ export class Game {
       this.traffic = new Traffic(data, (car) => this.scene.add(car.object));
       this.lights = new TrafficLights(this.scene, data, this.ground);
       this.traffic.lights = this.lights;
+      this.traffic.onHonk = (distance) => this.sound.honk(distance);
       this.map = new MapView(data, (index) => this.goToPlace(index));
       this.events.onPlaces(data.places);
       // Une voiture garée à chaque repère, pour en avoir toujours une sous la main.
@@ -224,6 +226,7 @@ export class Game {
       this.goToPlace(0);
       this.setupShadows();
       this.setupReflections();
+      Car.onCrash = (strength) => this.sound.crash(strength);
       // Adresse du type ...?at=x,n : démarre à ce point de la carte (mètres depuis la gare, n = nord).
       const at = new URLSearchParams(window.location.search).get('at')?.split(',').map(Number);
       if (at && at.length === 2 && at.every(Number.isFinite)) this.player.teleport(at[0], this.ground(at[0], -at[1]), -at[1]);
@@ -391,7 +394,7 @@ export class Game {
     for (const car of this.cars) if (car !== this.driving) car.settle(this.ground, true);
     const me = this.player.object.position;
     this.lights?.update(dt);
-    this.traffic?.update(dt, me.x, me.z, this.driving === null, this.cars, this.ground);
+    this.traffic?.update(dt, me.x, me.z, this.driving === null, this.cars, this.ground, this.collider);
     const heading = this.driving ? this.driving.heading : this.player.object.rotation.y;
     this.map?.update(this.player.object.position.x, this.player.object.position.z, heading);
     if (DRONE) { // vue aérienne de contrôle : ?drone=hauteur,cap

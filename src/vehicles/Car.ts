@@ -102,6 +102,17 @@ export class Car {
   private leanFrom = 0;
   private wheelieHeld = false;
   private wheelie = 0; // angle de la roue arrière (radians)
+  // --- Chocs : glissade et rotation reçues lors d'une collision (s'ajoutent à la marche normale, puis s'amortissent)
+  private slideX = 0;
+  private slideZ = 0;
+  private spin = 0;
+  /** Deux-roues renversé par un choc (il reste couché). */
+  fallen = false;
+  /** Vitesse du dernier choc subi (m/s) et temps écoulé depuis : la circulation s'en sert pour lâcher la voiture. */
+  lastImpact = 0;
+  sinceImpact = Infinity;
+  /** Appelé à chaque choc avec sa violence (m/s), pour le son. */
+  static onCrash: ((strength: number) => void) | null = null;
 
   /** Deux-roues : affiche ou cache le conducteur assis dessus. */
   set rider(shown: boolean) { if (this.riderNode) this.riderNode.visible = shown; if (!shown) this.wheelieHeld = false; }
@@ -124,6 +135,19 @@ export class Car {
     this.wheelbase = (spec.axleFront - spec.axleRear) * spec.length;
     this.shadow = createBlobShadow(spec.width * 1.35, spec.length * 1.15);
     this.object.add(this.shadow);
+  }
+
+  /** Masse approximative (kg) : proportionnelle au volume ; un deux-roues pèse environ 150 kg avec son pilote. */
+  get mass(): number {
+    return this.spec.moto ? 150 : Math.max(800, this.spec.length * this.spec.width * this.spec.height * 130);
+  }
+
+  /** Choc reçu : vitesse de glissade (m/s) et rotation (rad/s) ajoutées. */
+  impact(vx: number, vz: number, spin: number): void {
+    this.slideX += vx; this.slideZ += vz; this.spin += spin;
+    const strength = Math.hypot(vx, vz);
+    this.lastImpact = strength; this.sinceImpact = 0;
+    if (this.spec.moto && strength > 2.5) { this.fallen = true; this.rider = false; this.speed = 0; }
   }
 
   place(x: number, z: number, heading = this.heading): void {
@@ -160,7 +184,7 @@ export class Car {
       let turn = this.heading - this.leanFrom;
       turn = Math.atan2(Math.sin(turn), Math.cos(turn)) / dt;
       this.leanFrom = this.heading;
-      const target = Math.max(-0.5, Math.min(0.5, -turn * Math.abs(this.speed) * 0.09));
+      const target = this.fallen ? 1.45 : Math.max(-0.5, Math.min(0.5, -turn * Math.abs(this.speed) * 0.09));
       this.leanNode.rotation.z += (target - this.leanNode.rotation.z) * (1 - Math.exp(-5 * dt));
       // Roue arrière : la moto pivote autour du point de contact de sa roue arrière.
       const lift = this.wheelieHeld && Math.abs(this.speed) > 1.5 ? 0.78 : 0;
@@ -237,6 +261,13 @@ export class Car {
   }
 
   /** Place directement la voiture (utilisé par la circulation automatique). */
+  /** Remet un véhicule accidenté en état (réapparition dans la circulation). */
+  recover(): void {
+    this.slideX = this.slideZ = this.spin = 0;
+    this.fallen = false; this.sinceImpact = Infinity; this.lastImpact = 0;
+    if (this.leanNode) this.leanNode.rotation.z = 0;
+  }
+
   setPose(x: number, z: number, heading: number): void {
     this.dropPhysics();
     this.baseY = null;
@@ -352,6 +383,8 @@ export class Car {
     }
     this.steerInput = steer;
     this.turnWheel(steer, dt);
+    this.sinceImpact += dt;
+    if (this.fallen) { this.speed *= Math.exp(-4 * dt); this.move(dt, 0, collider, others); return; }
     if (this.airborne) {
       // En l'air : ni moteur, ni freins, ni direction. La voiture garde son élan.
       this.move(dt, 0, collider, others);
@@ -430,7 +463,8 @@ export class Car {
     }
     this.steerInput = 0;
     this.turnWheel(0, dt);
-    if (this.speed === 0) return;
+    this.sinceImpact += dt;
+    if (this.speed === 0 && this.slideX === 0 && this.slideZ === 0 && this.spin === 0) return;
     if (!this.airborne) this.speed -= Math.sign(this.speed) * Math.min(Math.abs(this.speed), 6 * dt);
     this.move(dt, 0, collider, others);
   }
@@ -450,23 +484,31 @@ export class Car {
     this.steerAngle = steerAngle;
     // Sous-pas : on n'avance jamais de plus de 50 cm d'un coup, sinon une voiture très rapide (ou une image lente)
     // saute par-dessus un mur ou une autre voiture au lieu de la percuter (skill physics-tuning : effet tunnel).
-    const steps = Math.min(40, Math.max(1, Math.ceil(Math.abs(this.speed) * dt / 0.5)));
-    for (let i = 0; i < steps; i++) if (!this.step(dt / steps, steerAngle, collider, others)) return;
+    const reach = (Math.abs(this.speed) + Math.hypot(this.slideX, this.slideZ)) * dt;
+    const steps = Math.min(40, Math.max(1, Math.ceil(reach / 0.5)));
+    for (let i = 0; i < steps; i++) if (!this.step(dt / steps, steerAngle, collider, others)) break;
+    // La glissade et la rotation d'un choc s'éteignent par le frottement des pneus (environ 7 m/s² et 3 /s).
+    const slide = Math.hypot(this.slideX, this.slideZ);
+    if (slide > 0) { const k = Math.max(0, slide - 7 * dt) / slide; this.slideX *= k; this.slideZ *= k; }
+    this.spin *= Math.exp(-3 * dt);
+    if (Math.abs(this.spin) < 0.02) this.spin = 0;
   }
 
   /** Un pas de déplacement ; false si la voiture a heurté quelque chose. */
   private step(dt: number, steerAngle: number, collider: Collider | null, others: Car[]): boolean {
-    const heading = this.heading - (this.speed / this.wheelbase) * Math.tan(steerAngle) * dt;
+    const heading = this.heading - (this.speed / this.wheelbase) * Math.tan(steerAngle) * dt + this.spin * dt;
     const fx = Math.sin(heading), fz = Math.cos(heading);
     const position = this.object.position;
-    const x = position.x + fx * this.speed * dt;
-    const z = position.z + fz * this.speed * dt;
+    const x = position.x + (fx * this.speed + this.slideX) * dt;
+    const z = position.z + (fz * this.speed + this.slideZ) * dt;
 
     const other = this.hitCar(others, x, z, heading);
-    if (other || (collider && this.hits(collider, x, z, fx, fz))) {
-      // La voiture percutée est poussée dans le sens du choc.
-      if (other) other.shove(this.speed * 0.5 * Math.cos(other.heading - heading));
-      this.speed *= -0.3; // choc : la voiture rebondit légèrement
+    if (other) { this.collide(other); return false; }
+    if (collider && this.hits(collider, x, z, fx, fz)) {
+      const strength = Math.abs(this.speed) + Math.hypot(this.slideX, this.slideZ);
+      if (strength > 3) Car.onCrash?.(strength);
+      this.speed *= -0.3; // choc contre un mur : la voiture rebondit légèrement
+      this.slideX *= -0.3; this.slideZ *= -0.3; this.spin *= 0.5;
       return false;
     }
     position.x = x;
@@ -474,6 +516,41 @@ export class Car {
     this.heading = heading;
     this.object.rotation.y = heading;
     return true;
+  }
+
+  /**
+   * Choc entre deux véhicules : échange de quantité de mouvement selon leurs masses (coefficient de restitution 0,25),
+   * plus une rotation quand le choc n'est pas dans l'axe. Une voiture qui percute une moto ralentit à peine ;
+   * une moto qui percute une voiture s'arrête net et se couche.
+   */
+  private collide(other: Car): void {
+    const a = this.object.position, b = other.object.position;
+    let nx = b.x - a.x, nz = b.z - a.z;
+    const d = Math.hypot(nx, nz) || 1; nx /= d; nz /= d;
+    const va = [Math.sin(this.heading) * this.speed + this.slideX, Math.cos(this.heading) * this.speed + this.slideZ];
+    const vb = [Math.sin(other.heading) * other.speed + other.slideX, Math.cos(other.heading) * other.speed + other.slideZ];
+    const closing = (va[0] - vb[0]) * nx + (va[1] - vb[1]) * nz;
+    if (closing <= 0) { this.speed *= 0.5; return; } // ils s'écartent déjà : simple frottement
+    const ma = this.mass, mb = other.mass, e = 0.25;
+    const j = (1 + e) * closing / (1 / ma + 1 / mb); // impulsion (kg·m/s)
+    // Point de contact : l'avant (ou l'arrière) de celui qui percute ; le bras de levier fait tourner chaque véhicule.
+    const ahead = Math.sign(this.speed || 1) * this.halfLength;
+    const cx = a.x + Math.sin(this.heading) * ahead, cz = a.z + Math.cos(this.heading) * ahead;
+    const turn = (car: Car, sign: number, m: number) => {
+      const rx = cx - car.object.position.x, rz = cz - car.object.position.z;
+      const inertia = m * (car.spec.length ** 2 + car.spec.width ** 2) / 12;
+      return -sign * (rx * nz - rz * nx) * j / inertia;
+    };
+    // Celui qui percute : on retire la part de vitesse le long de son axe, le reste devient glissade.
+    const da = [-nx * j / ma, -nz * j / ma];
+    const fx = Math.sin(this.heading), fz = Math.cos(this.heading);
+    const along = da[0] * fx + da[1] * fz;
+    this.speed += along;
+    this.slideX += da[0] - along * fx; this.slideZ += da[1] - along * fz;
+    this.spin += turn(this, 1, ma) * 0.6;
+    other.impact(nx * j / mb, nz * j / mb, turn(other, -1, mb) * 0.6);
+    if (this.spec.moto && j / ma > 2.5) { this.fallen = true; this.speed = 0; }
+    Car.onCrash?.(j / Math.min(ma, mb));
   }
 
   private hitCar(others: Car[], x: number, z: number, heading: number): Car | null {

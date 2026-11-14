@@ -6,6 +6,7 @@ import { buildBuildings } from './Buildings';
 import { createAsphaltTexture, createPavementTexture, createRoadTexture, createCloudTexture } from './Textures';
 import { addPlant } from './Trees';
 import { Water } from './Water';
+import { buildLandmarks } from './Landmarks';
 import type { WorldData } from './WorldData';
 
 const HORIZON = 0xd4e2e6;   // brume claire de bord de mer (même teinte que le brouillard)
@@ -208,6 +209,7 @@ export function buildAnnabaWorld(scene: THREE.Scene, data: WorldData, terrain: T
   for (const builder of lamps.values()) add(builder, lampMaterial);
 
   const collider = buildBuildings(scene, data, ground);
+  buildLandmarks(scene, data, ground, collider);
 
   return { collider, sky, water };
 }

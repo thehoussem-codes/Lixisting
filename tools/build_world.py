@@ -419,6 +419,16 @@ def main():
     if mairie is not None:
         q = pts(mairie) if mairie["type"] == "way" else [xy[mairie["id"]]]
         mairie = (sum(v[0] for v in q) / len(q), sum(v[1] for v in q) / len(q))
+    # Stades : enceinte (leisure=stadium) et terrains (leisure=pitch). Tout bâtiment étiqueté stadium/grandstand,
+    # ou posé dans une enceinte de stade, est une tribune : gradins inclinés vers le centre du terrain.
+    arenas = []
+    for w in ways:
+        t = w.get("tags", {})
+        if t.get("leisure") in ("stadium", "pitch") and w["nodes"][0] == w["nodes"][-1]:
+            q = pts(w)[:-1]
+            if len(q) >= 3 and abs(area(q)) > 2500:
+                arenas.append((t.get("leisure"), q, (sum(v[0] for v in q) / len(q), sum(v[1] for v in q) / len(q)), abs(area(q))))
+
     buildings, estimated, kinds = [], 0, {}
     for w in ways:
         tags = w.get("tags", {})
@@ -449,6 +459,15 @@ def main():
             kind, sure = "industrial", True
         if is_estimated and kind in DEFAULT_HEIGHT:
             height = DEFAULT_HEIGHT[kind]
+        focus = None
+        if tags["building"] in ("stadium", "grandstand") or any(k == "stadium" and point_in_polygon(cx, cy, q) for k, q, _, _ in arenas):
+            near = [a2 for a2 in arenas if math.hypot(a2[2][0] - cx, a2[2][1] - cy) < 250]
+            if near:
+                # Centre visé : le plus grand terrain de l'enceinte (ou l'enceinte elle-même).
+                pitch = max(near, key=lambda a2: (a2[0] == "pitch", -math.hypot(a2[2][0] - cx, a2[2][1] - cy)) if a2[3] > 5000 else (False, -1e9))
+                kind, sure, focus = "stands", True, pitch[2]
+                if is_estimated:
+                    height = 11.0
         if kind is None or kind == "apartment":
             if height >= 28:
                 kind = "tower"
@@ -471,7 +490,80 @@ def main():
                 item["s"] = walls  # murs à commerces : hypothèse (un immeuble sur deux, côté grande rue)
         if tags.get("name"):
             item["n"] = tags.get("name:fr") or tags["name"]
+        if focus:
+            item["f"] = [round(focus[0], 1), round(focus[1], 1)]
         buildings.append(item)
+
+    # --- Bâtiments qui débordent sur la chaussée : la circulation suit l'axe des rues, avec une voie de chaque côté.
+    # On repousse les murs à au moins CLEAR mètres de l'axe des rues carrossables (demande de Houssem : les voitures
+    # se bloquaient contre des maisons). Seuls les points trop proches bougent ; le reste du bâtiment est conservé.
+    CLEAR = 3.3
+    seg_cells = {}
+    gx = graph_nodes
+    for i in range(0, len(graph_edges), 4):
+        a, b = graph_edges[i], graph_edges[i + 1]
+        ax_, an_, bx_, bn_ = gx[a * 2], gx[a * 2 + 1], gx[b * 2], gx[b * 2 + 1]
+        for cx_ in range(int(min(ax_, bx_) // 20) - 1, int(max(ax_, bx_) // 20) + 2):
+            for cn_ in range(int(min(an_, bn_) // 20) - 1, int(max(an_, bn_) // 20) + 2):
+                seg_cells.setdefault((cx_, cn_), []).append((ax_, an_, bx_, bn_))
+
+    def nearest_axis(x, n):
+        best = None
+        for ax_, an_, bx_, bn_ in seg_cells.get((int(x // 20), int(n // 20)), ()):
+            dx_, dn_ = bx_ - ax_, bn_ - an_
+            L = dx_ * dx_ + dn_ * dn_
+            t = 0 if L == 0 else max(0, min(1, ((x - ax_) * dx_ + (n - an_) * dn_) / L))
+            qx, qn = ax_ + dx_ * t, an_ + dn_ * t
+            d = math.hypot(x - qx, n - qn)
+            if best is None or d < best[0]:
+                best = (d, qx, qn, dx_, dn_)
+        return best
+
+    moved = dropped = 0
+    kept = []
+    for b in buildings:
+        p = list(zip(b["p"][0::2], b["p"][1::2]))
+        ring = densify(p + [p[0]], 1.0)[:-1]
+        if not any((h := nearest_axis(x, n)) and h[0] < CLEAR for x, n in ring):
+            kept.append(b)
+            continue
+        out = []
+        for x, n in ring:
+            for _ in range(2):
+                h = nearest_axis(x, n)
+                if not h or h[0] >= CLEAR:
+                    break
+                d, qx, qn, dx_, dn_ = h
+                if d > 0.05:
+                    ux, un = (x - qx) / d, (n - qn) / d
+                else:  # point sur l'axe : on le pousse perpendiculairement, du côté du centre du bâtiment
+                    L = math.hypot(dx_, dn_) or 1
+                    ux, un = -dn_ / L, dx_ / L
+                    cx_, cn_ = sum(v[0] for v in p) / len(p), sum(v[1] for v in p) / len(p)
+                    if (cx_ - qx) * ux + (cn_ - qn) * un < 0:
+                        ux, un = -ux, -un
+                x, n = qx + ux * CLEAR, qn + un * CLEAR
+            out.append((x, n))
+        # Simplification d'un contour fermé : on le coupe en deux au point le plus éloigné du premier.
+        far = max(range(len(out)), key=lambda k: math.hypot(out[k][0] - out[0][0], out[k][1] - out[0][1]))
+        out = simplify(out[:far + 1], 0.15)[:-1] + simplify(out[far:] + [out[0]], 0.15)[:-1]
+        new_area = abs(area(out)) if len(out) >= 3 else 0
+        if new_area < max(6, 0.25 * abs(area(p))):
+            dropped += 1  # bâtiment presque entièrement sur la chaussée (souvent une erreur de tracé) : retiré
+            continue
+        if area(out) < 0:
+            out.reverse()
+        b["p"] = flat(out)
+        if "s" in b:
+            walls = shop_walls(out)
+            if walls:
+                b["s"] = walls
+            else:
+                del b["s"]
+        moved += 1
+        kept.append(b)
+    buildings = kept
+    print(f"Bâtiments reculés hors de la chaussée : {moved} ; retirés (sur la chaussée) : {dropped}")
 
     # --- largeur des rues : elles ne doivent pas mordre sur les bâtiments voisins.
     # On mesure, le long de chaque rue, la distance au bâtiment le plus proche.

@@ -194,3 +194,35 @@ Skill chargé : `threejs-materials-lighting`.
   d'immeubles et de maisons élargies (ocre clair, saumon pâle, jaune pâle).
 - Gendarmerie ré-exportée avec une simplification plus fine (54 000 triangles) : la carrosserie n'est plus déchirée.
 
+## 14 novembre 2026 (2 h) — Collisions, circulation, stade, Sheraton, gare maritime, palmiers
+
+Skills chargés : `physics-tuning`, `game-ai`, `audio-design`, `threejs-materials-lighting`.
+- **Son** : moteur deux fois moins fort ; coup sourd aux chocs ; klaxon des voitures bloquées derrière le joueur.
+- **Collisions** : échange de quantité de mouvement selon les masses (≈ volume × 130 kg/m³, deux-roues 150 kg),
+  restitution 0,25, rotation quand le choc n'est pas dans l'axe (point de contact = pare-chocs). Une moto percutée
+  se couche et glisse. Une voiture de la circulation percutée n'est plus conduite : elle glisse puis reste sur place.
+  Essai : berline à 54 km/h dans un SUV arrêté → le SUV recule de 3 m ; dans une mini, décalé de 1,5 m → elle pivote
+  d'environ 60° ; dans une moto → la moto est projetée à 12 m et tombe, la berline continue.
+- **Circulation** (machine à états : rouler / attendre / doubler / accidentée) : virages en courbe (Bézier de 7 m au
+  plus) au lieu d'angles droits, freinage anticipé selon l'angle du virage (3,2 m/s² latéral), distance de sécurité,
+  demi-tour en demi-cercle aux impasses. Devant un obstacle immobile : arrêt, klaxon après 1,2 s, dépassement après
+  2 s si la voie d'en face est libre sur 30 m, et rabattement seulement après avoir dépassé toute la file.
+  Essai sur rue d'essai, joueur debout sur la voie, 4 minutes : 36 dépassements, aucune voiture sur le joueur,
+  aucun saut de direction.
+- **Stades** : tout bâtiment OSM `stadium`/`grandstand`, ou posé dans une enceinte `leisure=stadium`, devient une
+  tribune en gradins inclinée vers le terrain (stade Chabou : 4 tribunes). Tracés blancs sur les terrains de plus
+  de 4 000 m². On ne devine pas un stade à partir d'un simple grand rectangle : beaucoup d'usines en sont aussi.
+- **Bâtiments sur la chaussée** : les murs sont repoussés à 3,3 m au moins de l'axe des rues carrossables
+  (1 288 bâtiments retouchés, 4 retirés car presque entièrement sur la chaussée). Écart assumé avec OSM.
+- **Sheraton** : modèle sur mesure sur ses quatre emprises OSM (tour 66 m vitrée en résille, renflée à mi-hauteur,
+  couronne, fente de balcons, « bulle » d'accueil blanche ajourée, socle et piscine). Pas d'enseigne ni de logo
+  (marque déposée). La position exacte de la fente de balcons est approximative.
+- **Gare maritime** : bâtiment de 110 × 30 m dans l'emprise OSM « Nouvelle gare maritime », d'après les photos du
+  bâtiment réel (rez vitré, dalle grise, étage vitré bleu à grandes diagonales, enseigne arabe, clôture bleue).
+  Les images de synthèse du projet (toit blanc courbe) n'ont pas servi. Le reste du port (quais, grues,
+  entrepôts) n'est pas modélisé : OSM ne le décrit pas et il faut des photos.
+- **Palmiers** : palmiers des Canaries (tronc épais, « ananas » brun, 30 palmes), écorce en losanges et pied chaulé à
+  limite irrégulière (1,45 à 2 m, coulures, éclats). Rangée de palmiers devant la gare maritime (photo).
+- **Végétation** : palmiers ramenés de 827 à 296 ; zones vertes OSM plantées environ deux fois plus densément
+  (ficus, pins d'Alep, cyprès, massifs).
+

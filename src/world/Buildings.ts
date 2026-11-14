@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { ownedByLandmark } from './Landmarks';
 import { Collider } from './Collider';
 import { MeshBuilder } from './MeshBuilder';
 import { FACADE_WIDTH, createClockTexture, createFacadeTexture, createRailTexture, type FacadeStyle } from './Textures';
@@ -102,6 +103,76 @@ const MODERN_ESTATES = [{ x: 450, n: 1885, r: 210 }];
 const ESTATE_WALLS = [0xffffff, 0xf7f4ea, 0xfdfbf3];
 const ESTATE_YELLOW = new THREE.Color(0xe0b23a);
 
+/** Gradins : marches de béton, rangées plus claires (pas de couleurs de sièges inventées). */
+function createStepsTexture(): THREE.CanvasTexture {
+  const element = document.createElement('canvas');
+  element.width = 16; element.height = 64;
+  const ctx = element.getContext('2d')!;
+  ctx.fillStyle = '#b8b6ae'; ctx.fillRect(0, 0, 16, 64);
+  ctx.fillStyle = '#8e8c85'; ctx.fillRect(0, 0, 16, 10);   // contremarche à l'ombre
+  ctx.fillStyle = '#d4d2ca'; ctx.fillRect(0, 10, 16, 6);   // nez de marche éclairé
+  const texture = new THREE.CanvasTexture(element);
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
+/**
+ * Tribune de stade : la surface monte du bord du terrain (1 m) jusqu'au haut de la tribune côté extérieur.
+ * Une rangée de gradins tous les 0,8 m environ ; murs extérieurs en béton.
+ */
+function buildStands(steps: MeshBuilder, walls: MeshBuilder, p: number[], height: number, focus: [number, number], ground: (x: number, z: number) => number): void {
+  const count = p.length / 2;
+  const fx = focus[0], fz = -focus[1];
+  let dMin = Infinity, dMax = 0, base = Infinity;
+  for (let i = 0; i < count; i++) {
+    const d = Math.hypot(p[i * 2] - fx, -p[i * 2 + 1] - fz);
+    dMin = Math.min(dMin, d); dMax = Math.max(dMax, d);
+    base = Math.min(base, ground(p[i * 2], -p[i * 2 + 1]));
+  }
+  // Profondeur locale : un rayon partant du centre du terrain traverse la tribune ; on mesure où il y entre et où il en sort.
+  // (Fonctionne pour les tribunes droites comme pour les virages en arc de cercle.)
+  const across = (x: number, z: number) => {
+    const ux = x - fx, uz = z - fz, d = Math.hypot(ux, uz) || 1;
+    let near = Infinity, far = 0;
+    for (let i = 0; i < count; i++) {
+      const ax = p[i * 2] - fx, az = -p[i * 2 + 1] - fz, bx = p[((i + 1) % count) * 2] - fx, bz = -p[((i + 1) % count) * 2 + 1] - fz;
+      const ex = bx - ax, ez = bz - az, den = (ux / d) * ez - (uz / d) * ex;
+      if (Math.abs(den) < 1e-9) continue;
+      const tRay = (ax * ez - az * ex) / den, tEdge = (ax * (uz / d) - az * (ux / d)) / den;
+      if (tEdge < -0.001 || tEdge > 1.001 || tRay <= 0) continue;
+      near = Math.min(near, tRay); far = Math.max(far, tRay);
+    }
+    if (!(far - near > 0.5)) { near = dMin; far = dMax; }
+    return { t: Math.max(0, Math.min(1, (d - near) / (far - near))), depth: far - near };
+  };
+  const rise = (x: number, z: number) => {
+    const { t, depth } = across(x, z);
+    return { y: base + 1 + t * (height - 1), row: (t * Math.hypot(depth, height)) / 0.8 };
+  };
+  const concrete = new THREE.Color(0xffffff), wallColor = new THREE.Color(0xc9c5bb);
+  const pts = Array.from({ length: count }, (_, i) => new THREE.Vector2(p[i * 2], -p[i * 2 + 1]));
+  const ids = pts.map((v) => { const r = rise(v.x, v.y); return steps.vertex(v.x, r.y, v.y, concrete, 1, 0, r.row); });
+  // On ne garde que les triangles réellement dans la tribune (les virages en croissant trompent parfois la triangulation).
+  const inside = (x: number, z: number) => {
+    let hit = false;
+    for (let i = 0, j = count - 1; i < count; j = i++) {
+      const a = pts[i], b = pts[j];
+      if ((a.y > z) !== (b.y > z) && x < ((b.x - a.x) * (z - a.y)) / (b.y - a.y) + a.x) hit = !hit;
+    }
+    return hit;
+  };
+  for (const [a, b, c] of THREE.ShapeUtils.triangulateShape(pts, [])) {
+    if (inside((pts[a].x + pts[b].x + pts[c].x) / 3, (pts[a].y + pts[b].y + pts[c].y) / 3)) steps.triangle(ids[a], ids[c], ids[b]);
+  }
+  for (let i = 0; i < count; i++) {
+    const a = pts[i], b = pts[(i + 1) % count], ya = rise(a.x, a.y).y, yb = rise(b.x, b.y).y;
+    const v0 = walls.vertex(a.x, base - 0.5, a.y, wallColor, 0.8), v1 = walls.vertex(b.x, base - 0.5, b.y, wallColor, 0.8);
+    const v2 = walls.vertex(b.x, yb, b.y, wallColor), v3 = walls.vertex(a.x, ya, a.y, wallColor);
+    walls.triangle(v0, v1, v2); walls.triangle(v0, v2, v3);
+  }
+}
+
 export function buildBuildings(scene: THREE.Scene, data: WorldData, ground: (x: number, z: number) => number): Collider {
   const collider = new Collider();
   const walls = new Map<string, MeshBuilder>();
@@ -112,8 +183,15 @@ export function buildBuildings(scene: THREE.Scene, data: WorldData, ground: (x: 
     return builder;
   };
 
+  const standSteps = new MeshBuilder(), standWalls = new MeshBuilder();
   data.buildings.forEach((building, index) => {
     const p = building.p, count = p.length / 2;
+    if (ownedByLandmark(p)) return; // modèle sur mesure (Landmarks.ts)
+    if (building.t === 'stands' && building.f) {
+      buildStands(standSteps, standWalls, p, building.h, building.f, ground);
+      collider.addBuilding(p);
+      return;
+    }
     let look = LOOK[building.t] ?? LOOK.apartment;
     const cell = `${Math.floor(p[0] / CHUNK)},${Math.floor(p[1] / CHUNK)}`;
     const estate = (building.t === 'apartment' || building.t === 'tower')
@@ -278,6 +356,12 @@ export function buildBuildings(scene: THREE.Scene, data: WorldData, ground: (x: 
       materials.set(style, material);
     }
     if (!builder.isEmpty) { const mesh = new THREE.Mesh(builder.build(), material); mesh.castShadow = true; scene.add(mesh); }
+  }
+  if (!standSteps.isEmpty) {
+    const steps = new THREE.Mesh(standSteps.build(), new THREE.MeshLambertMaterial({ vertexColors: true, map: createStepsTexture(), side: THREE.DoubleSide }));
+    steps.castShadow = steps.receiveShadow = true;
+    scene.add(steps);
+    scene.add(new THREE.Mesh(standWalls.build(), new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide })));
   }
   const roofMaterial = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
   for (const builder of roofs.values()) if (!builder.isEmpty) { const mesh = new THREE.Mesh(builder.build(), roofMaterial); mesh.castShadow = true; scene.add(mesh); }

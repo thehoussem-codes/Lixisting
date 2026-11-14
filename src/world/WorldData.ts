@@ -19,7 +19,7 @@ export interface WorldData {
   signals: number[];
   rails: { p: number[] }[];
   /** t = usage (house, apartment, tower, mosque, school...) ; s = commerces au rez-de-chaussée. */
-  buildings: { h: number; t: string; p: number[]; n?: string; s?: number[]; c?: number }[];
+  buildings: { h: number; t: string; p: number[]; n?: string; s?: number[]; c?: number; f?: [number, number] }[];
   /** Réseau routier : nodes = x, n... ; edges = départ, arrivée, sens unique (0/1), axe rapide (0/1)... */
   graph: { nodes: number[]; edges: number[] };
 }
