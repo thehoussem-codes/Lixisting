@@ -269,3 +269,24 @@ Skills chargés : `physics-tuning`, `game-ai`, `audio-design`, `threejs-material
 - Les couleurs exactes de chaque baie ne sont pas relevées une à une : la répartition est aléatoire (tirage fixe).
 - Pas d'éclairage de nuit (le jeu n'a pas encore de nuit) : les photos de nuit ont servi aux couleurs du verre.
 
+
+## Sous-Terrain de la place (ex-église Sainte-Monique) et abords du Sheraton
+
+- **Sous-Terrain** (`src/world/SousTerrain.ts`) : sur la place vide au nord du carrefour Zighout Youcef / Victor Hugo,
+  un édifice jaune de 18 × 20 m à pans coupés et angle arrondi (côté Cours), toit en croupe de tuiles rouges (vu sur
+  le satellite). Deux portes, à l'ouest et à l'est, donnent sur un palier puis un escalier qui descend vers une
+  halle commerçante 1,9 m sous le point bas de la place (plus profonde côté nord, la place montant vers le nord) :
+  boutiques à rideau métallique et enseignes bilingues, étals de vendeurs, néons. Deux vendeurs à parasol dehors.
+  Taille et position : satellite. Intérieur, enseignes et boutiques : **reconstitution** (aucune photo intérieure).
+- **Terrain percé** : `Terrain.cutHole()` découpe exactement le maillage du relief selon un polygone convexe, et le
+  jeu remplace la hauteur du sol par celle des paliers, des marches et de la halle (`LandmarkEdits.ground`).
+- **Abords du Sheraton** (`src/world/SheratonGrounds.ts`, le modèle de l'hôtel n'est pas changé) : clôture muret
+  blanc + grille noire + piliers le long du boulevard Victor Hugo et à l'ouest, ouverte à l'allée d'entrée (poste de
+  garde et barrière) et à un portillon piéton ; chemin dallé jusqu'au parvis ; marquise, portes vitrées et trois
+  mâts aux couleurs algériennes devant l'entrée ; pelouses à bords nets qui suivent les voies OSM ; palmiers alignés
+  (clôture, terre-plein de l'allée, bordure ouest, piscine) à la place des arbres posés au hasard ; ombrières
+  blanches sur les deux parkings (le long des allées OSM) ; piscine extérieure au nord-ouest ; court de tennis.
+- **Correction** : l'emprise du socle de l'hôtel n'était pas reconnue (centre décalé de 6 m), si bien que le jeu
+  affichait un immeuble générique de 22 m à sa place. Le socle de 9 m prévu est maintenant construit, et le court
+  de tennis que montre le satellite est posé sur son toit (la piscine, qui y était, est descendue au sol, au
+  nord-ouest, là où le satellite la montre).

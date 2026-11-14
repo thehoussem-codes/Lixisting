@@ -1,7 +1,11 @@
 import * as THREE from 'three';
 import type { Collider } from './Collider';
 import { MeshBuilder } from './MeshBuilder';
+import { buildSheratonGrounds } from './SheratonGrounds';
+import { buildSousTerrain } from './SousTerrain';
+import type { Terrain } from './Terrain';
 import type { WorldData } from './WorldData';
+import { type Ground, type Ring, boxAt, canvasTexture, cap, centroid, extrude, findFootprint, lowestGround, ringOf } from './LandmarkKit';
 
 /**
  * Bâtiments remarquables modélisés à la main d'après photos, posés sur leur emprise OpenStreetMap réelle.
@@ -15,12 +19,10 @@ import type { WorldData } from './WorldData';
  *    (toit blanc courbe) ne correspondent pas au bâtiment réalisé et n'ont pas servi.
  */
 
-type Ground = (x: number, z: number) => number;
-type Ring = [number, number][]; // [x, n] ; n = nord (z = -n)
 
 /** Centres (x, n) des emprises remplacées par un modèle sur mesure. */
 const OWNED: [number, number][] = [
-  [328.6, 774.8], [281.8, 755.8], [303.9, 765.8], [319.2, 818.6], // Sheraton
+  [328.6, 774.8], [281.8, 755.8], [303.9, 765.8], [323.3, 823.5], // Sheraton
   [206.0, 935.5], // Hôtel Seybouse International (OSM way 165582442, 18 niveaux)
 ];
 
@@ -30,37 +32,6 @@ export function ownedByLandmark(p: number[]): boolean {
   const count = p.length / 2;
   for (let i = 0; i < count; i++) { cx += p[i * 2] / count; cn += p[i * 2 + 1] / count; }
   return OWNED.some(([x, n]) => Math.hypot(cx - x, cn - n) < 4);
-}
-
-function ringOf(p: number[]): Ring {
-  const out: Ring = [];
-  for (let i = 0; i < p.length; i += 2) out.push([p[i], p[i + 1]]);
-  return out;
-}
-
-function centroid(ring: Ring): [number, number] {
-  let x = 0, n = 0;
-  for (const [a, b] of ring) { x += a / ring.length; n += b / ring.length; }
-  return [x, n];
-}
-
-function findFootprint(data: WorldData, x: number, n: number): Ring | null {
-  for (const b of data.buildings) {
-    const ring = ringOf(b.p), [cx, cn] = centroid(ring);
-    if (Math.hypot(cx - x, cn - n) < 4) return ring;
-  }
-  return null;
-}
-
-function canvasTexture(width: number, height: number, draw: (ctx: CanvasRenderingContext2D) => void, repeat = true): THREE.CanvasTexture {
-  const element = document.createElement('canvas');
-  element.width = width; element.height = height;
-  draw(element.getContext('2d')!);
-  const texture = new THREE.CanvasTexture(element);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  if (repeat) texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
-  texture.anisotropy = 4;
-  return texture;
 }
 
 /** Mur de verre du Sheraton : vitrage vert d'eau, résille de losanges claire, lignes d'étages discrètes. */
@@ -145,59 +116,9 @@ function terminalSign(): THREE.CanvasTexture {
   }, false);
 }
 
-/** Extrusion d'un contour, avec un renflement optionnel (scale(t), t = 0 en bas, 1 en haut) et des UV en mètres. */
-function extrude(b: MeshBuilder, ring: Ring, y0: number, y1: number, color: THREE.Color, tile: number, scale = (_t: number) => 1, rings = 1): void {
-  const [cx, cn] = centroid(ring);
-  let perimeter = 0;
-  const along = [0];
-  for (let i = 0; i < ring.length; i++) {
-    const [ax, an] = ring[i], [bx, bn] = ring[(i + 1) % ring.length];
-    perimeter += Math.hypot(bx - ax, bn - an); along.push(perimeter);
-  }
-  for (let r = 0; r < rings; r++) {
-    const t0 = r / rings, t1 = (r + 1) / rings;
-    const ya = y0 + (y1 - y0) * t0, yb = y0 + (y1 - y0) * t1, sa = scale(t0), sb = scale(t1);
-    for (let i = 0; i < ring.length; i++) {
-      const j = (i + 1) % ring.length;
-      const p = (k: number, s: number) => [cx + (ring[k][0] - cx) * s, -(cn + (ring[k][1] - cn) * s)];
-      const [ax, az] = p(i, sa), [bx, bz] = p(j, sa), [cx2, cz2] = p(j, sb), [dx, dz] = p(i, sb);
-      const ua = along[i] / tile, ub = along[i + 1] / tile;
-      const v0 = b.vertex(ax, ya, az, color, 1, ua, ya / tile), v1 = b.vertex(bx, ya, bz, color, 1, ub, ya / tile);
-      const v2 = b.vertex(cx2, yb, cz2, color, 1, ub, yb / tile), v3 = b.vertex(dx, yb, dz, color, 1, ua, yb / tile);
-      b.triangle(v0, v1, v2); b.triangle(v0, v2, v3);
-    }
-  }
-}
-
-/** Dalle horizontale sur un contour (triangulée), à l'échelle s autour du centre. */
-function cap(b: MeshBuilder, ring: Ring, y: number, color: THREE.Color, s = 1, up = true): void {
-  const [cx, cn] = centroid(ring);
-  const pts = ring.map(([x, n]) => new THREE.Vector2(cx + (x - cx) * s, cn + (n - cn) * s));
-  const tris = THREE.ShapeUtils.triangulateShape(pts, []);
-  const ids = pts.map((p) => b.vertex(p.x, y, -p.y, color, 1, p.x / 4, p.y / 4));
-  for (const [a, c, d] of tris) up ? b.triangle(ids[a], ids[d], ids[c]) : b.triangle(ids[a], ids[c], ids[d]);
-}
-
-function boxAt(b: MeshBuilder, x: number, z: number, w: number, d: number, y0: number, y1: number, color: THREE.Color, angle = 0): void {
-  const c = Math.cos(angle), s = Math.sin(angle);
-  const corner = (u: number, v: number): [number, number] => [x + u * c - v * s, z + u * s + v * c];
-  const pts = [corner(-w / 2, -d / 2), corner(w / 2, -d / 2), corner(w / 2, d / 2), corner(-w / 2, d / 2)];
-  for (let i = 0; i < 4; i++) {
-    const [ax, az] = pts[i], [bx, bz] = pts[(i + 1) % 4];
-    const v0 = b.vertex(ax, y0, az, color, 0.85), v1 = b.vertex(bx, y0, bz, color, 0.85), v2 = b.vertex(bx, y1, bz, color), v3 = b.vertex(ax, y1, az, color);
-    b.triangle(v0, v2, v1); b.triangle(v0, v3, v2);
-  }
-  const t = pts.map(([px, pz]) => b.vertex(px, y1, pz, color));
-  b.triangle(t[0], t[2], t[1]); b.triangle(t[0], t[3], t[2]);
-}
-
-function lowestGround(ring: Ring, ground: Ground): number {
-  return Math.min(...ring.map(([x, n]) => ground(x, -n)));
-}
-
 function buildSheraton(scene: THREE.Scene, data: WorldData, ground: Ground, collider: Collider): void {
   const tower = findFootprint(data, 328.6, 774.8), bubble = findFootprint(data, 281.8, 755.8);
-  const link = findFootprint(data, 303.9, 765.8), podium = findFootprint(data, 319.2, 818.6);
+  const link = findFootprint(data, 303.9, 765.8), podium = findFootprint(data, 323.3, 823.5);
   const stone = new THREE.Color(0xe7dcc4), grey = new THREE.Color(0xb7bcbf), white = new THREE.Color(0xf2f1ec);
   const solid = new MeshBuilder();
   if (tower) {
@@ -250,12 +171,6 @@ function buildSheraton(scene: THREE.Scene, data: WorldData, ground: Ground, coll
     extrude(solid, ring, base, base + height, stone, 4);
     cap(solid, ring, base + height, grey);
     collider.addBuilding(ring.flat());
-  }
-  if (podium) {
-    // Piscine et terrasse sur le toit du socle (photos aériennes).
-    const [cx, cn] = centroid(podium), y = lowestGround(podium, ground) - 0.5 + 9.05;
-    boxAt(solid, cx, -cn, 24, 16, y, y + 0.05, new THREE.Color(0xa07a58));
-    boxAt(solid, cx, -cn, 20, 6, y + 0.05, y + 0.1, new THREE.Color(0x2fb4e6));
   }
   const mesh = new THREE.Mesh(solid.build(), new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }));
   mesh.castShadow = true;
@@ -469,9 +384,23 @@ function buildSeybouse(scene: THREE.Scene, ground: Ground, collider: Collider): 
   collider.addBuilding([170.0, 922.1, 217.2, 924.1, 217.0, 928.7, 221.6, 928.9, 220.9, 943.8, 216.4, 943.6, 216.2, 947.5, 169.0, 945.5]);
 }
 
-export function buildLandmarks(scene: THREE.Scene, data: WorldData, ground: Ground, collider: Collider): void {
+/** Ce que les lieux modélisés changent au reste du monde : sol praticable en contrebas, arbres retirés ou ajoutés. */
+export interface LandmarkEdits {
+  ground: (x: number, z: number) => number | null;
+  keepTree: (x: number, n: number) => boolean;
+  palms: [number, number, number][];
+}
+
+export function buildLandmarks(scene: THREE.Scene, data: WorldData, ground: Ground, collider: Collider, terrain: Terrain): LandmarkEdits {
   buildSheraton(scene, data, ground, collider);
+  const grounds = buildSheratonGrounds(scene, data, ground, collider);
+  const sousTerrain = buildSousTerrain(scene, terrain, ground, collider);
   buildSeybouse(scene, ground, collider);
   buildFerryTerminal(scene, ground, collider);
   buildPitchLines(scene, data, ground);
+  return {
+    ground: sousTerrain.ground,
+    keepTree: (x, n) => grounds.keepTree(x, n) && !sousTerrain.inside(x, n),
+    palms: grounds.palms,
+  };
 }

@@ -6,7 +6,7 @@ import { buildBuildings } from './Buildings';
 import { createAsphaltTexture, createPavementTexture, createRoadTexture, createCloudTexture } from './Textures';
 import { addPlant } from './Trees';
 import { Water } from './Water';
-import { buildLandmarks } from './Landmarks';
+import { buildLandmarks, type LandmarkEdits } from './Landmarks';
 import type { WorldData } from './WorldData';
 
 const HORIZON = 0xd4e2e6;   // brume claire de bord de mer (même teinte que le brouillard)
@@ -85,6 +85,8 @@ export interface World {
   /** Le ciel doit rester centré sur la caméra. */
   sky: THREE.Mesh;
   water: Water;
+  /** Sol en contrebas des lieux modélisés, arbres à retirer et palmiers à ajouter. */
+  edits: LandmarkEdits;
 }
 
 /** Construit Annaba à partir des données réelles. */
@@ -209,7 +211,7 @@ export function buildAnnabaWorld(scene: THREE.Scene, data: WorldData, terrain: T
   for (const builder of lamps.values()) add(builder, lampMaterial);
 
   const collider = buildBuildings(scene, data, ground);
-  buildLandmarks(scene, data, ground, collider);
+  const edits = buildLandmarks(scene, data, ground, collider, terrain);
 
-  return { collider, sky, water };
+  return { collider, sky, water, edits };
 }

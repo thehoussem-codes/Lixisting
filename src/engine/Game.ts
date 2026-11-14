@@ -191,6 +191,17 @@ export class Game {
       this.collider = world.collider;
       this.sky = world.sky;
       this.water = world.water;
+      // Passage souterrain : sol en contrebas (paliers, marches, niveau commerçant) au lieu du terrain.
+      const terrainGround = this.ground, patch = world.edits.ground;
+      this.ground = (x, z) => patch(x, z) ?? terrainGround(x, z);
+      // Végétation : arbres retirés des lieux réaménagés, palmiers alignés ajoutés (abords du Sheraton).
+      for (const [species, values] of Object.entries(trees)) {
+        if (species === 'wall' || !Array.isArray(values)) continue;
+        const kept: number[] = [];
+        for (let i = 0; i < values.length; i += 3) if (world.edits.keepTree(values[i], values[i + 1])) kept.push(values[i], values[i + 1], values[i + 2]);
+        (trees as unknown as Record<string, number[]>)[species] = kept;
+      }
+      (trees as unknown as Record<string, number[]>).palm.push(...world.edits.palms.flat());
       // Port de pêche d'Annaba (36.90375, 7.77451) : bassin abrité par les jetées, rayon 330 m.
       this.harbor = new Harbor(this.scene, data, 1392, 920, 330, this.ground);
       const treeCount = buildTrees(this.scene, trees, terrain.heightAt);
