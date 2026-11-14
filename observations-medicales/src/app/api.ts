@@ -17,7 +17,18 @@ export function onUnauthorized(l: Listener) {
   return () => unauthListeners.delete(l);
 }
 
+export const MODE_LOCAL = import.meta.env.VITE_LOCAL === '1';
+
 export async function api<T = unknown>(path: string, opts: { method?: string; body?: unknown } = {}): Promise<T> {
+  if (MODE_LOCAL) {
+    const { localApi } = await import('./localApi.ts');
+    try {
+      return await localApi<T>(path, opts.method ?? 'GET', opts.body);
+    } catch (e) {
+      const x = e as Error & { status?: number };
+      throw new ApiError(x.status ?? 500, x.message);
+    }
+  }
   const res = await fetch(`/api${path}`, {
     method: opts.method ?? 'GET',
     credentials: 'same-origin',

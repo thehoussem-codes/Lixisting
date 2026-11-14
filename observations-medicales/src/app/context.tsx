@@ -64,6 +64,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
 /* ---------------- Thème ---------------- */
 export function getTheme(): 'light' | 'dark' {
+  const hote = document.documentElement.dataset.theme;
+  if (import.meta.env.VITE_LOCAL === '1' && (hote === 'dark' || hote === 'light')) return hote;
   try {
     const t = localStorage.getItem('obs-theme');
     if (t === 'dark' || t === 'light') return t;

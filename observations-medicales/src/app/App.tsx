@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { UserInfo } from '../../shared/types.ts';
-import { api, onUnauthorized } from './api.ts';
+import { api, onUnauthorized, MODE_LOCAL } from './api.ts';
 import { SessionCtx, ToastProvider, applyTheme, getTheme, type Session } from './context.tsx';
 import { href, useRoute } from './router.ts';
 import { Icon } from '../ui/icons.tsx';
@@ -102,12 +102,13 @@ function Shell() {
                     <a className="navi" href={href('/modeles')} onClick={() => setUserMenu(false)}><Icon name="template" />Modèles</a>
                     {s.user.role === 'admin' && <a className="navi" href={href('/admin')} onClick={() => setUserMenu(false)}><Icon name="shield" />Administration</a>}
                     <a className="navi" href={href('/parametres')} onClick={() => setUserMenu(false)}><Icon name="settings" />Paramètres</a>
-                    <button className="navi" onClick={() => void s.logout()}><Icon name="logout" />Se déconnecter</button>
+                    {!MODE_LOCAL && <button className="navi" onClick={() => void s.logout()}><Icon name="logout" />Se déconnecter</button>}
                   </div>
                 </div>
               )}
             </div>
           </header>
+          {MODE_LOCAL && <div className="demo-band">Version de démonstration : les données restent dans ce navigateur uniquement. Ne saisissez aucune donnée réelle de patient. <button className="btn xs" onClick={async () => { const { reinitialiserDemo } = await import('./localApi.ts'); reinitialiserDemo(); window.location.reload(); }}>Réinitialiser la démonstration</button></div>}
           <div className="main" style={route[0] === 'obs' ? { overflow: 'hidden' } : undefined}>
             <Route route={route} />
           </div>

@@ -1,4 +1,5 @@
 import { useObs } from '../app/context.tsx';
+import { MODE_LOCAL } from '../app/api.ts';
 import { Card, Field, Seg, Select, Suggest, Text } from '../ui/controls.tsx';
 import { ageLabel, parseDate } from '../engine/calc.ts';
 import { FIABILITES, INFORMATEURS, MODES_ADMISSION, SERVICES, SITUATIONS_FAMILIALES } from '../knowledge/antecedents.ts';
@@ -16,7 +17,7 @@ export function Identite() {
   const telInvalide = !!id.telephone && !/^[+\d][\d\s().-]{5,}$/.test(id.telephone);
   return (
     <div className="stack">
-      <ModuleHeader title="État civil et identification" desc="Identité du patient, conditions d’admission et qualité des informations recueillies. Les données d’identité sont chiffrées sur le serveur." />
+      <ModuleHeader title="État civil et identification" desc={`Identité du patient, conditions d’admission et qualité des informations recueillies. ${MODE_LOCAL ? 'Version de démonstration : données conservées dans ce navigateur uniquement.' : 'Les données d’identité sont chiffrées sur le serveur.'}`} />
       <Card title="Identité du patient">
         <div className="grid g3">
           <Field label="Nom" required htmlFor="nom"><Text id="nom" value={id.nom} onChange={(v) => setId('nom', v)} disabled={readOnly} /></Field>

@@ -32,7 +32,19 @@ export function nomFichier(m: ExportMeta, ext: string, format: string): string {
   return `${base}.${ext}`;
 }
 
-function telecharger(blob: Blob, nom: string) {
+async function telecharger(blob: Blob, nom: string) {
+  const cl = (window as unknown as { claude?: { use: (n: string) => Promise<{ save: (r: { filename: string; data: Blob }) => Promise<unknown> } | null> } }).claude;
+  if (cl?.use) {
+    const dl = await cl.use('downloads');
+    if (dl) {
+      try { await dl.save({ filename: nom, data: blob }); } catch (e) {
+        const code = (e as { code?: string }).code;
+        if (code === 'declined') return;
+        throw new Error(code === 'unavailable' ? 'enregistrement de fichiers indisponible ici' : (e as Error).message ?? String(code));
+      }
+      return;
+    }
+  }
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -95,8 +107,8 @@ export async function exportPDF(doc: GeneratedDoc, m: ExportMeta, format: string
     },
   };
   const nom = nomFichier(m, 'pdf', format);
-  await new Promise<void>((resolve) => {
-    (pdfMake as unknown as { createPdf: (d: unknown) => { getBlob: (cb: (b: Blob) => void) => void } }).createPdf(def).getBlob((b: Blob) => { telecharger(b, nom); resolve(); });
+  await new Promise<void>((resolve, reject) => {
+    (pdfMake as unknown as { createPdf: (d: unknown) => { getBlob: (cb: (b: Blob) => void) => void } }).createPdf(def).getBlob((b: Blob) => { telecharger(b, nom).then(() => resolve(), reject); });
   });
 }
 
@@ -156,5 +168,5 @@ export async function exportWord(doc: GeneratedDoc, m: ExportMeta, format: strin
     }],
   });
   const blob = await Packer.toBlob(document);
-  telecharger(blob, nomFichier(m, 'docx', format));
+  await telecharger(blob, nomFichier(m, 'docx', format));
 }

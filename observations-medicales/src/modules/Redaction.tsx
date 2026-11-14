@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { FormatObs, Preferences } from '../../shared/types.ts';
 import { useObs, useSession, useToast } from '../app/context.tsx';
-import { api } from '../app/api.ts';
+import { api, MODE_LOCAL } from '../app/api.ts';
 import { useObsStore } from '../app/store.ts';
 import { Area, Card, Modal } from '../ui/controls.tsx';
 import { Icon } from '../ui/icons.tsx';
@@ -97,7 +97,7 @@ export function Redaction() {
         <div className="row">
           {!readOnly && <button className="btn" onClick={() => setModele(true)} title="Enregistrer la structure de cette observation comme modèle réutilisable"><Icon name="template" />Modèle</button>}
           <button className="btn" onClick={copier}><Icon name="copy" />Copier</button>
-          <button className="btn" onClick={() => demander('print')}><Icon name="print" />Imprimer</button>
+          {!MODE_LOCAL && <button className="btn" onClick={() => demander('print')}><Icon name="print" />Imprimer</button>}
           <button className="btn" onClick={() => demander('word')}><Icon name="doc" />Word</button>
           <button className="btn" onClick={() => demander('pdf')}><Icon name="download" />PDF</button>
           {!readOnly && <button className="btn primary" onClick={() => setValider(true)}><Icon name="checkCircle" />Valider</button>}

@@ -3,3 +3,4 @@ dist
 data/
 *.local
 e2e/captures/
+dist-autonome
