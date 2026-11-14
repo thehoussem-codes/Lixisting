@@ -7,6 +7,7 @@ import { createAsphaltTexture, createPavementTexture, createRoadTexture, createC
 import { addPlant } from './Trees';
 import { Water } from './Water';
 import { STAIRS_APPROACH } from './SousTerrain';
+import { addGrandePoste } from './GrandePoste';
 import { buildLandmarks, type LandmarkEdits } from './Landmarks';
 import type { WorldData } from './WorldData';
 
@@ -213,6 +214,7 @@ export function buildAnnabaWorld(scene: THREE.Scene, data: WorldData, terrain: T
   const lampMaterial = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
   for (const builder of lamps.values()) add(builder, lampMaterial);
 
+  addGrandePoste(data); // îlot de la Grande Poste, absent d'OSM
   const collider = buildBuildings(scene, data, ground);
   const edits = buildLandmarks(scene, data, ground, collider, terrain);
 

@@ -320,3 +320,14 @@ Skills chargés : `physics-tuning`, `game-ai`, `audio-design`, `threejs-material
 - Deux niveaux superposés : les obstacles ont maintenant une plage de hauteur (`Collider.addBuilding(points, yMin,
   yMax)`) et le sol tient compte de la hauteur du joueur, pour qu'on circule sur l'esplanade au-dessus des galeries
   et dans les galeries en dessous.
+
+## Îlot complet jusqu'à la Grande Poste ; angles arrondis du complexe
+
+- Le complexe commercial a maintenant les angles arrondis (rayon 4,5 m, comme la place sur le satellite), son
+  bâtiment du haut aussi (3 m). Les galeries ont été resserrées (6 m de large) pour rester dans la partie droite de
+  la façade ; l'étal du vendeur est passé au fond de chaque galerie.
+- `src/world/GrandePoste.ts` : OSM n'a aucun bâtiment entre le complexe et la rue au nord (seulement le point du
+  bureau de poste). D'après la vue satellite : La Grande Poste (quadrilatère colonial autour d'une cour avec un
+  palmier, pavillons d'angle, toits de tuiles orange en croupe, ≈ 40 × 66 m) et, au nord, un grand immeuble à toit
+  plat autour d'une cour plantée ; entre le complexe et la Poste, stationnement et grands arbres. Emprises calées sur
+  le satellite (±2 m), hauteurs estimées (13 à 15 m), façades du générateur colonial.
