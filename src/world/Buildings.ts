@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { ownedByLandmark } from './Landmarks';
 import { Collider } from './Collider';
+import { buildHouse, grow } from './Houses';
 import { MeshBuilder } from './MeshBuilder';
 import { FACADE_WIDTH, createClockTexture, createFacadeTexture, createRailTexture, type FacadeStyle } from './Textures';
 import type { WorldData } from './WorldData';
@@ -34,36 +35,82 @@ function wallQuad(b: MeshBuilder, ax: number, az: number, bx: number, bz: number
   b.triangle(a, c, d); b.triangle(a, d, e);
 }
 
+const ARCADE_DEPTH = 2.8;
+const CORNICE = new THREE.Color(0xf1ead8), STONE_PIER = new THREE.Color(0xe6dfcc);
+const AWNINGS = [0xb8322c, 0x2f6f9f, 0x2f7d4f, 0xd98a1f, 0x7a2f2f, 0xe8e0c8].map((c) => new THREE.Color(c));
+
+function ringArea(ring: [number, number][]): number {
+  let a = 0;
+  for (let i = 0; i < ring.length; i++) { const [x1, n1] = ring[i], [x2, n2] = ring[(i + 1) % ring.length]; a += x1 * n2 - x2 * n1; }
+  return a / 2;
+}
+
+/** Recule vers l'intérieur les murs choisis d'un contour (sens trigonométrique) ; les autres ne bougent pas. */
+function insetEdges(ring: [number, number][], chosen: Set<number>, depth: number): [number, number][] {
+  const n = ring.length;
+  const line = (i: number) => {
+    const [ax, an] = ring[i], [bx, bn] = ring[(i + 1) % n], l = Math.hypot(bx - ax, bn - an) || 1;
+    const dx = (bx - ax) / l, dn = (bn - an) / l, d = chosen.has(i) ? depth : 0;
+    return { x: ax - dn * d, n: an + dx * d, dx, dn }; // intérieur : à gauche du sens de parcours
+  };
+  return ring.map((vertex, i) => {
+    const a = line((i + n - 1) % n), b = line(i);
+    const cross = a.dx * b.dn - a.dn * b.dx;
+    if (Math.abs(cross) < 0.05) return [b.x, b.n] as [number, number];
+    const t = ((b.x - a.x) * b.dn - (b.n - a.n) * b.dx) / cross;
+    const x = a.x + a.dx * t, m = a.n + a.dn * t;
+    return (Math.hypot(x - vertex[0], m - vertex[1]) > depth * 4 ? vertex : [x, m]) as [number, number];
+  });
+}
+
 /**
- * Adoucit les angles d'une emprise : un coin entre deux murs d'au moins 5 m, tournant de 35° à 145°, devient un
- * arrondi de trois segments (rayon ≈ 1,2 m). Renvoie le nouveau contour et, pour chaque segment, le rang du mur
- * d'origine (-1 pour un segment d'arrondi) : commerces et balcons restent attachés aux bons murs.
+ * Galerie à arcades d'un mur : piliers et arcs en plein cintre sur l'alignement de la façade, plafond, et fond de
+ * galerie (vitrines) en retrait. (ax, az)-(bx, bz) : mur en façade ; ia, ib : ses extrémités reculées (x, n).
  */
-function roundCorners(p: number[]): { points: number[]; wall: number[] } {
-  const n = p.length / 2;
-  const points: number[] = [], wall: number[] = [];
-  const cut: number[] = [];
-  for (let i = 0; i < n; i++) {
-    const h = (i + n - 1) % n, j = (i + 1) % n;
-    const inX = p[i * 2] - p[h * 2], inN = p[i * 2 + 1] - p[h * 2 + 1], outX = p[j * 2] - p[i * 2], outN = p[j * 2 + 1] - p[i * 2 + 1];
-    const a = Math.hypot(inX, inN), b = Math.hypot(outX, outN);
-    const turn = Math.abs(Math.atan2(inX * outN - inN * outX, inX * outX + inN * outN));
-    cut.push(n >= 3 && a >= 5 && b >= 5 && turn > 0.61 && turn < 2.53 ? Math.min(1.2, a * 0.22, b * 0.22) : 0);
-  }
-  for (let i = 0; i < n; i++) {
-    const h = (i + n - 1) % n, j = (i + 1) % n;
-    const x = p[i * 2], y = p[i * 2 + 1], d = cut[i];
-    if (d === 0) { points.push(x, y); wall.push(i); continue; }
-    const a = Math.hypot(x - p[h * 2], y - p[h * 2 + 1]), b = Math.hypot(p[j * 2] - x, p[j * 2 + 1] - y);
-    const sx = x - ((x - p[h * 2]) / a) * d, sy = y - ((y - p[h * 2 + 1]) / a) * d;
-    const ex = x + ((p[j * 2] - x) / b) * d, ey = y + ((p[j * 2 + 1] - y) / b) * d;
-    for (let k = 0; k <= 3; k++) { // courbe de Bézier du 2e degré, le coin d'origine pour point de contrôle
-      const t = k / 3, u = 1 - t;
-      points.push(u * u * sx + 2 * u * t * x + t * t * ex, u * u * sy + 2 * u * t * y + t * t * ey);
-      wall.push(k < 3 ? -1 : i);
+function buildArcade(solid: MeshBuilder, shops: MeshBuilder, ax: number, az: number, bx: number, bz: number, ia: [number, number], ib: [number, number],
+                     base: number, ceiling: number, wall: THREE.Color, collider: Collider): void {
+  const length = Math.hypot(bx - ax, bz - az), dx = (bx - ax) / length, dz = (bz - az) / length;
+  const inX = (bz - az) / length, inZ = -(bx - ax) / length; // vers l'intérieur du bâtiment
+  const H = ceiling - base, stone = STONE_PIER.clone().lerp(wall, 0.5);
+  const bays = Math.max(1, Math.round(length / 3.7)), bay = length / bays;
+  const r = Math.min(bay / 2 - 0.42, H - 0.5 - 1.9), spring = H - 0.5 - r;
+  const at = (s: number, y: number, depth = 0) => solid.vertex(ax + dx * s + inX * depth, base + y, az + dz * s + inZ * depth, stone, depth ? 0.78 : 0.7 + 0.3 * (y / H));
+  const face = (s0: number, y0: number, s1: number, y1: number, s2: number, y2: number, s3: number, y3: number) => {
+    const v = [at(s0, y0), at(s1, y1), at(s2, y2), at(s3, y3)];
+    solid.triangle(v[0], v[1], v[2]); solid.triangle(v[0], v[2], v[3]);
+  };
+  for (let k = 0; k < bays; k++) {
+    const s0 = k * bay, s1 = s0 + bay, c = s0 + bay / 2;
+    face(s0, 0, c - r, 0, c - r, H, s0, H);          // pilier gauche (jusqu'au plafond)
+    face(c + r, 0, s1, 0, s1, H, c + r, H);          // pilier droit
+    const SEG = 8;
+    for (let a = 0; a < SEG; a++) {                   // écoinçons au-dessus de l'arc
+      const t0 = Math.PI - (a / SEG) * Math.PI, t1 = Math.PI - ((a + 1) / SEG) * Math.PI;
+      face(c + Math.cos(t0) * r, spring + Math.sin(t0) * r, c + Math.cos(t1) * r, spring + Math.sin(t1) * r, c + Math.cos(t1) * r, H, c + Math.cos(t0) * r, H);
     }
+    // Épaisseur des piliers : retours de 55 cm de chaque côté de la baie.
+    for (const s of [c - r, c + r]) {
+      const v = [at(s, 0), at(s, 0, 0.55), at(s, spring, 0.55), at(s, spring)];
+      solid.triangle(v[0], v[1], v[2]); solid.triangle(v[0], v[2], v[3]);
+    }
+    // Obstacle : le pilier entre cette baie et la précédente (et le premier, au bord).
+    const pier = (from: number, to: number) => {
+      const px0 = ax + dx * from, pz0 = az + dz * from, px1 = ax + dx * to, pz1 = az + dz * to;
+      collider.addBuilding([px0, -pz0, px1, -pz1, px1 + inX * 0.55, -(pz1 + inZ * 0.55), px0 + inX * 0.55, -(pz0 + inZ * 0.55)]);
+    };
+    pier(s0, c - r);
+    pier(c + r, s1);
   }
-  return { points, wall };
+  // Plafond de la galerie et fond (vitrines).
+  const dark = SLAB.clone().multiplyScalar(0.8);
+  const cv = [solid.vertex(ax, ceiling - 0.02, az, dark, 0.8), solid.vertex(bx, ceiling - 0.02, bz, dark, 0.8), solid.vertex(ib[0], ceiling - 0.02, -ib[1], dark, 0.7), solid.vertex(ia[0], ceiling - 0.02, -ia[1], dark, 0.7)];
+  solid.triangle(cv[0], cv[1], cv[2]); solid.triangle(cv[0], cv[2], cv[3]);
+  const back = Math.hypot(ib[0] - ia[0], ib[1] - ia[1]);
+  wallQuad(shops, ia[0], -ia[1], ib[0], -ib[1], base, ceiling, wall, 0.7, 0.8, Math.max(1, Math.round(back / FACADE_WIDTH.shop)), 0, 1);
+  // Dallage clair sous la galerie.
+  const floor = new THREE.Color(0xd8d2c4);
+  const fv = [solid.vertex(ax, base + 0.03, az, floor, 0.9), solid.vertex(bx, base + 0.03, bz, floor, 0.9), solid.vertex(ib[0], base + 0.03, -ib[1], floor, 0.8), solid.vertex(ia[0], base + 0.03, -ia[1], floor, 0.8)];
+  solid.triangle(fv[0], fv[2], fv[1]); solid.triangle(fv[0], fv[3], fv[2]);
 }
 
 const ROOF_EDGE = new THREE.Color(0xbdb6a6), TANK_LEG = new THREE.Color(0x77736b), TANK_BLUE = new THREE.Color(0x3f6fae), TANK_GREY = new THREE.Color(0xc9c9c4), DISH = new THREE.Color(0xeeeeea);
@@ -215,6 +262,29 @@ export function buildBuildings(scene: THREE.Scene, data: WorldData, ground: (x: 
     return builder;
   };
 
+  // Distance approchée à la chaussée la plus proche (cases de 25 m) : sert à trouver la façade sur rue des maisons.
+  const roadCells = new Map<string, number[]>();
+  for (const road of data.roads) {
+    if (road.k === 'footway' || road.k === 'path' || road.k === 'steps') continue;
+    for (let i = 0; i < road.p.length; i += 2) {
+      const key = `${Math.floor(road.p[i] / 25)},${Math.floor(road.p[i + 1] / 25)}`;
+      let list = roadCells.get(key);
+      if (!list) { list = []; roadCells.set(key, list); }
+      list.push(road.p[i], road.p[i + 1]);
+    }
+  }
+  const roadDistance = (x: number, n: number): number => {
+    let best = Infinity;
+    const cx = Math.floor(x / 25), cn = Math.floor(n / 25);
+    for (let dx = -1; dx <= 1; dx++) for (let dn = -1; dn <= 1; dn++) {
+      const list = roadCells.get(`${cx + dx},${cn + dn}`);
+      if (list) for (let i = 0; i < list.length; i += 2) best = Math.min(best, Math.hypot(list[i] - x, list[i + 1] - n));
+    }
+    return best;
+  };
+  const medina = data.places.find((place) => place.name === 'Vieille Ville');
+  const oldTown: [number, number] | null = medina ? [medina.x, medina.n] : null;
+
   const standSteps = new MeshBuilder(), standWalls = new MeshBuilder();
   data.buildings.forEach((building, index) => {
     const p = building.p, count = p.length / 2;
@@ -240,6 +310,16 @@ export function buildBuildings(scene: THREE.Scene, data: WorldData, ground: (x: 
       cx += p[i * 2] / count; cz += -p[i * 2 + 1] / count;
     }
     const top = base + building.h;
+    let footprint = p; // emprise au sol pour les collisions (réduite sous les arcades)
+    if (building.t === 'house') {
+      buildHouse({
+        p, index, low, base, top, wall, roofColor, roadDistance,
+        walls: (style) => builderIn(walls, `${style}|${cell}`), solid: builderIn(roofs, cell),
+        oldTown: oldTown !== null && Math.hypot(cx - oldTown[0], -cz - oldTown[1]) < 330,
+      });
+      collider.addBuilding(p);
+      return;
+    }
     // Rez-de-chaussée distinct pour les immeubles : commerces le long des grandes rues, entrées ailleurs.
     const colonial = building.t === 'colonial';
     const tall = building.t === 'apartment' || building.t === 'tower' || building.t === 'hotel' || colonial;
@@ -250,24 +330,46 @@ export function buildBuildings(scene: THREE.Scene, data: WorldData, ground: (x: 
     const upper = builderIn(walls, `${look.style}|${cell}`);
     const plain = builderIn(roofs, cell); // murs unis (couleur seule), dans le même maillage que les toits
 
-    // Angles adoucis : chaque coin franc est remplacé par un petit arrondi (murs unis, sans fenêtre).
-    const soft = roundCorners(p);
-    const q = soft.points, qCount = q.length / 2;
+    // Arcades réelles (immeubles coloniaux, murs sur grande rue) : le rez-de-chaussée recule de 2,8 m derrière
+    // une file de piliers et d'arcs ; on circule dessous. Emprise au sol réduite d'autant pour les collisions.
+    const ring: [number, number][] = [];
+    for (let i = 0; i < count; i++) ring.push([p[i * 2], p[i * 2 + 1]]);
+    const arcades = new Set<number>();
+    if (colonial && hasGround) for (let i = 0; i < count; i++) {
+      const j = (i + 1) % count;
+      if (shopWalls.has(i) && Math.hypot(p[j * 2] - p[i * 2], p[j * 2 + 1] - p[i * 2 + 1]) >= 7) arcades.add(i);
+    }
+    let inner = arcades.size ? insetEdges(ring, arcades, ARCADE_DEPTH) : ring;
+    if (arcades.size && !(ringArea(inner) > 0.45 * ringArea(ring))) { arcades.clear(); inner = ring; } // immeuble trop mince
+    footprint = arcades.size ? inner.flat() : p;
+    const q = p, qCount = count;
     for (let k = 0; k < qCount; k++) {
-      const j = (k + 1) % qCount, i = soft.wall[k];
+      const j = (k + 1) % qCount, i = k;
       const ax = q[k * 2], az = -q[k * 2 + 1], bx = q[j * 2], bz = -q[j * 2 + 1];
       const length = Math.hypot(bx - ax, bz - az);
       // Soubassement uni, du point bas du terrain jusqu'au niveau du rez-de-chaussée.
       wallQuad(upper, ax, az, bx, bz, low - 1, base, wall, 0.6, 0.7, 0, 0, 0);
-      if (i < 0) { // segment d'arrondi : mur uni sur toute la hauteur
-        wallQuad(plain, ax, az, bx, bz, base, top, wall, hasGround ? 0.86 : 0.75, 1, 0, 0, 0);
-        continue;
-      }
-      if (hasGround) {
+      if (arcades.has(i)) {
+        buildArcade(plain, builderIn(walls, `shop|${cell}`), ax, az, bx, bz, inner[i], inner[j], base, upperFrom, wall, collider);
+      } else if (hasGround) {
         // Commerces seulement sur les murs qui donnent sur une grande rue ; entrées ailleurs.
         const groundStyle: FacadeStyle = colonial ? (shopWalls.has(i) ? 'arcade' : 'ground') : shopWalls.has(i) ? 'shop' : 'ground';
         const u = Math.max(1, Math.round(length / FACADE_WIDTH[groundStyle]));
         wallQuad(builderIn(walls, `${groundStyle}|${cell}`), ax, az, bx, bz, base, upperFrom, wall, 0.8, 0.9, u, 0, 1);
+        // Stores en toile au-dessus des vitrines (immeubles d'habitation à commerces).
+        if (groundStyle === 'shop' && length > 5) {
+          const ox = -(bz - az) / length, oz = (bx - ax) / length, bays = Math.max(1, Math.round(length / 3.2));
+          for (let b = 0; b < bays; b++) {
+            if ((index + b * 3 + i) % 3 === 0) continue; // une vitrine sur trois sans store
+            const t0 = (b + 0.08) / bays, t1 = (b + 0.92) / bays, cloth = AWNINGS[(index * 5 + b + i) % AWNINGS.length];
+            const sx = ax + (bx - ax) * t0, sz = az + (bz - az) * t0, ex = ax + (bx - ax) * t1, ez = az + (bz - az) * t1;
+            const y0 = base + GROUND_FLOOR - 0.55, y1 = y0 - 0.5, D = 1.15;
+            const v = [plain.vertex(sx, y0, sz, cloth, 1), plain.vertex(ex, y0, ez, cloth, 1), plain.vertex(ex + ox * D, y1, ez + oz * D, cloth, 0.85), plain.vertex(sx + ox * D, y1, sz + oz * D, cloth, 0.85)];
+            plain.triangle(v[0], v[1], v[2]); plain.triangle(v[0], v[2], v[3]);
+            const w = [plain.vertex(sx + ox * D, y1, sz + oz * D, WHITE, 0.95), plain.vertex(ex + ox * D, y1, ez + oz * D, WHITE, 0.95), plain.vertex(ex + ox * D, y1 - 0.22, ez + oz * D, cloth, 0.9), plain.vertex(sx + ox * D, y1 - 0.22, sz + oz * D, cloth, 0.9)];
+            plain.triangle(w[0], w[1], w[2]); plain.triangle(w[0], w[2], w[3]);
+          }
+        }
       }
       // Centre colonial : balcons filants en saillie, avec garde-corps en fer forgé, au 1er et au 3e étage.
       if (colonial && length > 4) {
@@ -320,6 +422,21 @@ export function buildBuildings(scene: THREE.Scene, data: WorldData, ground: (x: 
     } else {
       // Toit plat ; les murs dépassent pour former l'acrotère.
       roof.flatPolygon(q, building.t === 'industrial' ? top : top - PARAPET, roofColor);
+    }
+
+    // Corniche en saillie en tête de façade (immeubles et bâtiments publics) : le toit ne finit plus en arête nue.
+    if (tall || building.t === 'public' || building.t === 'school' || building.t === 'hospital') {
+      const outer = grow(ring, 0.38), tone = colonial ? CORNICE : wall.clone().multiplyScalar(0.96);
+      for (let i = 0; i < count; i++) {
+        const j = (i + 1) % count;
+        const a = ring[i], b = ring[j], ao = outer[i], bo = outer[j], y0 = top - 0.42, y1 = top + 0.02;
+        const v = [roof.vertex(ao[0], y0, -ao[1], tone, 0.82), roof.vertex(bo[0], y0, -bo[1], tone, 0.82), roof.vertex(bo[0], y1, -bo[1], tone, 1), roof.vertex(ao[0], y1, -ao[1], tone, 1)];
+        roof.triangle(v[0], v[1], v[2]); roof.triangle(v[0], v[2], v[3]);
+        const u = [roof.vertex(a[0], y0, -a[1], tone, 0.6), roof.vertex(b[0], y0, -b[1], tone, 0.6), roof.vertex(bo[0], y0, -bo[1], tone, 0.7), roof.vertex(ao[0], y0, -ao[1], tone, 0.7)];
+        roof.triangle(u[0], u[1], u[2]); roof.triangle(u[0], u[2], u[3]);
+        const t = [roof.vertex(a[0], y1, -a[1], tone, 1.02), roof.vertex(b[0], y1, -b[1], tone, 1.02), roof.vertex(bo[0], y1, -bo[1], tone, 1.02), roof.vertex(ao[0], y1, -ao[1], tone, 1.02)];
+        roof.triangle(t[0], t[2], t[1]); roof.triangle(t[0], t[3], t[2]);
+      }
     }
 
     // Toits-terrasses habités : édicule d'escalier, citernes d'eau et paraboles, comme sur les toits d'Annaba.
@@ -379,7 +496,7 @@ export function buildBuildings(scene: THREE.Scene, data: WorldData, ground: (x: 
       box(roof, mx, mz, 0.9, tip + 0.4, tip + 3.4, MINARET);
       pyramid(roof, mx, mz, 1.0, tip + 3.4, tip + 5.2, DOME);
     }
-    collider.addBuilding(p);
+    collider.addBuilding(footprint);
   });
 
   const materials = new Map<string, THREE.Material>();

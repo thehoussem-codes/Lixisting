@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { splitIntoSectors } from '../world/Sectors';
+import { MOBILE } from './Mobile';
+import { TouchControls } from '../ui/TouchControls';
 import { Sound } from './Sound';
 import { Harbor } from '../world/Harbor';
 import { Input } from './Input';
@@ -26,14 +28,14 @@ import { MapView } from '../ui/MapView';
  * Part de la résolution de l'écran réellement calculée. 1 = image nette.
  * Si le jeu rame, ajouter ?res=0.6 à l'adresse pour alléger le calcul.
  */
-const RENDER_SCALE = Math.min(1, Math.max(0.3, Number(new URLSearchParams(window.location.search).get('res')) || 1));
+const RENDER_SCALE = Math.min(1, Math.max(0.3, Number(new URLSearchParams(window.location.search).get('res')) || (MOBILE ? 0.7 : 1)));
 const DRONE = new URLSearchParams(window.location.search).get('drone')?.split(',').map(Number);
-const SHADOWS = new URLSearchParams(window.location.search).get('ombres') !== '0';
+const SHADOWS = new URLSearchParams(window.location.search).get('ombres') !== '0' && !MOBILE; // pas d'ombres sur téléphone
 const SHADOW_RANGE = 85; // demi-largeur de la zone ombrée autour du joueur, en mètres
 const AUTO_SCALE = !new URLSearchParams(window.location.search).has('res');
 const ENTER_DISTANCE = 4.5;
 const SECTOR = 400;          // taille des secteurs du monde (m)
-const VIEW_DISTANCE = 1400; // au-delà, tout est noyé dans le brouillard
+const VIEW_DISTANCE = MOBILE ? 850 : 1400; // au-delà, tout est noyé dans le brouillard
 const ROAD_SURFACE = 0.2;
 
 export interface GameEvents {
@@ -47,7 +49,7 @@ export interface GameEvents {
 
 /** Le moteur : crée la scène, fait tourner la boucle de jeu, nettoie à la fin. */
 export class Game {
-  private renderer = new THREE.WebGLRenderer({ antialias: true, // arêtes lissées
+  private renderer = new THREE.WebGLRenderer({ antialias: !MOBILE, // arêtes lissées
     powerPreference: 'high-performance' });
   private scene = new THREE.Scene();
   private camera = new THREE.PerspectiveCamera(60, 1, 0.5, 7000);
@@ -61,6 +63,7 @@ export class Game {
   private ground: (x: number, z: number) => number = () => 0;
   private places: WorldPlace[] = [];
   private trees: TreeStream | null = null;
+  private touch: TouchControls | null = null;
   private labels: { name: string; x: number; n: number; radius: number }[] = [];
   private cars: Car[] = [];
   private map: MapView | null = null;
@@ -104,6 +107,8 @@ export class Game {
     container.appendChild(this.renderer.domElement);
 
     this.input = new Input(this.renderer.domElement);
+    // Téléphone : joystick, boutons, caméra au doigt ; le premier contact débloque le son.
+    if (MOBILE) this.touch = new TouchControls(this.input, () => this.sound.unlock());
     this.cameraRig = new ThirdPersonCamera(this.camera);
     this.scene.background = new THREE.Color(0x9fd0ea);
     this.scene.add(this.player.object);
@@ -167,6 +172,7 @@ export class Game {
     cancelAnimationFrame(this.frameId);
     window.removeEventListener('resize', this.resize);
     window.removeEventListener('keydown', this.onKeyDown);
+    this.touch?.dispose();
     this.input.dispose();
     this.map?.dispose();
     this.renderer.dispose();

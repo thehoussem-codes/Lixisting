@@ -18,7 +18,7 @@ function finish(canvas: HTMLCanvasElement): THREE.CanvasTexture {
 
 /** Photos de matières (asphalte, crépi, dallage...) chargées au démarrage : voir public/assets/textures/CREDITS.md. */
 const photos = new Map<string, HTMLImageElement>();
-const PHOTO_NAMES = ['ground', 'asphalt', 'asphalt_old', 'pavement', 'pavers', 'plaster', 'plaster_old', 'stone_wall'];
+const PHOTO_NAMES = ['ground', 'asphalt', 'asphalt_old', 'pavement', 'pavers', 'plaster', 'plaster_old', 'stone_wall', 'villa_ground', 'villa_upper', 'villa_rail'];
 
 /** Charge les photos de matières. Une photo absente n'empêche rien : le dessin calculé prend sa place. */
 export async function loadPhotoTextures(): Promise<void> {
@@ -51,21 +51,36 @@ function canvas(width: number, height: number, detail = 1): [HTMLCanvasElement, 
   return [element, ctx];
 }
 
-export type FacadeStyle = 'apartment' | 'house' | 'tower' | 'school' | 'public' | 'industrial' | 'mosque' | 'shop' | 'ground' | 'colonial' | 'arcade' | 'station' | 'cite' | 'citetour';
+export type FacadeStyle = 'apartment' | 'house' | 'tower' | 'school' | 'public' | 'industrial' | 'mosque' | 'shop' | 'ground' | 'colonial' | 'arcade' | 'station' | 'cite' | 'citetour'
+  | 'villaGround' | 'villaUpper' | 'villaRail' | 'plaster' | 'houseSide' | 'houseFront' | 'houseUpper' | 'brick' | 'brickOpen' | 'cement' | 'casbah' | 'casbahDoor';
 
 /** Largeur réelle (m) couverte par un motif : 4 travées pour les rez-de-chaussée, 1 sinon. */
 export const FACADE_WIDTH: Record<FacadeStyle, number> = {
   apartment: 3.2, house: 3.2, tower: 3.2, school: 4, public: 3.2, industrial: 3, mosque: 4, shop: 12.8, ground: 12.8,
   colonial: 3, arcade: 3.4, station: 5, cite: 3.4, citetour: 3.2,
+  villaGround: 10, villaUpper: 10, villaRail: 9, plaster: 4, houseSide: 6, houseFront: 10, houseUpper: 10, brick: 4, brickOpen: 10, cement: 4, casbah: 5, casbahDoor: 2.2,
 };
 
+/** Façade tirée d'un rendu du modèle « Algerian villa » fourni par Houssem (voir CREDITS.md). */
+function photoFacade(name: string, fallback: string): THREE.CanvasTexture {
+  const image = photos.get(name);
+  const element = document.createElement('canvas');
+  element.width = image ? image.width : 8; element.height = image ? image.height : 8;
+  const ctx = element.getContext('2d')!;
+  if (image) ctx.drawImage(image, 0, 0); else { ctx.fillStyle = fallback; ctx.fillRect(0, 0, 8, 8); }
+  return finish(element);
+}
+
 export function createFacadeTexture(style: FacadeStyle): THREE.CanvasTexture {
-  const wide = style === 'shop' || style === 'ground';
+  if (style === 'villaGround') return photoFacade('villa_ground', '#9a8f84');
+  if (style === 'villaUpper') return photoFacade('villa_upper', '#e8e4da');
+  if (style === 'villaRail') return photoFacade('villa_rail', '#d9c4a0');
+  const wide = style === 'shop' || style === 'ground' || style === 'houseFront' || style === 'houseUpper' || style === 'brickOpen';
   const width = wide ? 256 : 64, detail = photos.size ? 4 : 1;
   const [element, ctx] = canvas(width, 64, detail);
   // Fond de crépi photographié (les cités ont un crépi plus fatigué), sous les fenêtres dessinées.
   // Le crépi ne fait que nuancer la couleur du mur : trop opaque, il salissait toutes les façades en gris.
-  for (let x = 0; x < width; x += 64) photo(ctx, style === 'apartment' || style === 'industrial' ? 'plaster_old' : 'plaster', x, 0, 64, 64, style === 'industrial' ? 0.6 : 0.4);
+  if (style !== 'brick' && style !== 'brickOpen' && style !== 'cement') for (let x = 0; x < width; x += 64) photo(ctx, style === 'apartment' || style === 'industrial' ? 'plaster_old' : 'plaster', x, 0, 64, 64, style === 'industrial' ? 0.6 : 0.4);
   const rect = (color: string, x: number, y: number, w: number, h: number) => { ctx.fillStyle = color; ctx.fillRect(x, y, w, h); };
   switch (style) {
     case 'apartment': // fenêtre + balcon à garde-corps
@@ -150,6 +165,61 @@ export function createFacadeTexture(style: FacadeStyle): THREE.CanvasTexture {
       rect('#d8cdb4', 0, 60, 64, 4);
       break;
     }
+    case 'plaster': // enduit nu
+      rect('rgba(0,0,0,0.05)', 0, 60, 64, 4);
+      break;
+    case 'houseSide': // mur latéral de maison : une seule petite fenêtre à barreaux (la colonne 0 reste nue)
+      rect('#d9d4c8', 28, 16, 26, 28); rect('#26323c', 31, 19, 20, 22);
+      for (let x = 34; x < 50; x += 4) rect('#111111', x, 19, 1, 22);
+      rect('#111111', 31, 29, 20, 1); rect('#c9c3b5', 26, 44, 30, 3);
+      break;
+    case 'houseFront': // rez-de-chaussée de villa : garage à rideau, porte d'entrée en fer, fenêtre à grille
+      rect('rgba(90,60,40,0.28)', 0, 50, 256, 14);                                  // soubassement carrelé
+      rect('#8a9197', 14, 14, 80, 50); for (let y = 17; y < 64; y += 4) rect('#6f767c', 14, y, 80, 1); rect('#5d6368', 12, 12, 84, 3);
+      rect('#e6e0d2', 116, 10, 40, 54); rect('#2f5a46', 120, 14, 32, 50); rect('#234536', 135, 14, 2, 50);
+      for (const y of [20, 34, 48]) { rect('#3d7359', 123, y, 10, 9); rect('#3d7359', 139, y, 10, 9); }
+      rect('#c8b27a', 131, 40, 2, 4);
+      rect('#e6e0d2', 180, 16, 56, 34); rect('#26323c', 184, 20, 48, 26);
+      for (let x = 188; x < 232; x += 5) rect('#141414', x, 20, 1, 26);
+      rect('#141414', 184, 32, 48, 1); rect('#d5cfc0', 178, 50, 60, 3);
+      break;
+    case 'houseUpper': // étage de villa : porte-fenêtre et deux fenêtres à persiennes
+      rect('#e6e0d2', 34, 8, 44, 52); rect('#26323c', 46, 12, 20, 48); rect('#3f6b55', 36, 12, 10, 48); rect('#3f6b55', 66, 12, 10, 48);
+      for (const x0 of [116, 190]) {
+        rect('#e6e0d2', x0 - 2, 14, 48, 32); rect('#26323c', x0 + 12, 17, 20, 26); rect('#3f6b55', x0, 17, 12, 26); rect('#3f6b55', x0 + 32, 17, 12, 26);
+        for (let y = 19; y < 43; y += 3) { rect('#2f5443', x0, y, 12, 1); rect('#2f5443', x0 + 32, y, 12, 1); }
+        rect('#d5cfc0', x0 - 4, 46, 52, 3);
+      }
+      for (let y = 14; y < 60; y += 3) { rect('#2f5443', 36, y, 10, 1); rect('#2f5443', 66, y, 10, 1); }
+      rect('#d9d4c6', 0, 60, 256, 4);
+      break;
+    case 'brick': case 'brickOpen': { // maison en cours de construction : brique creuse rouge, ossature béton apparente
+      rect('#b8663f', 0, 0, width, 64);
+      for (let y = 0; y < 64; y += 3) {
+        rect('rgba(70,40,25,0.5)', 0, y, width, 0.6);
+        for (let x = (y / 3) % 2 ? 0 : 4; x < width; x += 8) { rect('rgba(70,40,25,0.4)', x, y, 0.6, 3); rect(`rgba(${200 + (x * 7 + y * 3) % 40},${110 + (x + y) % 30},70,0.22)`, x + 1, y + 1, 6, 1.6); }
+      }
+      rect('#a7a39b', 0, 58, width, 6); rect('#8f8b84', 0, 57, width, 1);            // dalle de béton
+      for (let x = 0; x < width; x += 64) rect('#a7a39b', x, 0, 5, 64);              // poteaux
+      if (style === 'brickOpen') for (const x0 of [30, 112, 196]) { rect('#a7a39b', x0 - 3, 12, 42, 4); rect('#17191b', x0, 16, 36, 30); rect('#a7a39b', x0 - 2, 46, 40, 2); }
+      break;
+    }
+    case 'cement': // enduit ciment gris, taloché
+      rect('#b3ada3', 0, 0, 64, 64);
+      for (let k = 0; k < 40; k++) rect(`rgba(${k % 2 ? 255 : 60},${k % 2 ? 250 : 55},${k % 2 ? 240 : 50},0.06)`, (k * 37) % 64, (k * 23) % 64, 14, 3);
+      rect('rgba(60,55,50,0.25)', 0, 58, 64, 6);
+      break;
+    case 'casbah': // maison de la vieille ville : chaux, petite fenêtre grillée à encadrement bleu
+      rect('#2f6fa5', 32, 14, 20, 24); rect('#1c242b', 35, 17, 14, 18);
+      for (let x = 37; x < 49; x += 3) rect('#0f0f0f', x, 17, 1, 18);
+      rect('rgba(47,111,165,0.5)', 0, 56, 64, 8);                                   // soubassement bleu
+      break;
+    case 'casbahDoor': // porte cintrée bleue, cloutée
+      ctx.fillStyle = '#e9e4d6'; ctx.beginPath(); ctx.arc(32, 26, 24, Math.PI, 0); ctx.fill(); ctx.fillRect(8, 26, 48, 38);
+      ctx.fillStyle = '#2a64a0'; ctx.beginPath(); ctx.arc(32, 28, 19, Math.PI, 0); ctx.fill(); ctx.fillRect(13, 28, 38, 36);
+      rect('#1f4d7d', 31, 10, 2, 54);
+      for (const y of [34, 44, 54]) for (const x of [18, 24, 38, 44]) rect('#c9b06a', x, y, 2, 2);
+      break;
     case 'shop': // 4 travées : vitrine avec enseigne, entrée d'immeuble, rideau baissé, vitrine à store
       rect('#e6e2d8', 0, 0, 256, 5);
       rect('#2f6f9f', 6, 8, 52, 9); rect('#e9eef2', 12, 11, 40, 3);

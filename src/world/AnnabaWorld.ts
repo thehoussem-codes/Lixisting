@@ -1,3 +1,4 @@
+import { MOBILE } from '../engine/Mobile';
 import * as THREE from 'three';
 import type { Collider } from './Collider';
 import { MeshBuilder } from './MeshBuilder';
@@ -12,7 +13,8 @@ import { buildLandmarks, type LandmarkEdits } from './Landmarks';
 import type { WorldData } from './WorldData';
 
 const HORIZON = 0xd4e2e6;   // brume claire de bord de mer (même teinte que le brouillard)
-const FOG_DENSITY = 0.00105; // brouillard exponentiel : 30 % de voile à 500 m, 70 % à 1 km, presque plein à 1,6 km
+// Téléphone : on voit moins loin (850 m), le brouillard se referme plus tôt pour qu'aucun bloc n'apparaisse d'un coup.
+const FOG_DENSITY = MOBILE ? 0.0017 : 0.00105; // brouillard exponentiel : 30 % de voile à 500 m, 70 % à 1 km, presque plein à 1,6 km
 const ZENITH = 0x2c6fc4;
 const SUN_GLOW = 0xffd7a0;   // le ciel se réchauffe du côté du soleil, près de l'horizon
 const SUN_POSITION = new THREE.Vector3(400, 380, 150);

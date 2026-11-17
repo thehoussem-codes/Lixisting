@@ -322,13 +322,14 @@ def build_trees(world, grid=None, grid_origin=None):
     out = {"pine": [], "palm": [], "ficus": [], "cypress": [], "bush": [], "araucaria": [], "fpine": [], "oak": []}
 
     def add(kind, x, n, low=0.75, high=1.35):
-        out[kind] += [round(float(x), 1), round(float(n), 1), round(float(low + rng.random() * (high - low)), 2)]
+        precise = kind not in ("fpine", "oak", "bush", "cypress")   # forêt : au mètre près, fichier plus léger
+        out[kind] += [round(float(x), 1) if precise else int(round(float(x))), round(float(n), 1) if precise else int(round(float(n))), round(float(low + rng.random() * (high - low)), 1 if not precise else 2)]
 
     # 1. Zones vertes OSM
     # Densité (m² par arbre) et espèces. Annaba a peu de palmiers dans ses espaces verts (retour de Houssem) :
     # surtout ficus, pins d'Alep, cyprès et massifs ; les zones vertes de la carte sont plantées plus densément.
     # Bois et maquis : de vraies forêts (pins d'Alep et chênes de l'Edough), serrées, sans clairières vides.
-    mixes = {"wood": (80, [("fpine", 0.55), ("oak", 0.25), ("cypress", 0.05), ("bush", 0.15)]),
+    mixes = {"wood": (60, [("fpine", 0.55), ("oak", 0.25), ("cypress", 0.05), ("bush", 0.15)]),
              "scrub": (120, [("bush", 0.55), ("fpine", 0.3), ("oak", 0.15)]),
              "grass": (160, [("palm", 0.04), ("ficus", 0.38), ("pine", 0.2), ("cypress", 0.08), ("bush", 0.3)])}
     for area in world["areas"]:
@@ -357,7 +358,7 @@ def build_trees(world, grid=None, grid_origin=None):
     # 2. Tout terrain naturel (vert sur la carte du jeu : loin des bâtiments, hors zones déjà traitées) : forêt.
     # Retour de Houssem : la végétation d'Annaba, ce sont des forêts ; aucun grand espace vert ne reste nu.
     rect = world["meta"]["rect_m"]
-    per_tree = 150.0
+    per_tree = 95.0   # houppiers jointifs : les arbres se touchent
     count = int((rect[2] - rect[0]) * (rect[3] - rect[1]) / per_tree)
     spots = np.column_stack([rect[0] + rng.random(count) * (rect[2] - rect[0]), rect[1] + rng.random(count) * (rect[3] - rect[1])])
     on_land = np.zeros(len(spots), dtype=bool)
@@ -373,9 +374,9 @@ def build_trees(world, grid=None, grid_origin=None):
         if len(near):
             taken[near[Polygon(ring).contains_points(spots[near], radius=4) | Polygon(ring).contains_points(spots[near], radius=-4)]] = True
     spots = spots[~taken]
-    kinds = rng.choice(["fpine", "oak", "cypress", "bush"], len(spots), p=[0.5, 0.25, 0.07, 0.18])
+    kinds = rng.choice(["fpine", "oak", "cypress", "bush"], len(spots), p=[0.52, 0.33, 0.05, 0.10])
     for (x, n), kind in zip(spots, kinds):
-        add(kind, x, n, 1.1, 1.9) if kind in ("fpine", "oak") else add(kind, x, n, 0.9, 1.6)
+        add(kind, x, n, 1.25, 2.0) if kind in ("fpine", "oak") else add(kind, x, n, 0.9, 1.6)
 
     # 3. Arbres d'alignement le long des rues à trottoir
     side = 1

@@ -1,3 +1,5 @@
+import { MOBILE } from './Mobile';
+
 /**
  * Clavier + souris.
  * On lit la position physique des touches (event.code), donc W A S D
@@ -20,6 +22,17 @@ export class Input {
     return this.keys.has(code);
   }
 
+  /** Touches simulées par les commandes tactiles (téléphone). */
+  setVirtual(code: string, down: boolean): void {
+    if (down) this.keys.add(code); else this.keys.delete(code);
+  }
+
+  /** Mouvement de caméra venant du doigt (téléphone), ajouté à celui de la souris. */
+  addLook(dx: number, dy: number): void {
+    this.mouseDX += dx;
+    this.mouseDY += dy;
+  }
+
   /** Mouvement de souris accumulé depuis le dernier appel. */
   consumeMouse(): { dx: number; dy: number } {
     const delta = { dx: this.mouseDX, dy: this.mouseDY };
@@ -40,7 +53,7 @@ export class Input {
   private onKeyDown = (e: KeyboardEvent) => { this.keys.add(e.code); };
   private onKeyUp = (e: KeyboardEvent) => { this.keys.delete(e.code); };
   private onBlur = () => { this.keys.clear(); };
-  private onClick = () => { void this.element.requestPointerLock(); };
+  private onClick = () => { if (!MOBILE) void this.element.requestPointerLock?.()?.catch?.(() => undefined); };
   private onMouseMove = (e: MouseEvent) => {
     if (document.pointerLockElement !== this.element) return;
     this.mouseDX += e.movementX;

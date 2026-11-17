@@ -1,3 +1,4 @@
+import { MOBILE } from '../engine/Mobile';
 import * as THREE from 'three';
 import { createFoliageTexture } from './Textures';
 import { MeshBuilder } from './MeshBuilder';
@@ -6,7 +7,7 @@ import { MeshBuilder } from './MeshBuilder';
 export type TreeData = Record<string, number[]>;
 
 const CHUNK = 200;          // regroupement par blocs de 200 m
-const VIEW_DISTANCE = 520;  // au-delà, la végétation d'un bloc n'est plus affichée
+const VIEW_DISTANCE = MOBILE ? 360 : 520;  // au-delà, la végétation d'un bloc n'est plus affichée
 
 const FICUS_BARK = new THREE.Color(0x9a958a); // écorce grise et lisse des ficus (photo du Cours)
 const BARK = new THREE.Color(0x6b4f35), PALM_BARK = new THREE.Color(0x7a5a3c);
@@ -41,8 +42,7 @@ function noise(i: number, salt: number): number {
 
 /** Tronc effilé en plusieurs tronçons, qui peut pencher. Renvoie la position du sommet. */
 function trunk(b: MeshBuilder, x: number, y: number, z: number, radius: number, height: number, leanX: number, leanZ: number,
-               sides: number, color: THREE.Color): [number, number, number] {
-  const SEGMENTS = 3;
+               sides: number, color: THREE.Color, SEGMENTS = 3): [number, number, number] {
   let previous: number[] = [];
   for (let s = 0; s <= SEGMENTS; s++) {
     const t = s / SEGMENTS, r = radius * (1 - 0.45 * t);
@@ -123,23 +123,19 @@ function pine(b: MeshBuilder, i: number, x: number, y: number, z: number, s: num
 /** Pin de forêt : même silhouette que le pin d'Alep, en beaucoup moins de triangles (les forêts en comptent des milliers). */
 function forestPine(b: MeshBuilder, i: number, x: number, y: number, z: number, s: number): void {
   const color = GREENS.pine[i % GREENS.pine.length], light = LIGHT(color);
-  const height = (4.5 + noise(i, 1) * 3) * s;
-  const [tx, ty, tz] = trunk(b, x, y - 0.3, z, 0.22 * s, height, (noise(i, 2) - 0.5) * 1.2 * s, (noise(i, 3) - 0.5) * 1.2 * s, 4, BARK);
-  const spread = (2.6 + noise(i, 4) * 1.4) * s;
-  blob(b, tx, ty + 0.4 * s, tz, spread, 1.3 * s, spread, 7, 3, color, light, true);
-  const a = noise(i, 5) * Math.PI * 2;
-  blob(b, tx + Math.cos(a) * spread * 0.5, ty + 1.1 * s, tz + Math.sin(a) * spread * 0.5, spread * 0.62, 0.95 * s, spread * 0.62, 6, 2, light, light, true);
+  const height = (4 + noise(i, 1) * 2.6) * s;
+  const [tx, ty, tz] = trunk(b, x, y - 0.3, z, 0.2 * s, height, (noise(i, 2) - 0.5) * 1.0 * s, (noise(i, 3) - 0.5) * 1.0 * s, 4, BARK, 1);
+  const spread = (2.7 + noise(i, 4) * 1.3) * s;
+  blob(b, tx, ty + 0.5 * s, tz, spread, 1.5 * s, spread, 7, 3, color, light, true);
 }
 
 /** Chêne (chêne-liège de l'Edough) : houppier rond et dense, tronc court et nu. */
 function oak(b: MeshBuilder, i: number, x: number, y: number, z: number, s: number): void {
   const color = GREENS.ficus[i % GREENS.ficus.length], light = LIGHT(color);
-  const height = (2.2 + noise(i, 1) * 1.2) * s;
-  const [tx, ty, tz] = trunk(b, x, y - 0.3, z, 0.3 * s, height, (noise(i, 2) - 0.5) * 0.6, (noise(i, 3) - 0.5) * 0.6, 5, OAK_BARK);
-  const r = (2.5 + noise(i, 4) * 1.3) * s;
-  blob(b, tx, ty + r * 0.55, tz, r, r * 0.8, r, 8, 4, color, light, true);
-  const a = noise(i, 5) * Math.PI * 2;
-  blob(b, tx + Math.cos(a) * r * 0.55, ty + r * 0.35, tz + Math.sin(a) * r * 0.55, r * 0.6, r * 0.5, r * 0.6, 6, 3, light, light, true);
+  const height = (2.0 + noise(i, 1) * 1.2) * s;
+  const [tx, ty, tz] = trunk(b, x, y - 0.3, z, 0.28 * s, height, (noise(i, 2) - 0.5) * 0.6, (noise(i, 3) - 0.5) * 0.6, 4, OAK_BARK, 1);
+  const r = (2.6 + noise(i, 4) * 1.2) * s;
+  blob(b, tx, ty + r * 0.5, tz, r, r * 0.78, r, 7, 3, color, light, true);
 }
 
 const BARK_SPAN = 12; // m de tronc couverts par la texture d'écorce (de bas en haut, sans répétition)
@@ -374,6 +370,7 @@ export interface TreeStream {
   update(x: number, z: number, budget?: number): void;
 }
 
+const FOREST = new Set(['fpine', 'oak', 'bush', 'cypress']);
 const BUILD_DISTANCE = VIEW_DISTANCE + 160;   // un bloc est construit un peu avant d'entrer dans le champ de vision
 const DROP_DISTANCE = VIEW_DISTANCE + 900;    // et libéré quand le joueur s'en est vraiment éloigné
 
@@ -393,7 +390,9 @@ export function buildTrees(scene: THREE.Scene, data: TreeData, ground: (x: numbe
       const kx = Math.floor(x / CHUNK), kn = Math.floor(n / CHUNK), key = `${kx},${kn}`;
       let block = blocks.get(key);
       if (!block) { block = { x: (kx + 0.5) * CHUNK, z: -(kn + 0.5) * CHUNK, plants: [], meshes: null }; blocks.set(key, block); }
-      block.plants.push(speciesIndex, count, x, n, values[i + 2]); // le rang global garde à chaque plante sa forme
+      // Téléphone : une plante de forêt sur deux (les houppiers sont élargis d'autant, la forêt reste pleine).
+      if (MOBILE && FOREST.has(species) && count % 2 === 1) { count++; continue; }
+      block.plants.push(speciesIndex, count, x, n, values[i + 2] * (MOBILE && FOREST.has(species) ? 1.25 : 1)); // le rang global garde à chaque plante sa forme
       count++;
     }
   });

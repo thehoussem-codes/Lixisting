@@ -374,3 +374,26 @@ Skills chargés : `physics-tuning`, `game-ai`, `audio-design`, `threejs-material
 - **Lissage** : angles des bâtiments arrondis (`roundCorners` dans Buildings.ts : coins de 35° à 145° entre deux murs
   d'au moins 5 m, rayon ≈ 1,2 m), textures filtrées (plus de gros pixels), anticrénelage activé.
   Coût à surveiller sur l'Intel UHD 630 : l'anticrénelage et les forêts ; la résolution automatique compense.
+
+## Maisons algériennes, arcades, stores, corniches ; forêts jointives
+
+- `src/world/Houses.ts` : chaque emprise OSM « maison » devient une villa algérienne (façade tirée d'un rendu du
+  modèle « Algerian villa » fourni par Houssem : garage à rideau, soubassement de pierre, balcon à balustres, dalle
+  débordante terre cuite), une villa enduite à toit de tuiles et balcon en fer forgé, une maison en brique en cours
+  de construction (fers en attente sur la dalle) ou, autour de la Vieille Ville, une maison blanche à porte cintrée
+  bleue. Façade principale = mur le plus proche d'une rue. Citernes d'eau sur les toits plats.
+- Immeubles coloniaux sur rue commerçante : vraies arcades en 3D (piliers, arcs en plein cintre, galerie de 2,8 m
+  où l'on circule, vitrines au fond). Stores en toile au-dessus des vitrines ; corniche en saillie en tête des
+  immeubles. Les angles arrondis de l'étape précédente sont retirés (mal compris).
+- Forêts : un arbre pour 95 m², houppiers élargis, les arbres se touchent (664 000 plantes, modèles allégés).
+
+## Version téléphone
+
+- `src/engine/Mobile.ts` détecte un écran tactile sans souris (`?mobile=1` pour forcer, `?mobile=0` pour couper).
+- `src/ui/TouchControls.ts` : joystick à gauche (poussé au bord = courir), glisser ailleurs = caméra, boutons SAUT
+  (aussi frein à main), voiture, carte. Les commandes passent par la même classe `Input` que le clavier.
+- Écran « tourne ton téléphone » en vertical ; plein écran et verrouillage horizontal au premier contact là où le
+  navigateur l'accepte (Android ; pas Safari sur iPhone, où il faut « Ajouter à l'écran d'accueil »).
+- Mode allégé : pas d'ombres ni d'anticrénelage, résolution 0,7 (ajustée ensuite automatiquement), vue à 850 m avec
+  brouillard plus dense, arbres affichés à 360 m, une plante de forêt sur deux (houppiers élargis).
+- Vérifié en émulation téléphone (844 × 390) : joystick, caméra au doigt, écran vertical. Pas sur un vrai téléphone.
