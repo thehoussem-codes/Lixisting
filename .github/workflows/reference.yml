@@ -1,0 +1,25 @@
+# Vue aérienne de référence d'une zone (pour repérer les bâtiments) : artefact privé, effacé après 1 jour.
+name: Vue aérienne de référence
+
+on:
+  workflow_dispatch:
+    inputs:
+      rect:
+        description: "x0 n0 x1 n1 [zoom] (mètres du jeu)"
+        required: true
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pillow numpy
+      - run: python tools/reference_imagery.py ${{ inputs.rect }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reference
+          path: reference.jpg
+          retention-days: 1
