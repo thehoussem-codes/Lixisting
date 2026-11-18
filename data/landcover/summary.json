@@ -1,0 +1,22 @@
+{
+  "source": "ESA WorldCover 10 m 2021 v200",
+  "licence": "CC BY 4.0",
+  "attribution": "© ESA WorldCover project / Contains modified Copernicus Sentinel data (2021) processed by ESA WorldCover consortium",
+  "url": "https://esa-worldcover.s3.eu-central-1.amazonaws.com/v200/2021/map/ESA_WorldCover_10m_2021_v200_N36E006_Map.tif",
+  "x0": -6582.7,
+  "n0": -5596.6,
+  "step": 10.0,
+  "cols": 1160,
+  "rows": 1500,
+  "row0": "sud",
+  "classes": {
+    "10": 412091,
+    "20": 51956,
+    "30": 174590,
+    "40": 58770,
+    "50": 266884,
+    "60": 23310,
+    "80": 748031,
+    "90": 4368
+  }
+}
