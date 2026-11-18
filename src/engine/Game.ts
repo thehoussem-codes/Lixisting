@@ -524,9 +524,9 @@ export class Game {
       this.scaleTimer = 1.5;
       const fps = 1 / this.frameTime;
       // Les ombres coûtent cher : si le jeu rame encore à la résolution minimale, on les coupe.
-      if (this.sun?.castShadow && fps < 24 && this.renderScale <= 0.6) { this.sun.castShadow = false; console.info('Ombres coupées pour garder la fluidité.'); }
+      if (this.sun?.castShadow && fps < 24 && this.renderScale <= 0.7) { this.sun.castShadow = false; console.info('Ombres coupées pour garder la fluidité.'); }
       const wanted = fps < 33 ? this.renderScale - 0.1 : fps > 52 ? this.renderScale + 0.05 : this.renderScale;
-      const next = Math.min(1, Math.max(0.5, wanted));
+      const next = Math.min(1, Math.max(0.7, wanted)); // jamais sous 0,7 : l'image resterait trop floue
       if (next !== this.renderScale) { this.renderScale = next; this.resize(); }
     }
     this.hudTimer -= dt;

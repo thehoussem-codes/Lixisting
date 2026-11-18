@@ -427,7 +427,7 @@ export function buildTrees(scene: THREE.Scene, data: TreeData, ground: (x: numbe
   let first = true;
   return {
     count,
-    update(x, z, budget = 6) {
+    update(x, z, budget = 2.5) {
       if (first) { budget = 700; first = false; } // à l'arrivée : tout le voisinage d'un coup, sans apparition visible
       const start = performance.now();
       // Les blocs à construire, du plus proche au plus lointain.
@@ -440,9 +440,10 @@ export function buildTrees(scene: THREE.Scene, data: TreeData, ground: (x: numbe
         } else if (d < BUILD_DISTANCE) wanted.push([d, block]);
       }
       wanted.sort((a, b) => a[0] - b[0]);
+      // Un seul bloc par image en jeu (sauf au démarrage) : pas d'à-coups quand on avance.
       for (const [, block] of wanted) {
         build(block);
-        if (performance.now() - start > budget) break;
+        if (performance.now() - start > budget || budget < 100) break;
       }
     },
   };

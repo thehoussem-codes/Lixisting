@@ -408,3 +408,12 @@ Skills chargés : `physics-tuning`, `game-ai`, `audio-design`, `threejs-material
 - Téléphone : pas de corniches, de stores, de balcons d'immeubles ou de maisons, ni de citernes (moitié moins de
   géométrie de bâtiments).
 - Mesuré en émulation téléphone : pic 1 670 → 543 Mo, mémoire après chargement 687 → 373 Mo, géométrie 462 → ≈ 295 Mo.
+
+## Qualité et fluidité sur ordinateur (retour de Houssem : « baisse de qualité et de fluidité »)
+
+- Cause : forêts très denses (664 000 plantes) et nouveaux détails → images par seconde en baisse → la résolution
+  automatique descendait jusqu'à 0,5 et coupait les ombres (image floue), et la construction des blocs d'arbres en
+  jeu (jusqu'à 6 ms par image) donnait des à-coups.
+- Forêts : un arbre pour 150 m² mais houppiers plus larges (les arbres se touchent toujours) : 453 000 plantes.
+- Arbres construits un bloc par image (2,5 ms au plus) en jeu.
+- Résolution automatique jamais sous 0,7.

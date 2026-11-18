@@ -358,7 +358,7 @@ def build_trees(world, grid=None, grid_origin=None):
     # 2. Tout terrain naturel (vert sur la carte du jeu : loin des bâtiments, hors zones déjà traitées) : forêt.
     # Retour de Houssem : la végétation d'Annaba, ce sont des forêts ; aucun grand espace vert ne reste nu.
     rect = world["meta"]["rect_m"]
-    per_tree = 95.0   # houppiers jointifs : les arbres se touchent
+    per_tree = 150.0  # moins d'arbres, mais plus larges : les houppiers se touchent toujours
     count = int((rect[2] - rect[0]) * (rect[3] - rect[1]) / per_tree)
     spots = np.column_stack([rect[0] + rng.random(count) * (rect[2] - rect[0]), rect[1] + rng.random(count) * (rect[3] - rect[1])])
     on_land = np.zeros(len(spots), dtype=bool)
@@ -376,7 +376,7 @@ def build_trees(world, grid=None, grid_origin=None):
     spots = spots[~taken]
     kinds = rng.choice(["fpine", "oak", "cypress", "bush"], len(spots), p=[0.52, 0.33, 0.05, 0.10])
     for (x, n), kind in zip(spots, kinds):
-        add(kind, x, n, 1.25, 2.0) if kind in ("fpine", "oak") else add(kind, x, n, 0.9, 1.6)
+        add(kind, x, n, 1.6, 2.3) if kind in ("fpine", "oak") else add(kind, x, n, 0.9, 1.6)
 
     # 3. Arbres d'alignement le long des rues à trottoir
     side = 1
