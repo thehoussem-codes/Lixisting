@@ -591,70 +591,82 @@ def main():
     # On repousse les murs à au moins CLEAR mètres de l'axe des rues carrossables (demande de Houssem : les voitures
     # se bloquaient contre des maisons). Seuls les points trop proches bougent ; le reste du bâtiment est conservé.
     CLEAR = 3.3
-    seg_cells = {}
-    gx = graph_nodes
-    for i in range(0, len(graph_edges), 4):
-        a, b = graph_edges[i], graph_edges[i + 1]
-        ax_, an_, bx_, bn_ = gx[a * 2], gx[a * 2 + 1], gx[b * 2], gx[b * 2 + 1]
-        for cx_ in range(int(min(ax_, bx_) // 20) - 1, int(max(ax_, bx_) // 20) + 2):
-            for cn_ in range(int(min(an_, bn_) // 20) - 1, int(max(an_, bn_) // 20) + 2):
-                seg_cells.setdefault((cx_, cn_), []).append((ax_, an_, bx_, bn_))
 
-    def nearest_axis(x, n):
-        best = None
-        for ax_, an_, bx_, bn_ in seg_cells.get((int(x // 20), int(n // 20)), ()):
-            dx_, dn_ = bx_ - ax_, bn_ - an_
-            L = dx_ * dx_ + dn_ * dn_
-            t = 0 if L == 0 else max(0, min(1, ((x - ax_) * dx_ + (n - an_) * dn_) / L))
-            qx, qn = ax_ + dx_ * t, an_ + dn_ * t
-            d = math.hypot(x - qx, n - qn)
-            if best is None or d < best[0]:
-                best = (d, qx, qn, dx_, dn_)
-        return best
+    def push_back(buildings, segments):
+        """Recule les murs hors des bandes [(ax, an, bx, bn, dégagement)] ; renvoie (gardés, reculés, retirés)."""
+        seg_cells = {}
+        for ax_, an_, bx_, bn_, clear in segments:
+            for cx_ in range(int(min(ax_, bx_) // 20) - 1, int(max(ax_, bx_) // 20) + 2):
+                for cn_ in range(int(min(an_, bn_) // 20) - 1, int(max(an_, bn_) // 20) + 2):
+                    seg_cells.setdefault((cx_, cn_), []).append((ax_, an_, bx_, bn_, clear))
 
-    moved = dropped = 0
-    kept = []
-    for b in buildings:
-        p = list(zip(b["p"][0::2], b["p"][1::2]))
-        ring = densify(p + [p[0]], 1.0)[:-1]
-        if not any((h := nearest_axis(x, n)) and h[0] < CLEAR for x, n in ring):
+        def nearest_axis(x, n):
+            """Le segment dont la bande est la plus enfoncée dans ce point : (manque, qx, qn, dx, dn, dégagement)."""
+            best = None
+            for ax_, an_, bx_, bn_, clear in seg_cells.get((int(x // 20), int(n // 20)), ()):
+                dx_, dn_ = bx_ - ax_, bn_ - an_
+                L = dx_ * dx_ + dn_ * dn_
+                t = 0 if L == 0 else max(0, min(1, ((x - ax_) * dx_ + (n - an_) * dn_) / L))
+                qx, qn = ax_ + dx_ * t, an_ + dn_ * t
+                d = math.hypot(x - qx, n - qn)
+                if best is None or clear - d > best[0]:
+                    best = (clear - d, qx, qn, dx_, dn_, clear, d)
+            return best
+
+        moved = dropped = 0
+        kept = []
+        for b in buildings:
+            p = list(zip(b["p"][0::2], b["p"][1::2]))
+            ring = densify(p + [p[0]], 1.0)[:-1]
+            if not any((h := nearest_axis(x, n)) and h[0] > 0 for x, n in ring):
+                kept.append(b)
+                continue
+            out = []
+            for x, n in ring:
+                for _ in range(3):
+                    h = nearest_axis(x, n)
+                    if not h or h[0] <= 0:
+                        break
+                    _, qx, qn, dx_, dn_, clear, d = h
+                    if d > 0.05:
+                        ux, un = (x - qx) / d, (n - qn) / d
+                    else:  # point sur l'axe : on le pousse perpendiculairement, du côté du centre du bâtiment
+                        L = math.hypot(dx_, dn_) or 1
+                        ux, un = -dn_ / L, dx_ / L
+                        cx_, cn_ = sum(v[0] for v in p) / len(p), sum(v[1] for v in p) / len(p)
+                        if (cx_ - qx) * ux + (cn_ - qn) * un < 0:
+                            ux, un = -ux, -un
+                    x, n = qx + ux * clear, qn + un * clear
+                out.append((x, n))
+            # Simplification d'un contour fermé : on le coupe en deux au point le plus éloigné du premier.
+            far = max(range(len(out)), key=lambda k: math.hypot(out[k][0] - out[0][0], out[k][1] - out[0][1]))
+            out = simplify(out[:far + 1], 0.15)[:-1] + simplify(out[far:] + [out[0]], 0.15)[:-1]
+            new_area = abs(area(out)) if len(out) >= 3 else 0
+            if new_area < max(6, 0.25 * abs(area(p))):
+                dropped += 1  # bâtiment presque entièrement sur la chaussée (souvent une erreur de tracé) : retiré
+                continue
+            if area(out) < 0:
+                out.reverse()
+            b["p"] = flat(out)
+            if "s" in b:
+                walls = shop_walls(out)
+                if walls:
+                    b["s"] = walls
+                else:
+                    del b["s"]
+            moved += 1
             kept.append(b)
-            continue
-        out = []
-        for x, n in ring:
-            for _ in range(2):
-                h = nearest_axis(x, n)
-                if not h or h[0] >= CLEAR:
-                    break
-                d, qx, qn, dx_, dn_ = h
-                if d > 0.05:
-                    ux, un = (x - qx) / d, (n - qn) / d
-                else:  # point sur l'axe : on le pousse perpendiculairement, du côté du centre du bâtiment
-                    L = math.hypot(dx_, dn_) or 1
-                    ux, un = -dn_ / L, dx_ / L
-                    cx_, cn_ = sum(v[0] for v in p) / len(p), sum(v[1] for v in p) / len(p)
-                    if (cx_ - qx) * ux + (cn_ - qn) * un < 0:
-                        ux, un = -ux, -un
-                x, n = qx + ux * CLEAR, qn + un * CLEAR
-            out.append((x, n))
-        # Simplification d'un contour fermé : on le coupe en deux au point le plus éloigné du premier.
-        far = max(range(len(out)), key=lambda k: math.hypot(out[k][0] - out[0][0], out[k][1] - out[0][1]))
-        out = simplify(out[:far + 1], 0.15)[:-1] + simplify(out[far:] + [out[0]], 0.15)[:-1]
-        new_area = abs(area(out)) if len(out) >= 3 else 0
-        if new_area < max(6, 0.25 * abs(area(p))):
-            dropped += 1  # bâtiment presque entièrement sur la chaussée (souvent une erreur de tracé) : retiré
-            continue
-        if area(out) < 0:
-            out.reverse()
-        b["p"] = flat(out)
-        if "s" in b:
-            walls = shop_walls(out)
-            if walls:
-                b["s"] = walls
-            else:
-                del b["s"]
-        moved += 1
-        kept.append(b)
+        return kept, moved, dropped
+
+    gx = graph_nodes
+    axis_segments = [(gx[graph_edges[i] * 2], gx[graph_edges[i] * 2 + 1], gx[graph_edges[i + 1] * 2], gx[graph_edges[i + 1] * 2 + 1], CLEAR)
+                     for i in range(0, len(graph_edges), 4)]
+    # Voies de service (accès, parkings) : pas dans le graphe de circulation, mais carrossables elles aussi.
+    for road in roads:
+        if road["k"] == "service":
+            line = road["_line"]
+            axis_segments += [(a[0], a[1], b[0], b[1], 2.2) for a, b in zip(line, line[1:])]
+    kept, moved, dropped = push_back(buildings, axis_segments)
     buildings = kept
     print(f"Bâtiments reculés hors de la chaussée : {moved} ; retirés (sur la chaussée) : {dropped}")
 
@@ -738,6 +750,16 @@ def main():
         narrowed += width < road["w"]
         road["w"] = round(width, 1)
         road["sw"] = round(max(0.0, min(1.8, free - width / 2 - 0.2)), 1)  # trottoir de chaque côté
+
+    # Seconde passe, avec la largeur finale de chaque chaussée : plus aucun mur ne mord sur l'enrobé.
+    final_segments = []
+    for road in roads:
+        if road["k"] in ("footway", "path", "steps", "track", "pedestrian"):
+            continue
+        q = road["p"]
+        final_segments += [(q[i], q[i + 1], q[i + 2], q[i + 3], road["w"] / 2 + 0.35) for i in range(0, len(q) - 2, 2)]
+    buildings, moved2, dropped2 = push_back(buildings, final_segments)
+    print(f"Seconde passe (largeur finale des chaussées) : {moved2} bâtiments reculés, {dropped2} retirés")
 
     # --- carrefours : là où plusieurs rues carrossables se rejoignent, un disque d'enrobé
     # (et de trottoir dessous) viendra raccorder proprement les chaussées.

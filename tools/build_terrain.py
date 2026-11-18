@@ -14,6 +14,7 @@ from pathlib import Path
 
 import numpy as np
 from matplotlib.path import Path as Polygon
+from scipy.ndimage import gaussian_filter
 from scipy.spatial import Delaunay, cKDTree
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -146,44 +147,70 @@ def main():
     far_from_coast = cKDTree(coast_points).query(interior)[0] > COAST_STEP * 0.8
     interior = interior[inside & far_from_coast]
 
-    # --- rues taillées dans la colline : profil en long adouci, plate-forme et crête de talus ajoutées au maillage
+    # --- chaussées à niveau : sur toute la ville, chaque rue carrossable reçoit sa propre plate-forme.
+    # En travers, la rue est horizontale (même hauteur sur les deux bords : plus de dévers à gauche ou à droite) ;
+    # en long, elle suit un relief adouci (grille lissée à ~30 m, puis moyenne glissante le long de la rue) : des
+    # montées et des descentes, mais plus de pics brusques. Le profil vient d'un même champ lissé pour toutes les
+    # rues, si bien que deux rues qui se croisent arrivent à la même hauteur au carrefour.
+    smooth_grid = gaussian_filter(grid, 1.0)
+
+    def smooth_height(x, n):
+        fx = np.clip((x - x0) / STEP, 0, cols - 1.001)
+        fy = np.clip((n - n0) / STEP, 0, rows - 1.001)
+        ix, iy = fx.astype(int), fy.astype(int)
+        ax, ay = fx - ix, fy - iy
+        return (smooth_grid[iy, ix] * (1 - ax) + smooth_grid[iy, ix + 1] * ax) * (1 - ay) + \
+               (smooth_grid[iy + 1, ix] * (1 - ax) + smooth_grid[iy + 1, ix + 1] * ax) * ay
+
     graded_points, graded_heights = [], []
+    road_axes, road_edges = [], []
+    MAJOR = ("trunk", "primary", "secondary", "tertiary", "trunk_link", "primary_link", "secondary_link", "tertiary_link")
     for road in world["roads"]:
+        if road["k"] in ("footway", "path", "steps", "track", "pedestrian"):
+            continue
         line = pairs(road["p"])
-        if road["k"] not in ("trunk", "primary", "secondary", "tertiary"):
-            continue
-        # La rue doit être en majorité dans la zone : une rue qui ne fait que l'effleurer n'est pas modifiée.
-        if not any((np.hypot(line[:, 0] - zx, line[:, 1] - zn) < zr).mean() > 0.5 for zx, zn, zr in GRADING_ZONES):
-            continue
-        # Un point tous les 5 m le long de l'axe.
         steps = np.concatenate([[0], np.cumsum(np.hypot(*np.diff(line, axis=0).T))])
-        marks = np.linspace(0, steps[-1], max(2, int(steps[-1] / 5) + 1))
-        axis = np.column_stack([np.interp(marks, steps, line[:, 0]), np.interp(marks, steps, line[:, 1])])
-        natural = height(axis[:, 0], axis[:, 1])
-        # Profil : on ne remblaie jamais, on entaille seulement ; la pente reste sous MAX_GRADE à partir des points bas.
-        profile = (natural[None, :] + MAX_GRADE * np.abs(marks[:, None] - marks[None, :])).min(axis=1)
-        if (natural - profile).max() < 1.0:
+        if steps[-1] < 1:
             continue
+        spacing = 8.0 if road["k"] in MAJOR else 12.0
+        marks = np.linspace(0, steps[-1], max(2, int(round(steps[-1] / spacing)) + 1))
+        axis = np.column_stack([np.interp(marks, steps, line[:, 0]), np.interp(marks, steps, line[:, 1])])
+        natural_axis = height(axis[:, 0], axis[:, 1])
+        profile = smooth_height(axis[:, 0], axis[:, 1])
+        if len(profile) > 4:   # moyenne glissante sur ±2 points, extrémités fixes (raccord aux carrefours)
+            padded = np.concatenate([profile[:1].repeat(2), profile, profile[-1:].repeat(2)])
+            inner = np.convolve(padded, np.ones(5) / 5, mode="valid")
+            inner[0], inner[-1] = profile[0], profile[-1]
+            profile = inner
+        # Jamais à plus de 1 m du terrain naturel : la rue reste au pied des maisons qui la bordent.
+        profile = np.clip(profile, natural_axis - 1.0, natural_axis + 1.0)
         tangent = np.gradient(axis, axis=0)
         tangent /= np.maximum(np.linalg.norm(tangent, axis=1, keepdims=True), 1e-6)
         normal = np.column_stack([-tangent[:, 1], tangent[:, 0]])
-        edge = road["w"] / 2 + road.get("sw", 0) + 0.6
-        graded_points.append(axis); graded_heights.append(profile)
+        edge = road["w"] / 2 + road.get("sw", 0) + 0.4
+        road_axes.append(axis); road_edges.append(np.full(len(axis), edge))
         for side in (1, -1):
             platform = axis + normal * side * edge
-            crest = axis + normal * side * (edge + 0.8)
-            crest_height = np.maximum(profile, height(crest[:, 0], crest[:, 1]))
-            graded_points += [platform, crest]; graded_heights += [profile, crest_height]
-            # Mur de soutènement là où le talus dépasse 1,2 m.
-            foot = axis + normal * side * (edge - 0.08)  # juste devant le talus, qu'il masque entièrement
-            for k in range(len(axis) - 1):
-                if crest_height[k] - profile[k] > 1.2 or crest_height[k + 1] - profile[k + 1] > 1.2:
-                    WALLS.extend(round(float(v), 2) for v in (foot[k, 0], foot[k, 1], foot[k + 1, 0], foot[k + 1, 1],
-                                 profile[k] - 0.4, crest_height[k] + 0.9, profile[k + 1] - 0.4, crest_height[k + 1] + 0.9))
-        # Les points de la grille pris dans la plate-forme sont retirés : c'est la rue qui commande ici.
-        interior = interior[cKDTree(axis).query(interior)[0] > edge + 3.5]
-        print(f"rue taillée : {road.get('n') or road['k']}, {steps[-1]:.0f} m, entaille maximale {(natural - profile).max():.1f} m, "
-              f"altitude {profile.min():.1f} à {profile.max():.1f} m (avant : jusqu'à {natural.max():.1f} m)")
+            crest = axis + normal * side * (edge + 1.2)
+            natural = height(crest[:, 0], crest[:, 1])
+            graded_points.append(platform); graded_heights.append(profile)
+            # Crête de talus seulement là où le terrain naturel s'écarte de la rue (sinon, inutile).
+            steep = np.abs(natural - profile) > 0.6
+            if steep.any():
+                graded_points.append(crest[steep]); graded_heights.append(natural[steep])
+            # Mur de soutènement là où la rue est taillée de plus de 1,5 m dans la pente.
+            if road["k"] in MAJOR or road["k"] == "residential":
+                foot = axis + normal * side * (edge - 0.08)
+                for k in range(len(axis) - 1):
+                    if natural[k] - profile[k] > 1.5 and natural[k + 1] - profile[k + 1] > 1.5:
+                        WALLS.extend(round(float(v), 2) for v in (foot[k, 0], foot[k, 1], foot[k + 1, 0], foot[k + 1, 1],
+                                     profile[k] - 0.4, natural[k] + 0.6, profile[k + 1] - 0.4, natural[k + 1] + 0.6))
+    # Les points de la grille à 30 m pris sous une chaussée sont retirés : c'est la plate-forme qui commande ici.
+    if road_axes:
+        all_axes, all_edges = np.vstack(road_axes), np.concatenate(road_edges)
+        distance, nearest_axis = cKDTree(all_axes).query(interior)
+        interior = interior[distance > all_edges[nearest_axis] + 4]
+    print("chaussées mises à niveau :", len(road_axes), "rues,", sum(len(g) for g in graded_points), "points de plate-forme")
     graded_count = sum(len(g) for g in graded_points)
 
     points = np.vstack([coast_points, interior] + graded_points)

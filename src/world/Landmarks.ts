@@ -4,6 +4,7 @@ import { MeshBuilder } from './MeshBuilder';
 import { buildSheratonGrounds } from './SheratonGrounds';
 import { buildSousTerrain } from './SousTerrain';
 import { buildGrandePoste } from './GrandePoste';
+import { GARAGE_CENTROID, GARAGE_NAME, type Garage, buildGarage } from './Garage';
 import { buildStreetDetails } from './StreetDetails';
 import { THEATRE_CENTROID, THEATRE_NAME, buildTheatre } from './Theatre';
 import type { Terrain } from './Terrain';
@@ -28,6 +29,7 @@ const OWNED: [number, number][] = [
   [328.6, 774.8], [281.8, 755.8], [303.9, 765.8], [323.3, 823.5], // Sheraton
   [206.0, 935.5], // Hôtel Seybouse International (OSM way 165582442, 18 niveaux)
   THEATRE_CENTROID, // Théâtre Azzedine Medjoubi (OSM way 341076691)
+  GARAGE_CENTROID, // Garage de l'Est (OSM way 341068653) : salle d'exposition des voitures
 ];
 
 /** Ce bâtiment de la carte est-il remplacé par un modèle sur mesure ? */
@@ -396,6 +398,8 @@ export interface LandmarkEdits {
   trees: [string, number, number, number][];
   /** Noms affichés en bas de l'écran près d'un lieu (prioritaires sur le quartier). */
   labels: { name: string; x: number; n: number; radius: number }[];
+  /** Garage où sont exposées toutes les voitures normales du jeu. */
+  garage: (Garage & { name: string }) | null;
 }
 
 export function buildLandmarks(scene: THREE.Scene, data: WorldData, ground: Ground, collider: Collider, terrain: Terrain): LandmarkEdits {
@@ -408,10 +412,12 @@ export function buildLandmarks(scene: THREE.Scene, data: WorldData, ground: Grou
   const theatre = buildTheatre(scene, data, ground, collider);
   const poste = buildGrandePoste(scene, ground);
   const details = buildStreetDetails(scene, data, ground, collider);
+  const garage = buildGarage(scene, data, ground, collider);
   return {
     ground: (x, z, y) => sousTerrain.ground(x, z, y) ?? theatre?.ground(x, z) ?? null,
-    keepTree: (x, n) => grounds.keepTree(x, n) && !sousTerrain.inside(x, n) && (theatre?.keepTree(x, n) ?? true) && poste.keepTree(x, n) && details.keepTree(x, n),
+    keepTree: (x, n) => grounds.keepTree(x, n) && !sousTerrain.inside(x, n) && (theatre?.keepTree(x, n) ?? true) && poste.keepTree(x, n) && details.keepTree(x, n) && !(garage?.inside(x, n) ?? false),
     trees: [...grounds.palms.map(([x, n, s]): [string, number, number, number] => ['palm', x, n, s]), ...(theatre?.extra ?? []), ...poste.trees],
     labels: theatre ? [{ name: THEATRE_NAME, x: 100, n: 473, radius: 45 }] : [],
+    garage: garage ? { ...garage, name: GARAGE_NAME } : null,
   };
 }

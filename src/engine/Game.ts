@@ -33,6 +33,8 @@ const DRONE = new URLSearchParams(window.location.search).get('drone')?.split(',
 const SHADOWS = new URLSearchParams(window.location.search).get('ombres') !== '0' && !MOBILE; // pas d'ombres sur téléphone
 const SHADOW_RANGE = 85; // demi-largeur de la zone ombrée autour du joueur, en mètres
 const AUTO_SCALE = !new URLSearchParams(window.location.search).has('res');
+// Écran Retina (Mac) : le jeu peut monter jusqu'à 1,5 pixel par point quand il est fluide (image bien plus nette).
+const MAX_SCALE = MOBILE ? 1 : Math.min(1.5, Math.max(1, window.devicePixelRatio || 1));
 const ENTER_DISTANCE = 4.5;
 const SECTOR = 400;          // taille des secteurs du monde (m)
 const VIEW_DISTANCE = MOBILE ? 850 : 1400; // au-delà, tout est noyé dans le brouillard
@@ -301,6 +303,9 @@ export class Game {
       this.lights = new TrafficLights(this.scene, data, this.ground);
       this.traffic.lights = this.lights;
       this.traffic.onHonk = (distance) => this.sound.honk(distance);
+      // Garage de l'Est : repère sur la carte, et toutes les voitures normales du jeu exposées à l'intérieur.
+      const garage = world.edits.garage;
+      if (garage) data.places.push({ name: garage.name, ...garage.place });
       this.map = new MapView(data, (index) => this.goToPlace(index));
       this.events.onPlaces(data.places);
       // Une voiture garée à chaque repère, pour en avoir toujours une sous la main.
@@ -314,6 +319,18 @@ export class Game {
         this.cars.push(car);
         this.scene.add(car.object);
       });
+      if (garage) {
+        const showroom = [...CAR_CATALOG.filter((spec) => spec.topSpeed !== null && spec.id !== 'exemple'), ...MOTO_CATALOG];
+        showroom.forEach((spec, i) => {
+          const slot = garage.slots[i];
+          if (!slot) return;
+          const car = new Car(spec, spec.colors[(i * 3) % spec.colors.length]);
+          car.place(slot.x, -slot.n, slot.heading);
+          this.cars.push(car);
+          this.scene.add(car.object);
+        });
+        console.info(`Garage : ${Math.min(showroom.length, garage.slots.length)} véhicules exposés sur ${garage.slots.length} places`);
+      }
       // Un deux-roues garé à côté de la voiture, un repère sur deux (maxi-scooter et cyclomoteur en alternance).
       data.places.forEach((place, i) => {
         if (i % 2) return;
@@ -521,12 +538,12 @@ export class Game {
     // Résolution automatique : on allège le calcul si le jeu rame, on le raffine s'il a de la marge.
     this.scaleTimer -= elapsed;
     if (AUTO_SCALE && this.scaleTimer <= 0) {
-      this.scaleTimer = 1.5;
+      this.scaleTimer = 3; // changer de résolution coûte une image saccadée : pas trop souvent
       const fps = 1 / this.frameTime;
       // Les ombres coûtent cher : si le jeu rame encore à la résolution minimale, on les coupe.
       if (this.sun?.castShadow && fps < 24 && this.renderScale <= 0.7) { this.sun.castShadow = false; console.info('Ombres coupées pour garder la fluidité.'); }
-      const wanted = fps < 33 ? this.renderScale - 0.1 : fps > 52 ? this.renderScale + 0.05 : this.renderScale;
-      const next = Math.min(1, Math.max(0.7, wanted)); // jamais sous 0,7 : l'image resterait trop floue
+      const wanted = fps < 30 ? this.renderScale - 0.1 : fps > 57 ? this.renderScale + 0.05 : this.renderScale;
+      const next = Math.min(MAX_SCALE, Math.max(0.7, wanted)); // jamais sous 0,7 ; au-delà de 1 sur écran Retina si la fluidité le permet
       if (next !== this.renderScale) { this.renderScale = next; this.resize(); }
     }
     this.hudTimer -= dt;

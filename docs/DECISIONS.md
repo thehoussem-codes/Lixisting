@@ -417,3 +417,21 @@ Skills chargés : `physics-tuning`, `game-ai`, `audio-design`, `threejs-material
 - Forêts : un arbre pour 150 m² mais houppiers plus larges (les arbres se touchent toujours) : 453 000 plantes.
 - Arbres construits un bloc par image (2,5 ms au plus) en jeu.
 - Résolution automatique jamais sous 0,7.
+
+## Rues à niveau, maisons hors chaussée, garage, netteté
+
+- **Rues à niveau** (`build_terrain.py`) : toutes les rues carrossables de la ville reçoivent une plate-forme :
+  horizontale en travers (les deux bords à la même hauteur), profil en long adouci (relief lissé à ~30 m puis
+  moyenne glissante sur ~50 m, jamais à plus de 1 m du terrain naturel). Les rues qui se croisent partagent le même
+  champ lissé, donc la même hauteur au carrefour. Murs de soutènement là où la rue entaille la pente de plus de 1,5 m.
+  Mesuré sur 293 rues tirées au hasard : écart de hauteur entre les deux bords 0,43 m → 0,07 m en moyenne
+  (90 % des rues : 1,06 m → 0,26 m). Terrain : 312 000 points (fichier 15 Mo, contre 6,6 Mo).
+- **Maisons sur la chaussée** (`build_world.py`) : seconde passe de recul avec la largeur finale de chaque chaussée
+  (+ 35 cm) et les voies de service : 1 565 bâtiments reculés.
+- **Garage de l'Est** (`src/world/Garage.ts`, OSM way 341068653, shop=car, près de la gare) : hall vitré, enseigne,
+  trois grandes portes ; toutes les voitures normales du jeu et les deux-roues y sont exposés et conduisibles
+  (13 véhicules ; police, gendarmerie, BRI et ambulance exclus). Repère sur la carte.
+- **Netteté** : sur écran Retina, la résolution monte jusqu'à 1,5 pixel par point quand le jeu est fluide ; elle
+  change moins souvent (toutes les 3 s au plus), chaque changement coûtant une image saccadée.
+- « Voitures du PDF » : aucun PDF reçu ; toutes les voitures des fichiers fournis sont déjà dans le jeu, sauf la
+  Mercedes G63 de police (non intégrée).
