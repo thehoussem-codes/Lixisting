@@ -48,7 +48,7 @@ export class ThirdPersonCamera {
     if (collider) {
       for (let i = 1; i <= STEPS; i++) {
         const d = (DISTANCE * i) / STEPS;
-        if (collider.inside(this.target.x + dirX * d, this.target.z + dirZ * d)) {
+        if (collider.inside(this.target.x + dirX * d, this.target.z + dirZ * d, this.target.y + dirY * d - 0.3)) {
           wanted = Math.max(0.8, (DISTANCE * (i - 1)) / STEPS);
           break;
         }

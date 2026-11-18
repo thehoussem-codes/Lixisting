@@ -57,16 +57,19 @@ html.mobile, html.mobile body { touch-action: none; -webkit-user-select: none; u
   background: rgba(255, 210, 63, 0.9); box-shadow: 0 2px 8px rgba(0,0,0,0.5); transition: transform 0.05s;
 }
 .touch-button {
-  position: fixed; min-width: 104px; height: 54px; padding: 0 12px; border-radius: 14px; box-sizing: border-box;
+  position: fixed; width: 66px; height: 66px; border-radius: 50%; box-sizing: border-box;
   display: flex; align-items: center; justify-content: center;
-  background: rgba(16, 22, 28, 0.58); border: 2px solid rgba(255,255,255,0.75); color: #fff;
-  font: bold 15px "Trebuchet MS", Arial, sans-serif; letter-spacing: 0.5px; text-shadow: 1px 1px 0 #000;
-  pointer-events: auto; touch-action: none;
+  background: radial-gradient(circle at 35% 30%, rgba(70, 82, 94, 0.72), rgba(14, 18, 24, 0.72));
+  border: 2px solid rgba(255,255,255,0.85); color: #fff; box-shadow: 0 3px 10px rgba(0,0,0,0.35);
+  font: bold 14px "Trebuchet MS", Arial, sans-serif; letter-spacing: 0.5px; text-shadow: 1px 1px 0 #000;
+  pointer-events: auto; touch-action: none; line-height: 1; text-align: center; user-select: none; -webkit-user-select: none;
+  transition: transform 0.06s;
 }
-.touch-button.on { background: rgba(255, 210, 63, 0.9); color: #1b1b1b; text-shadow: none; }
-.touch-gas { right: calc(22px + env(safe-area-inset-right)); bottom: 26px; min-width: 128px; height: 70px; font-size: 17px; }
-.touch-jump { right: calc(22px + env(safe-area-inset-right)); bottom: 108px; min-width: 128px; }
-.touch-car { right: calc(162px + env(safe-area-inset-right)); bottom: 26px; }
+.touch-button.on { background: radial-gradient(circle at 35% 30%, #ffe27a, #f2b705); color: #1b1b1b; text-shadow: none; transform: scale(0.94); }
+.touch-button.hidden { display: none; }
+.touch-gas { right: calc(26px + env(safe-area-inset-right)); bottom: 28px; width: 86px; height: 86px; }
+.touch-brake { right: calc(124px + env(safe-area-inset-right)); bottom: 22px; }
+.touch-car { right: calc(36px + env(safe-area-inset-right)); bottom: 128px; font-size: 30px; text-shadow: none; }
 .touch-rotate { display: none; }
 @media (orientation: portrait) {
   html.mobile .touch-rotate {

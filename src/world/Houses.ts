@@ -1,3 +1,4 @@
+import type { Roof } from './Collider';
 import { MOBILE } from '../engine/Mobile';
 import * as THREE from 'three';
 import type { MeshBuilder } from './MeshBuilder';
@@ -77,7 +78,8 @@ function boxAt(b: MeshBuilder, x: number, n: number, half: number, y0: number, y
   b.flatPolygon(c.flat(), y1, color);
 }
 
-export function buildHouse(h: HouseContext): void {
+/** Construit la maison et renvoie son toit pour les collisions (on peut sauter et marcher dessus). */
+export function buildHouse(h: HouseContext): Roof {
   const ring: P[] = [];
   for (let i = 0; i < h.p.length; i += 2) ring.push([h.p[i], h.p[i + 1]]);
   const count = ring.length;
@@ -170,13 +172,16 @@ export function buildHouse(h: HouseContext): void {
 
   // --- Toits.
   const top = h.top;
+  let roofShape: Roof = { y: top };
   if (kind === 'villa') {
+    roofShape = { y: top + 0.22 };
     // Dalle débordante couleur terre cuite, comme sur le modèle.
     plate(h.solid, grow(ring, 0.45), top + 0.22, 0.22, TERRACOTTA);
   } else if (kind === 'finished') {
     // Tuiles à quatre pentes, avec débord de toit.
     const eave = grow(ring, 0.4), rise = 1.5 + (hash % 5) * 0.2;
     const apex = h.solid.vertex(cx, top + rise, -cn, h.roofColor, 1.05);
+    roofShape = { y: top, apex: [cx, -cn, top + rise] };
     for (let i = 0; i < count; i++) {
       const j = (i + 1) % count;
       h.solid.triangle(h.solid.vertex(eave[i][0], top, -eave[i][1], h.roofColor, 0.8), h.solid.vertex(eave[j][0], top, -eave[j][1], h.roofColor, 0.8), apex);
@@ -193,6 +198,7 @@ export function buildHouse(h: HouseContext): void {
   } else {
     // Terrasse à acrotère, et un petit volume en retrait sur le toit (escalier, chambre haute).
     h.solid.flatPolygon(h.p, top - 0.75, SLAB);
+    roofShape = { y: top - 0.75 };
     for (let i = 0; i < count; i++) quad(h.solid, ring[(i + 1) % count], ring[i], top - 0.75, top, tint, 0.8, 0.85, 0, 0, 0, 0);
     if (area > 45) {
       const anchor = ring[h.index % count];
@@ -211,4 +217,5 @@ export function buildHouse(h: HouseContext): void {
     boxAt(h.solid, tx, tn, 0.1, y, y + 0.6, CONCRETE);
     boxAt(h.solid, tx, tn, 0.5, y + 0.6, y + 1.55, TANK[h.index % TANK.length]);
   }
+  return roofShape;
 }

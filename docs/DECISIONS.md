@@ -457,3 +457,11 @@ Skills chargés : `physics-tuning`, `game-ai`, `audio-design`, `threejs-material
 - Joystick à gauche : directions seulement. Pousser vers l'avant ne fait plus avancer la voiture ; tirer vers l'arrière freine puis recule.
 - À droite, boutons texte simples (sans logo) : AVANCER/ACCÉLÉRER (gros bouton), SAUTER/FREIN À MAIN, MONTER/SORTIR. Les libellés changent quand on est dans un véhicule.
 - La mini-carte en haut à gauche s'ouvre en plein écran d'un toucher ; plus de bouton « carte ».
+
+## Routes d'avant, lissées ; toits franchissables ; végétation satellite ; boutons ronds (18/11/2026)
+
+- **Routes** : le nivellement de toutes les rues (plates-formes ajoutées au maillage, 18/11 01h48) est retiré à la demande de Houssem : il créait des marches et des bosses (« on saute de partout »). Retour au terrain d'avant, mais le relief à 30 m est lissé sous les rues carrossables et jusqu'à 20 m autour (fondu jusqu'à 45 m), plus fortement dans les rues en pente. Les maisons repoussées hors des chaussées restent repoussées.
+- **Toits** : chaque maison et chaque immeuble a un toit pour les collisions (plat, terrasse ou à quatre pentes). Les murs ne bloquent que sous le toit : à pied (saut) ou en voiture (saut depuis une pente), on peut passer au-dessus, se poser sur le toit et y marcher ; en sortant du bord, on tombe. Mosquées, gradins et monuments restent pleins.
+- **Voitures** : on peut sauter par-dessus une voiture et se poser sur son toit ; deux voitures l'une au-dessus de l'autre ne se percutent plus.
+- **Végétation** : source satellite ESA WorldCover 10 m (2021, CC BY 4.0). Arbres → forêt serrée de pins et chênes ; broussailles → maquis clair ; herbe → quelques plantes ; ville, port, cultures, sol nu → rien. Les bois OSM ne sont plantés que là où le satellite voit du vert. Arbres d'alignement seulement sur les grandes avenues, jamais sur le port de pêche. Couleur du sol d'après la même carte.
+- **Téléphone** : trois boutons ronds — pédale d'accélérateur (dessin, aucun emoji n'existe), FREIN (au volant seulement, frein à main) et 🚗 pour monter/sortir. Plus de bouton sauter.

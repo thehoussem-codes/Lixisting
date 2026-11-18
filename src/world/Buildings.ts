@@ -313,12 +313,12 @@ export function buildBuildings(scene: THREE.Scene, data: WorldData, ground: (x: 
     const top = base + building.h;
     let footprint = p; // emprise au sol pour les collisions (réduite sous les arcades)
     if (building.t === 'house') {
-      buildHouse({
+      const houseRoof = buildHouse({
         p, index, low, base, top, wall, roofColor, roadDistance,
         walls: (style) => builderIn(walls, `${style}|${cell}`), solid: builderIn(roofs, cell),
         oldTown: oldTown !== null && Math.hypot(cx - oldTown[0], -cz - oldTown[1]) < 330,
       });
-      collider.addBuilding(p);
+      collider.addBuilding(p, -Infinity, Infinity, houseRoof);
       return;
     }
     // Rez-de-chaussée distinct pour les immeubles : commerces le long des grandes rues, entrées ailleurs.
@@ -497,7 +497,9 @@ export function buildBuildings(scene: THREE.Scene, data: WorldData, ground: (x: 
       box(roof, mx, mz, 0.9, tip + 0.4, tip + 3.4, MINARET);
       pyramid(roof, mx, mz, 1.0, tip + 3.4, tip + 5.2, DOME);
     }
-    collider.addBuilding(footprint);
+    // Toit-terrasse franchissable (on peut s'y poser) ; mosquées et tours à horloge restent pleines.
+    const flatRoof = building.t !== 'mosque' && !(building.t === 'house') ? { y: building.t === 'industrial' ? top : top - PARAPET } : undefined;
+    collider.addBuilding(footprint, -Infinity, Infinity, flatRoof);
   });
 
   const materials = new Map<string, THREE.Material>();

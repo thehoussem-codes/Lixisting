@@ -5,7 +5,13 @@
  */
 const CELL = 40;
 
-interface Footprint { minX: number; maxX: number; minZ: number; maxZ: number; points: Float32Array; yMin: number; yMax: number }
+/**
+ * Toit d'un bâtiment : plat (hauteur y) ou à pentes, avec un faîtage au point apex (x, z, hauteur).
+ * Un bâtiment qui a un toit ne bloque que sous son toit : au-dessus, on peut y atterrir et marcher.
+ */
+export interface Roof { y: number; apex?: [number, number, number] }
+
+interface Footprint { minX: number; maxX: number; minZ: number; maxZ: number; points: Float32Array; yMin: number; yMax: number; roof?: Roof }
 
 export class Collider {
   private grid = new Map<string, Footprint[]>();
@@ -15,7 +21,7 @@ export class Collider {
    * yMin / yMax (facultatifs) : l'obstacle ne bloque qu'entre ces hauteurs, pour les lieux à deux niveaux
    * (galerie sous une esplanade). Sans hauteur précisée par l'appelant, tous les obstacles comptent.
    */
-  addBuilding(points: number[], yMin = -Infinity, yMax = Infinity): void {
+  addBuilding(points: number[], yMin = -Infinity, yMax = Infinity, roof?: Roof): void {
     const count = points.length / 2;
     const xz = new Float32Array(points.length);
     let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
@@ -25,7 +31,7 @@ export class Collider {
       minX = Math.min(minX, x); maxX = Math.max(maxX, x);
       minZ = Math.min(minZ, z); maxZ = Math.max(maxZ, z);
     }
-    const footprint: Footprint = { minX, maxX, minZ, maxZ, points: xz, yMin, yMax };
+    const footprint: Footprint = { minX, maxX, minZ, maxZ, points: xz, yMin, yMax, roof };
     for (let cx = Math.floor(minX / CELL); cx <= Math.floor(maxX / CELL); cx++) {
       for (let cz = Math.floor(minZ / CELL); cz <= Math.floor(maxZ / CELL); cz++) {
         const key = `${cx},${cz}`;
@@ -41,15 +47,55 @@ export class Collider {
     for (const f of cell) {
       if (x < f.minX || x > f.maxX || z < f.minZ || z > f.maxZ) continue;
       if (y !== undefined && (y < f.yMin || y > f.yMax)) continue;
-      const p = f.points;
-      let hit = false;
-      for (let i = 0, j = p.length - 2; i < p.length; j = i, i += 2) {
-        if ((p[i + 1] > z) !== (p[j + 1] > z) &&
-            x < ((p[j] - p[i]) * (z - p[i + 1])) / (p[j + 1] - p[i + 1]) + p[i]) hit = !hit;
-      }
-      if (hit) return true;
+      if (!Collider.contains(f, x, z)) continue;
+      // Au-dessus du toit : le bâtiment ne bloque plus (on passe par-dessus, on se pose dessus).
+      if (y !== undefined && f.roof && y >= Collider.roofHeight(f, x, z)) continue;
+      return true;
     }
     return false;
+  }
+
+  /**
+   * Toit le plus haut sous le point x, z qui ne dépasse pas `reach` (hauteur des pieds + marche franchissable).
+   * Renvoie -Infinity s'il n'y en a pas : le sol est alors le terrain.
+   */
+  roofAt(x: number, z: number, reach: number): number {
+    const cell = this.grid.get(`${Math.floor(x / CELL)},${Math.floor(z / CELL)}`);
+    if (!cell) return -Infinity;
+    let best = -Infinity;
+    for (const f of cell) {
+      if (!f.roof || x < f.minX || x > f.maxX || z < f.minZ || z > f.maxZ) continue;
+      if (!Collider.contains(f, x, z)) continue;
+      const h = Collider.roofHeight(f, x, z);
+      if (h <= reach && h > best) best = h;
+    }
+    return best;
+  }
+
+  private static contains(f: Footprint, x: number, z: number): boolean {
+    const p = f.points;
+    let hit = false;
+    for (let i = 0, j = p.length - 2; i < p.length; j = i, i += 2) {
+      if ((p[i + 1] > z) !== (p[j + 1] > z) &&
+          x < ((p[j] - p[i]) * (z - p[i + 1])) / (p[j + 1] - p[i + 1]) + p[i]) hit = !hit;
+    }
+    return hit;
+  }
+
+  /** Hauteur du toit en x, z : plat, ou interpolée dans le pan (triangle mur–faîtage) qui contient le point. */
+  private static roofHeight(f: Footprint, x: number, z: number): number {
+    const roof = f.roof!;
+    if (!roof.apex) return roof.y;
+    const [ax, az, ay] = roof.apex, p = f.points;
+    for (let i = 0, j = p.length - 2; i < p.length; j = i, i += 2) {
+      const bx = p[j], bz = p[j + 1], cx = p[i], cz = p[i + 1];
+      const v0x = bx - ax, v0z = bz - az, v1x = cx - ax, v1z = cz - az, px = x - ax, pz = z - az;
+      const det = v0x * v1z - v1x * v0z;
+      if (Math.abs(det) < 1e-6) continue;
+      const u = (px * v1z - v1x * pz) / det, v = (v0x * pz - px * v0z) / det;
+      if (u >= -1e-3 && v >= -1e-3 && u + v <= 1.001) return ay + (u + v) * (roof.y - ay);
+    }
+    return roof.y;
   }
 
   /** Un disque (le joueur) touche-t-il un bâtiment ? */

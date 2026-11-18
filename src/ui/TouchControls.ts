@@ -4,13 +4,22 @@ import type { Input } from '../engine/Input';
  * Commandes tactiles (téléphone à l'horizontale), d'après les demandes de Houssem :
  * - joystick à gauche : les directions. À pied il fait tout (avancer, reculer, tourner ; au bord : courir).
  *   En voiture ou à moto : gauche / droite pour tourner, bas pour freiner puis reculer ; le haut n'accélère pas ;
- * - bouton ACCÉLÉRER à droite (à pied : AVANCER) ;
- * - bouton FREIN À MAIN en voiture, SAUTER à pied ; bouton MONTER / SORTIR pour la voiture ;
+ * - à droite, trois boutons ronds : la pédale d'accélérateur (à pied : avancer), FREIN (au volant seulement)
+ *   et la voiture 🚗 pour monter ou sortir. Pas de bouton pour sauter (inutile pour l'instant) ;
  * - la mini-carte en haut à gauche s'ouvre d'un toucher (pas de bouton de carte) ;
  * - glisser le doigt ailleurs sur l'écran : tourner la caméra.
- * Boutons texte simples, sans icône.
  * Les commandes alimentent la même classe Input que le clavier : le jeu ne fait aucune différence.
  */
+/** Pédale d'accélérateur, dessin simple (aucun emoji n'existe pour cela). */
+const PEDAL = `<svg viewBox="0 0 44 48" width="38" height="42" aria-label="accélérer">
+  <g transform="rotate(-14 22 26)">
+    <path d="M10 6 Q10 3 13 3 H31 Q34 3 34 6 L31 34 Q30.6 36 28.5 36 H15.5 Q13.4 36 13 34 Z" fill="currentColor" fill-opacity="0.18" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M15 10h14M15.6 16h12.8M16.2 22h11.6M16.8 28h10.4" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>
+    <rect x="14" y="38" width="16" height="5" rx="2.5" fill="currentColor"/>
+  </g>
+  <path d="M5 46h34" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>
+</svg>`;
+
 export class TouchControls {
   private root = document.createElement('div');
   private stick = document.createElement('div');
@@ -21,7 +30,7 @@ export class TouchControls {
   private lookLast = { x: 0, y: 0 };
   private held = new Set<string>();
   private gas: HTMLDivElement;
-  private jump: HTMLDivElement;
+  private brake: HTMLDivElement;
   private car: HTMLDivElement;
   private driving = false;
   private stickVector = { x: 0, y: 0 };
@@ -30,9 +39,8 @@ export class TouchControls {
   setDriving(driving: boolean): void {
     if (driving === this.driving) return;
     this.driving = driving;
-    this.gas.textContent = driving ? 'ACCÉLÉRER' : 'AVANCER';
-    this.jump.textContent = driving ? 'FREIN À MAIN' : 'SAUTER';
-    this.car.textContent = driving ? 'SORTIR' : 'MONTER';
+    this.brake.classList.toggle('hidden', !driving);
+    this.car.classList.toggle('driving', driving);
     this.applyStick();
   }
 
@@ -42,9 +50,9 @@ export class TouchControls {
     this.knob.className = 'touch-knob';
     this.stick.appendChild(this.knob);
     this.root.appendChild(this.stick);
-    this.gas = this.button('AVANCER', 'touch-gas', 'KeyW', 'hold');
-    this.jump = this.button('SAUTER', 'touch-jump', 'Space', 'hold');
-    this.car = this.button('MONTER', 'touch-car', 'KeyF', 'tap');
+    this.gas = this.button(PEDAL, 'touch-gas', 'KeyW', 'hold');
+    this.brake = this.button('FREIN', 'touch-brake hidden', 'Space', 'hold');
+    this.car = this.button('🚗', 'touch-car', 'KeyF', 'tap');
     const turn = document.createElement('div');
     turn.className = 'touch-rotate';
     turn.innerHTML = '<div>📱↻</div><p>Tourne ton téléphone<br>à l\'horizontale</p>';
@@ -83,7 +91,7 @@ export class TouchControls {
   private button(label: string, className: string, code: string, mode: 'hold' | 'tap'): HTMLDivElement {
     const b = document.createElement('div');
     b.className = `touch-button ${className}`;
-    b.textContent = label;
+    b.innerHTML = label;
     b.addEventListener('touchstart', (e) => {
       e.preventDefault(); e.stopPropagation();
       this.wake();

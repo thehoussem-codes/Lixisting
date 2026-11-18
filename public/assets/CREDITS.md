@@ -14,3 +14,9 @@
 
 Le lissage du volant (vitesse de rotation limitée, plus lente à haute vitesse, retour rapide au centre) et l'épure d'Ackermann s'inspirent du projet libre [codingedger/car-game](https://github.com/codingedger/car-game) (GPL v3). Aucun code ni fichier de ce projet n'a été copié : notre version est réécrite pour notre moteur.
 
+
+## Végétation vue par satellite
+
+Emplacement des forêts, broussailles et prairies : **ESA WorldCover 10 m 2021 v200**, licence [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+© ESA WorldCover project / Contains modified Copernicus Sentinel data (2021) processed by ESA WorldCover consortium.
+Données extraites par `tools/extract_landcover.py` dans `data/landcover/`.

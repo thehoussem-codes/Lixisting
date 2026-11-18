@@ -62,7 +62,8 @@ export class Game {
   private sound = new Sound();
   private collider: Collider | null = null;
   /** Hauteur du sol en un point (0 partout tant que le terrain n'est pas chargé). */
-  private ground: (x: number, z: number) => number = () => 0;
+  /** Hauteur du sol en x, z. Avec y (hauteur actuelle de ce qui se pose) : les toits atteignables comptent aussi. */
+  private ground: (x: number, z: number, y?: number) => number = () => 0;
   private places: WorldPlace[] = [];
   private trees: TreeStream | null = null;
   private touch: TouchControls | null = null;
@@ -96,7 +97,20 @@ export class Game {
   /** Ce qui bloque le personnage à pied : bâtiments et voitures. */
   private obstacles = {
     blocked: (x: number, z: number, radius: number, y?: number): boolean =>
-      (this.collider?.blocked(x, z, radius, y) ?? false) || this.allCars().some((car) => car.contains(x, z, radius)),
+      (this.collider?.blocked(x, z, radius, y) ?? false) ||
+      // Une voiture ne bloque plus quand on est au-dessus de son toit (y = hauteur des pieds + 0,6 m).
+      this.allCars().some((car) => car.contains(x, z, radius) && (y === undefined || y - 0.6 < car.top() - 0.15)),
+  };
+  /** Sol du piéton : le sol, les toits, et le toit d'une voiture quand il saute dessus. */
+  private playerGround = (x: number, z: number, y?: number): number => {
+    let floor = this.ground(x, z, y);
+    if (y !== undefined) {
+      for (const car of this.allCars()) {
+        const top = car.top();
+        if (top > floor && top <= y + 0.6 && car.contains(x, z, -0.1)) floor = top;
+      }
+    }
+    return floor;
   };
   private frameId = 0;
   private disposed = false;
@@ -126,6 +140,11 @@ export class Game {
       const car = wanted ? this.cars.find((c) => c.spec.id === wanted) : undefined;
       if (car) car.place(this.player.object.position.x, this.player.object.position.z, car.heading);
       this.toggleCar(Infinity);
+    };
+    // Essais : lâcher le personnage à `h` mètres au-dessus du point x, n (toits, chutes).
+    (window as unknown as Record<string, unknown>).lixitingDrop = (x: number, n: number, h: number) => {
+      this.player.teleport(x, this.ground(x, -n) + h, -n);
+      (this.player as unknown as { airborne: boolean }).airborne = true;
     };
     // Petit accès de diagnostic, utilisé par les vérifications automatiques.
     (window as unknown as Record<string, unknown>).lixitingTraffic = () => this.traffic?.snapshot() ?? [];
@@ -246,7 +265,14 @@ export class Game {
       // Passage souterrain : sol en contrebas (paliers, marches, niveau commerçant) au lieu du terrain.
       const terrainGround = this.ground, patch = world.edits.ground;
       // La hauteur actuelle du joueur départage les lieux à deux niveaux (esplanade au-dessus des galeries).
-      this.ground = (x, z) => patch(x, z, this.player?.object.position.y) ?? terrainGround(x, z);
+      const collider = world.collider;
+      this.ground = (x, z, y) => {
+        const floor = patch(x, z, this.player?.object.position.y) ?? terrainGround(x, z);
+        if (y === undefined) return floor;
+        // Toits : on s'y pose quand on arrive par-dessus (saut, voiture lancée depuis une pente) ;
+        // 60 cm de marche franchissable, comme un trottoir haut.
+        return Math.max(floor, collider.roofAt(x, z, y + 0.6));
+      };
       // Végétation : arbres retirés des lieux réaménagés, palmiers alignés ajoutés (abords du Sheraton).
       for (const [species, values] of Object.entries(trees)) {
         if (species === 'wall' || !Array.isArray(values)) continue;
@@ -505,7 +531,7 @@ export class Game {
       this.cameraRig.update(this.input, car.object.position, this.collider, dt, this.ground, 8 + Math.min(3.5, Math.abs(car.speed) * 0.09), follow);
     } else {
       this.sound.update(null);
-      this.player.update(dt, this.input, this.cameraRig.yaw, this.obstacles, this.ground);
+      this.player.update(dt, this.input, this.cameraRig.yaw, this.obstacles, this.playerGround);
       this.cameraRig.update(this.input, this.player.object.position, this.collider, dt, this.ground);
     }
     for (const car of this.cars) if (car !== this.driving) car.settle(this.ground, true);

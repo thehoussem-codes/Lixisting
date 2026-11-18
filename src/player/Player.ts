@@ -309,7 +309,7 @@ export class Player {
     this.airborne = false;
   }
 
-  update(dt: number, input: Input, cameraYaw: number, collider: Obstacles | null, ground: (x: number, z: number) => number): void {
+  update(dt: number, input: Input, cameraYaw: number, collider: Obstacles | null, ground: (x: number, z: number, y?: number) => number): void {
     const position = this.object.position;
     const forward = (input.isDown('KeyW') || input.isDown('ArrowUp') ? 1 : 0)
                   - (input.isDown('KeyS') || input.isDown('ArrowDown') ? 1 : 0);
@@ -343,7 +343,7 @@ export class Player {
     }
 
     // Saut et gravité : au sol, le personnage suit le relief ; en l'air, il retombe.
-    const floor = ground(position.x, position.z);
+    const floor = ground(position.x, position.z, position.y);
     if (this.swimming) {
       // Nage : le corps flotte à la surface, allongé.
       // En avançant : allongé à la surface (crawl). À l'arrêt : presque debout, on fait du surplace.
@@ -354,6 +354,9 @@ export class Player {
       this.velocityY -= GRAVITY * dt;
       position.y += this.velocityY * dt;
       if (position.y <= floor) { position.y = floor; this.velocityY = 0; this.airborne = false; }
+    } else if (position.y - floor > 0.7) {
+      // Le sol s'est dérobé (bord d'un toit, d'une voiture) : on tombe au lieu de se téléporter en bas.
+      this.velocityY = 0; this.airborne = true;
     } else {
       position.y = floor;
       if (input.isDown('Space')) { this.velocityY = JUMP_SPEED; this.airborne = true; }

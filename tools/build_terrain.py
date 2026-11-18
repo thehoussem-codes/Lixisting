@@ -22,6 +22,7 @@ WORLD = ROOT / "public" / "world" / "annaba.json"
 DEM = ROOT / "data" / "elevation" / "annaba_dem.json.gz"
 OUT = ROOT / "public" / "world" / "terrain.bin"
 TREES_OUT = ROOT / "public" / "world" / "trees.json"
+LANDCOVER = ROOT / "data" / "landcover"
 
 
 
@@ -53,6 +54,50 @@ COLORS = {  # couleurs du sol (rouge, vert, bleu de 0 à 1)
 
 from build_world import edge_shore  # noqa: E402
 
+# Occupation du sol vue par satellite (ESA WorldCover 10 m, voir tools/extract_landcover.py).
+TREE, SHRUB, GRASS, CROP, BUILT, BARE, WATER, WETLAND = 10, 20, 30, 40, 50, 60, 80, 90
+COVER_COLORS = {TREE: (0.22, 0.40, 0.18), SHRUB: (0.42, 0.50, 0.27), GRASS: (0.55, 0.62, 0.36), CROP: (0.66, 0.64, 0.44),
+                BUILT: (0.60, 0.58, 0.54), BARE: (0.70, 0.65, 0.52), WATER: (0.60, 0.58, 0.54), WETLAND: (0.45, 0.52, 0.35)}
+
+
+class LandCover:
+    """Classe d'occupation du sol (10 = arbres, 20 = broussailles, 30 = herbe...) en tout point x, n du jeu."""
+
+    def __init__(self):
+        from PIL import Image
+        meta = json.loads((LANDCOVER / "summary.json").read_text(encoding="utf-8"))
+        self.grid = np.array(Image.open(LANDCOVER / "annaba_worldcover.png"))
+        self.x0, self.n0, self.step = meta["x0"], meta["n0"], meta["step"]
+
+    def at(self, x, n):
+        col = np.clip(np.round((np.asarray(x) - self.x0) / self.step).astype(int), 0, self.grid.shape[1] - 1)
+        row = np.clip(np.round((np.asarray(n) - self.n0) / self.step).astype(int), 0, self.grid.shape[0] - 1)
+        return self.grid[row, col]
+
+    def share(self, x, n, classes, radius=1):
+        """Part des cases (2 x radius + 1)² autour du point qui appartiennent à `classes`."""
+        hits = np.zeros(np.shape(x), dtype=float)
+        total = 0
+        for dx in range(-radius, radius + 1):
+            for dn in range(-radius, radius + 1):
+                hits += np.isin(self.at(np.asarray(x) + dx * self.step, np.asarray(n) + dn * self.step), classes)
+                total += 1
+        return hits / total
+
+    def colors(self, x, n):
+        """Couleur du sol d'après la classe, adoucie sur ~20 m (pas de pixels de 10 m visibles)."""
+        from scipy.ndimage import gaussian_filter as blur
+        if not hasattr(self, "_rgb"):
+            rgb = np.zeros(self.grid.shape + (3,), dtype=float)
+            for k, c in COVER_COLORS.items():
+                rgb[self.grid == k] = c
+            unknown = ~np.isin(self.grid, list(COVER_COLORS))
+            rgb[unknown] = COVER_COLORS[BUILT]
+            self._rgb = np.stack([blur(rgb[..., i], 2.0) for i in range(3)], axis=-1)
+        col = np.clip(np.round((np.asarray(x) - self.x0) / self.step).astype(int), 0, self.grid.shape[1] - 1)
+        row = np.clip(np.round((np.asarray(n) - self.n0) / self.step).astype(int), 0, self.grid.shape[0] - 1)
+        return self._rgb[row, col]
+
 
 def cours_promenade(world):
     """Promenade centrale du Cours de la Révolution : bande entre ses deux chaussées réelles (OSM),
@@ -80,6 +125,15 @@ def cours_promenade(world):
 
 def pairs(flat):
     return np.array(flat, dtype=float).reshape(-1, 2)
+
+
+def densify_line(line, step):
+    """Points tous les `step` mètres le long d'une ligne ouverte."""
+    out = [line[:1]]
+    for a, b in zip(line, line[1:]):
+        count = max(1, int(np.ceil(np.hypot(*(b - a)) / step)))
+        out.append(a + (b - a) * (np.arange(1, count + 1)[:, None] / count))
+    return np.vstack(out)
 
 
 def densify(ring, step):
@@ -125,6 +179,21 @@ def main():
     fall = np.clip(shore_distance / np.clip(350 + 1.2 * grid, 350, 900), 0, 1)
     grid = grid * fall ** 1.5
 
+    # Rues plus douces (retour de Houssem) : sous les rues carrossables et à leurs abords, le relief à 30 m est
+    # remplacé par une version lissée (moyenne pondérée sur ~60 m). Les montées et descentes restent, mais
+    # sans bosse ni creux brusque d'un point de la grille à l'autre. Plus loin des rues, le relief est intact.
+    drivable = [pairs(r["p"]) for r in world["roads"] if r["k"] not in ("footway", "path", "steps", "track", "pedestrian", "cycleway")]
+    if drivable:
+        road_cloud = np.vstack([densify_line(line, 10.0) for line in drivable])
+        distance = cKDTree(road_cloud).query(np.column_stack([gx.ravel(), gn.ravel()]))[0].reshape(grid.shape)
+        blend = np.clip(1 - (distance - 20) / 25, 0, 1)        # 1 jusqu'à 20 m d'une rue, 0 au-delà de 45 m
+        soft = gaussian_filter(grid, 1.0, mode="nearest")
+        softer = gaussian_filter(grid, 1.6, mode="nearest")
+        steep = np.clip((np.hypot(*np.gradient(grid, STEP)) - 0.06) / 0.10, 0, 1)   # les rues en pente forte : plus lissées
+        target = soft * (1 - steep) + softer * steep
+        grid = np.maximum(grid * (1 - blend) + target * blend, MIN_HEIGHT * fall ** 1.5)
+        print("relief lissé le long des rues :", int((blend > 0).sum()), "points de grille")
+
     def height(x, n):
         """Même calcul que dans le jeu (Terrain.heightAt) : interpolation dans la grille à 30 m."""
         fx = np.clip((x - x0) / STEP, 0, cols - 1.001)
@@ -147,70 +216,44 @@ def main():
     far_from_coast = cKDTree(coast_points).query(interior)[0] > COAST_STEP * 0.8
     interior = interior[inside & far_from_coast]
 
-    # --- chaussées à niveau : sur toute la ville, chaque rue carrossable reçoit sa propre plate-forme.
-    # En travers, la rue est horizontale (même hauteur sur les deux bords : plus de dévers à gauche ou à droite) ;
-    # en long, elle suit un relief adouci (grille lissée à ~30 m, puis moyenne glissante le long de la rue) : des
-    # montées et des descentes, mais plus de pics brusques. Le profil vient d'un même champ lissé pour toutes les
-    # rues, si bien que deux rues qui se croisent arrivent à la même hauteur au carrefour.
-    smooth_grid = gaussian_filter(grid, 1.0)
-
-    def smooth_height(x, n):
-        fx = np.clip((x - x0) / STEP, 0, cols - 1.001)
-        fy = np.clip((n - n0) / STEP, 0, rows - 1.001)
-        ix, iy = fx.astype(int), fy.astype(int)
-        ax, ay = fx - ix, fy - iy
-        return (smooth_grid[iy, ix] * (1 - ax) + smooth_grid[iy, ix + 1] * ax) * (1 - ay) + \
-               (smooth_grid[iy + 1, ix] * (1 - ax) + smooth_grid[iy + 1, ix + 1] * ax) * ay
-
+    # --- rues taillées dans la colline : profil en long adouci, plate-forme et crête de talus ajoutées au maillage
     graded_points, graded_heights = [], []
-    road_axes, road_edges = [], []
-    MAJOR = ("trunk", "primary", "secondary", "tertiary", "trunk_link", "primary_link", "secondary_link", "tertiary_link")
     for road in world["roads"]:
-        if road["k"] in ("footway", "path", "steps", "track", "pedestrian"):
-            continue
         line = pairs(road["p"])
-        steps = np.concatenate([[0], np.cumsum(np.hypot(*np.diff(line, axis=0).T))])
-        if steps[-1] < 1:
+        if road["k"] not in ("trunk", "primary", "secondary", "tertiary"):
             continue
-        spacing = 8.0 if road["k"] in MAJOR else 12.0
-        marks = np.linspace(0, steps[-1], max(2, int(round(steps[-1] / spacing)) + 1))
+        # La rue doit être en majorité dans la zone : une rue qui ne fait que l'effleurer n'est pas modifiée.
+        if not any((np.hypot(line[:, 0] - zx, line[:, 1] - zn) < zr).mean() > 0.5 for zx, zn, zr in GRADING_ZONES):
+            continue
+        # Un point tous les 5 m le long de l'axe.
+        steps = np.concatenate([[0], np.cumsum(np.hypot(*np.diff(line, axis=0).T))])
+        marks = np.linspace(0, steps[-1], max(2, int(steps[-1] / 5) + 1))
         axis = np.column_stack([np.interp(marks, steps, line[:, 0]), np.interp(marks, steps, line[:, 1])])
-        natural_axis = height(axis[:, 0], axis[:, 1])
-        profile = smooth_height(axis[:, 0], axis[:, 1])
-        if len(profile) > 4:   # moyenne glissante sur ±2 points, extrémités fixes (raccord aux carrefours)
-            padded = np.concatenate([profile[:1].repeat(2), profile, profile[-1:].repeat(2)])
-            inner = np.convolve(padded, np.ones(5) / 5, mode="valid")
-            inner[0], inner[-1] = profile[0], profile[-1]
-            profile = inner
-        # Jamais à plus de 1 m du terrain naturel : la rue reste au pied des maisons qui la bordent.
-        profile = np.clip(profile, natural_axis - 1.0, natural_axis + 1.0)
+        natural = height(axis[:, 0], axis[:, 1])
+        # Profil : on ne remblaie jamais, on entaille seulement ; la pente reste sous MAX_GRADE à partir des points bas.
+        profile = (natural[None, :] + MAX_GRADE * np.abs(marks[:, None] - marks[None, :])).min(axis=1)
+        if (natural - profile).max() < 1.0:
+            continue
         tangent = np.gradient(axis, axis=0)
         tangent /= np.maximum(np.linalg.norm(tangent, axis=1, keepdims=True), 1e-6)
         normal = np.column_stack([-tangent[:, 1], tangent[:, 0]])
-        edge = road["w"] / 2 + road.get("sw", 0) + 0.4
-        road_axes.append(axis); road_edges.append(np.full(len(axis), edge))
+        edge = road["w"] / 2 + road.get("sw", 0) + 0.6
+        graded_points.append(axis); graded_heights.append(profile)
         for side in (1, -1):
             platform = axis + normal * side * edge
-            crest = axis + normal * side * (edge + 1.2)
-            natural = height(crest[:, 0], crest[:, 1])
-            graded_points.append(platform); graded_heights.append(profile)
-            # Crête de talus seulement là où le terrain naturel s'écarte de la rue (sinon, inutile).
-            steep = np.abs(natural - profile) > 0.6
-            if steep.any():
-                graded_points.append(crest[steep]); graded_heights.append(natural[steep])
-            # Mur de soutènement là où la rue est taillée de plus de 1,5 m dans la pente.
-            if road["k"] in MAJOR or road["k"] == "residential":
-                foot = axis + normal * side * (edge - 0.08)
-                for k in range(len(axis) - 1):
-                    if natural[k] - profile[k] > 1.5 and natural[k + 1] - profile[k + 1] > 1.5:
-                        WALLS.extend(round(float(v), 2) for v in (foot[k, 0], foot[k, 1], foot[k + 1, 0], foot[k + 1, 1],
-                                     profile[k] - 0.4, natural[k] + 0.6, profile[k + 1] - 0.4, natural[k + 1] + 0.6))
-    # Les points de la grille à 30 m pris sous une chaussée sont retirés : c'est la plate-forme qui commande ici.
-    if road_axes:
-        all_axes, all_edges = np.vstack(road_axes), np.concatenate(road_edges)
-        distance, nearest_axis = cKDTree(all_axes).query(interior)
-        interior = interior[distance > all_edges[nearest_axis] + 4]
-    print("chaussées mises à niveau :", len(road_axes), "rues,", sum(len(g) for g in graded_points), "points de plate-forme")
+            crest = axis + normal * side * (edge + 0.8)
+            crest_height = np.maximum(profile, height(crest[:, 0], crest[:, 1]))
+            graded_points += [platform, crest]; graded_heights += [profile, crest_height]
+            # Mur de soutènement là où le talus dépasse 1,2 m.
+            foot = axis + normal * side * (edge - 0.08)  # juste devant le talus, qu'il masque entièrement
+            for k in range(len(axis) - 1):
+                if crest_height[k] - profile[k] > 1.2 or crest_height[k + 1] - profile[k + 1] > 1.2:
+                    WALLS.extend(round(float(v), 2) for v in (foot[k, 0], foot[k, 1], foot[k + 1, 0], foot[k + 1, 1],
+                                 profile[k] - 0.4, crest_height[k] + 0.9, profile[k + 1] - 0.4, crest_height[k + 1] + 0.9))
+        # Les points de la grille pris dans la plate-forme sont retirés : c'est la rue qui commande ici.
+        interior = interior[cKDTree(axis).query(interior)[0] > edge + 3.5]
+        print(f"rue taillée : {road.get('n') or road['k']}, {steps[-1]:.0f} m, entaille maximale {(natural - profile).max():.1f} m, "
+              f"altitude {profile.min():.1f} à {profile.max():.1f} m (avant : jusqu'à {natural.max():.1f} m)")
     graded_count = sum(len(g) for g in graded_points)
 
     points = np.vstack([coast_points, interior] + graded_points)
@@ -255,12 +298,10 @@ def main():
     # --- couleur de chaque point : type de sol OSM, sinon selon l'altitude et la pente
     # Sol : gris minéral en ville, terre sèche en lisière, vert sur les terrains sans construction.
     # (Les photos d'Annaba montrent des collines couvertes de maquis, pas du sable.)
-    built = cKDTree(np.vstack([pairs(b["p"]) for b in world["buildings"]]))
-    away = built.query(points)[0]
-    town, edge, wild = np.array([0.60, 0.58, 0.54]), np.array([0.50, 0.55, 0.33]), np.array([0.27, 0.43, 0.20])  # sous-bois vert sombre
-    t1 = np.clip((away - 30) / 40, 0, 1)[:, None]     # 30 à 70 m des bâtiments : ville -> lisière
-    t2 = np.clip((away - 45) / 45, 0, 1)[:, None]     # 70 à 150 m : lisière -> nature
-    colors = (town * (1 - t1) + edge * t1) * (1 - t2) + wild * t2
+    # Couleur d'après le satellite (ESA WorldCover) : vert foncé sous les forêts, vert clair sur l'herbe,
+    # gris minéral en ville et sur le port, terre claire sur le sol nu.
+    cover = LandCover()
+    colors = cover.colors(points[:, 0], points[:, 1])
     patchy = np.sin(points[:, 0] * 0.031) * np.cos(points[:, 1] * 0.027)   # nuances larges, pour éviter l'aplat
     colors = colors * (1 + 0.06 * patchy[:, None])
     gy, gxx = np.gradient(grid, STEP)
@@ -326,13 +367,13 @@ def main():
         f.write(color_array.tobytes())
         f.write(indices.tobytes())
 
-    build_trees(world, grid, (x0, n0))
+    build_trees(world, grid, (x0, n0), cover)
     print(f"terrain : {len(positions)} points, {len(indices)} triangles, grille {cols} x {rows}, "
           f"altitude max {grid.max():.0f} m, fichier {OUT.stat().st_size // 1024} ko")
     return points, triangles, heights, colors
 
 
-def build_trees(world, grid=None, grid_origin=None):
+def build_trees(world, grid=None, grid_origin=None, cover=None):
     """Végétation. Trois sources, de la plus sûre à la plus libre :
     1. les zones vertes réelles d'OSM (bois, garrigue, parcs) : on y répartit des arbres ;
     2. les collines non bâties (relief réel) : maquis clairsemé de pins, cyprès et buissons ;
@@ -340,6 +381,8 @@ def build_trees(world, grid=None, grid_origin=None):
     L'emplacement exact de chaque arbre est tiré au hasard (tirage toujours identique) :
     c'est un décor plausible, pas un relevé arbre par arbre."""
     rng = np.random.default_rng(7)
+    cover = cover or LandCover()
+    GREEN = [TREE, SHRUB, GRASS]
     road_points = np.vstack([pairs(r["p"]) for r in world["roads"]])
     road_owner = np.concatenate([np.full(len(r["p"]) // 2, i) for i, r in enumerate(world["roads"])])
     building_points = np.vstack([pairs(b["p"]) for b in world["buildings"]])
@@ -367,7 +410,8 @@ def build_trees(world, grid=None, grid_origin=None):
         # Squares du centre (Cours, place du théâtre) : pelouses plantées avec soin, comme sur les photos —
         # quelques palmiers et araucarias isolés, massifs bas ; pas de forêt d'arbres tirés au hasard.
         hall = world["meta"].get("town_hall")
-        if area["k"] == "grass" and hall and np.hypot(*(ring.mean(axis=0) - np.array(hall))) < 550:
+        square = area["k"] == "grass" and hall and np.hypot(*(ring.mean(axis=0) - np.array(hall))) < 550
+        if square:
             per_tree, mix = 260, [("palm", 0.35), ("araucaria", 0.25), ("bush", 0.4)]
         lo, hi = ring.min(axis=0), ring.max(axis=0)
         count = int((hi[0] - lo[0]) * (hi[1] - lo[1]) / per_tree)
@@ -378,41 +422,59 @@ def build_trees(world, grid=None, grid_origin=None):
         if len(candidates) == 0:
             continue
         candidates = candidates[(roads.query(candidates)[0] > 7) & (buildings.query(candidates)[0] > 5)]
+        if not square:   # seulement là où le satellite voit vraiment du vert (pas de bois « sur le papier »)
+            candidates = candidates[cover.share(candidates[:, 0], candidates[:, 1], GREEN) >= 0.34]
         names, weights = [m[0] for m in mix], [m[1] for m in mix]
         for (x, n), kind in zip(candidates, rng.choice(names, len(candidates), p=weights)):
             add(kind, x, n)
 
-    # 2. Tout terrain naturel (vert sur la carte du jeu : loin des bâtiments, hors zones déjà traitées) : forêt.
-    # Retour de Houssem : la végétation d'Annaba, ce sont des forêts ; aucun grand espace vert ne reste nu.
+    # 2. Végétation d'après le satellite (ESA WorldCover 10 m) — retour de Houssem : « vert foncé, de la forêt ;
+    #    vert clair, peu ; pas de vert, rien ». Arbres (vert foncé) : forêt serrée de pins d'Alep et de chênes ;
+    #    broussailles : maquis clairsemé ; herbe : quelques buissons et arbres isolés ; ailleurs (ville, port,
+    #    cultures, sol nu, eau) : aucun arbre.
     rect = world["meta"]["rect_m"]
-    per_tree = 150.0  # moins d'arbres, mais plus larges : les houppiers se touchent toujours
-    count = int((rect[2] - rect[0]) * (rect[3] - rect[1]) / per_tree)
-    spots = np.column_stack([rect[0] + rng.random(count) * (rect[2] - rect[0]), rect[1] + rng.random(count) * (rect[3] - rect[1])])
-    on_land = np.zeros(len(spots), dtype=bool)
-    for polygon in land:
-        on_land |= polygon.contains_points(spots)
-    spots = spots[on_land]
-    spots = spots[(buildings.query(spots)[0] > 45) & (roads.query(spots)[0] > 9) & (coast.query(spots)[0] > 14)]
-    taken = np.zeros(len(spots), dtype=bool)
-    for area in world["areas"]:   # plages, terrains de sport, parkings, parcs et bois ont leur propre traitement
-        ring = pairs(area["p"])
-        lo, hi = ring.min(axis=0), ring.max(axis=0)
-        near = np.where((spots[:, 0] >= lo[0]) & (spots[:, 0] <= hi[0]) & (spots[:, 1] >= lo[1]) & (spots[:, 1] <= hi[1]))[0]
-        if len(near):
-            taken[near[Polygon(ring).contains_points(spots[near], radius=4) | Polygon(ring).contains_points(spots[near], radius=-4)]] = True
-    spots = spots[~taken]
-    kinds = rng.choice(["fpine", "oak", "cypress", "bush"], len(spots), p=[0.52, 0.33, 0.05, 0.10])
-    for (x, n), kind in zip(spots, kinds):
-        add(kind, x, n, 1.6, 2.3) if kind in ("fpine", "oak") else add(kind, x, n, 0.9, 1.6)
+    densities = {TREE: (140.0, ["fpine", "oak", "cypress", "bush"], [0.52, 0.33, 0.05, 0.10]),
+                 SHRUB: (520.0, ["bush", "fpine", "oak"], [0.65, 0.2, 0.15]),
+                 GRASS: (1600.0, ["bush", "oak", "fpine"], [0.6, 0.25, 0.15])}
+    for cls, (per_tree, names, weights) in densities.items():
+        cells = np.argwhere(cover.grid == cls)
+        area = len(cells) * cover.step ** 2
+        count = int(area / per_tree)
+        if count == 0:
+            continue
+        pick = cells[rng.integers(0, len(cells), count)]
+        spots = np.column_stack([cover.x0 + (pick[:, 1] + rng.random(count) - 0.5) * cover.step,
+                                 cover.n0 + (pick[:, 0] + rng.random(count) - 0.5) * cover.step])
+        on_land = np.zeros(len(spots), dtype=bool)
+        for polygon in land:
+            on_land |= polygon.contains_points(spots)
+        spots = spots[on_land]
+        spots = spots[(buildings.query(spots)[0] > 6) & (roads.query(spots)[0] > 7) & (coast.query(spots)[0] > 10)]
+        # Pas au milieu d'une zone dont le satellite dit qu'elle n'est pas verte (bord d'une tache isolée).
+        spots = spots[cover.share(spots[:, 0], spots[:, 1], GREEN) >= (0.5 if cls == TREE else 0.6)]
+        taken = np.zeros(len(spots), dtype=bool)
+        for area_ in world["areas"]:   # plages, terrains de sport, parkings, parcs et bois ont leur propre traitement
+            ring = pairs(area_["p"])
+            lo, hi = ring.min(axis=0), ring.max(axis=0)
+            near = np.where((spots[:, 0] >= lo[0]) & (spots[:, 0] <= hi[0]) & (spots[:, 1] >= lo[1]) & (spots[:, 1] <= hi[1]))[0]
+            if len(near):
+                taken[near[Polygon(ring).contains_points(spots[near], radius=4) | Polygon(ring).contains_points(spots[near], radius=-4)]] = True
+        spots = spots[~taken]
+        for (x, n), kind in zip(spots, rng.choice(names, len(spots), p=weights)):
+            if kind in ("fpine", "oak"):
+                add(kind, x, n, 1.6, 2.3) if cls == TREE else add(kind, x, n, 1.1, 1.7)
+            else:
+                add(kind, x, n, 0.9, 1.6)
+        print("satellite", cls, ":", len(spots), "plantes")
 
     # 3. Arbres d'alignement le long des rues à trottoir
     side = 1
     for road_index, road in enumerate(world["roads"]):
         width, walk = road["w"], road.get("sw", 0)
-        if walk < 1.5 or road["k"] not in ("primary", "secondary", "tertiary", "residential"):
+        if walk < 1.5 or road["k"] not in ("primary", "secondary", "tertiary"):
             continue
         line = pairs(road["p"])
-        spacing = 14 if road["k"] != "residential" else 22
+        spacing = 14
         since = spacing / 2
         for a, b in zip(line, line[1:]):
             length = np.hypot(*(b - a))
@@ -431,6 +493,8 @@ def build_trees(world, grid=None, grid_origin=None):
             near = roads.query_ball_point(point, 7.5)
             if any(road_owner[k] != road_index for k in near):
                 continue
+            if np.hypot(point[0] - HARBOURS[0][0], point[1] - HARBOURS[0][1]) < HARBOURS[0][2]:
+                continue   # pas d'arbres sur les quais du port de pêche
             near_sea = coast.query(point)[0] < 160
             if near_sea and road["k"] != "residential" and rng.random() < 0.3:
                 add("palm", *point, 0.9, 1.3)

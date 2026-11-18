@@ -293,6 +293,11 @@ export class Car {
     return true;
   }
 
+  /** Hauteur du toit de la voiture (monde). */
+  top(): number {
+    return this.object.position.y + this.spec.height;
+  }
+
   /** Ce point (vu du dessus) est-il sous la voiture ? */
   contains(x: number, z: number, margin = 0): boolean {
     const dx = x - this.object.position.x, dz = z - this.object.position.z;
@@ -337,10 +342,11 @@ export class Car {
     return this.physics;
   }
 
-  private simulate(dt: number, controls: Controls, collider: Collider | null, others: Car[], ground: (x: number, z: number) => number): void {
+  private simulate(dt: number, controls: Controls, collider: Collider | null, others: Car[], ground: (x: number, z: number, y?: number) => number): void {
     const physics = this.wake();
     physics.step(dt, controls, {
-      ground,
+      // Le sol vu de la voiture : terrain, et toits qu'elle survole d'assez près pour s'y poser.
+      ground: (x: number, z: number) => ground(x, z, physics.y),
       waterLevel: Car.waterLevel,
       collides: (x, z, yaw) => {
         const other = this.hitCar(others, x, z, yaw);
@@ -353,7 +359,7 @@ export class Car {
     this.speed = physics.forwardSpeed;
     this.object.rotation.set(-physics.pitch, physics.yaw, physics.roll);
     // Ombre : elle reste au sol quand la voiture décolle, et s'estompe avec la hauteur.
-    const above = Math.max(0, physics.y - ground(physics.x, physics.z));
+    const above = Math.max(0, physics.y - ground(physics.x, physics.z, physics.y));
     this.shadow.position.y = 0.04 - above;
     (this.shadow.material as THREE.MeshBasicMaterial).opacity = physics.submerged > 0.2 ? 0 : 0.55 / (1 + above * 0.6);
     // Roues : elles suivent le sol (débattement), braquent à l'avant et tournent.
@@ -366,7 +372,7 @@ export class Car {
   }
 
   /** Conduite : W accélère, S freine puis recule, A/D tournent, Espace = frein à main. */
-  drive(dt: number, input: Input, collider: Collider | null, others: Car[], ground: (x: number, z: number) => number): void {
+  drive(dt: number, input: Input, collider: Collider | null, others: Car[], ground: (x: number, z: number, y?: number) => number): void {
     const up = input.isDown('KeyW') || input.isDown('ArrowUp'), down = input.isDown('KeyS') || input.isDown('ArrowDown');
     // Maxi-scooter : haut + bas en même temps = roue arrière (la moto continue d'avancer).
     this.wheelieHeld = this.spec.moto === 'maxiscooter' && up && down && !this.airborne;
@@ -454,7 +460,7 @@ export class Car {
   }
 
   /** Voiture sans conducteur : elle finit de rouler puis s'arrête. */
-  coast(dt: number, collider: Collider | null, others: Car[], ground: (x: number, z: number) => number): void {
+  coast(dt: number, collider: Collider | null, others: Car[], ground: (x: number, z: number, y?: number) => number): void {
     if (this.physics) {
       // La simulation continue tant que la voiture bouge, puis se met en veille.
       this.restTime = this.physics.isMoving ? 0 : this.restTime + dt;
@@ -556,6 +562,8 @@ export class Car {
   private hitCar(others: Car[], x: number, z: number, heading: number): Car | null {
     for (const other of others) {
       if (other === this || !other.object.visible) continue;
+      // L'une passe au-dessus de l'autre (saut) : pas de choc.
+      if (this.object.position.y > other.top() - 0.2 || other.object.position.y > this.top() - 0.2) continue;
       // Si les deux voitures se touchaient déjà (apparition, poussée), on laisse repartir pour se dégager.
       if (this.wouldOverlap(other, x, z, heading) &&
           !this.wouldOverlap(other, this.object.position.x, this.object.position.z, this.heading)) return other;

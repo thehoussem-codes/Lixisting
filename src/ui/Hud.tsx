@@ -24,7 +24,7 @@ export function Hud({ status, places, zone, speed, gear, fps, location, detail }
         {speed !== null && <div className="hud-speed">{speed} <span>km/h · rapport {gear}</span></div>}
         <div className="hud-zone-name">{zone}</div>
       </div>
-      <div className="hud hud-credit">Données cartographiques © contributeurs OpenStreetMap</div>
+      <div className="hud hud-credit">Données cartographiques © contributeurs OpenStreetMap · végétation © ESA WorldCover (Copernicus Sentinel 2021)</div>
     </>
   );
 }
