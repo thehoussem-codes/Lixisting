@@ -1,0 +1,14 @@
+{
+  "source": "EMODnet Bathymetry DTM (moyenne), CC BY 4.0",
+  "url": "https://ows.emodnet-bathymetry.eu/wcs?service=wcs&version=1.0.0&request=getcoverage&coverage=emodnet:mean&crs=EPSG:4326&BBOX=7.1,36.75,8.45,37.4&format=image/tiff&interpolation=nearest&resx=0.0010416666666666667&resy=0.0010416666666666667",
+  "west": 7.1,
+  "south": 36.75,
+  "east": 8.45,
+  "north": 37.4,
+  "cols": 1296,
+  "rows": 624,
+  "unit": "décimètres",
+  "row0": "nord",
+  "max_depth_m": 2875.800048828125,
+  "sea_cells": 565770
+}
