@@ -1,11 +1,14 @@
 import type { Input } from '../engine/Input';
 
 /**
- * Commandes tactiles (téléphone à l'horizontale) :
- * - joystick à gauche : marcher / conduire (haut = avancer ou accélérer, bas = reculer ou freiner) ;
- *   poussé jusqu'au bord à pied : courir ;
- * - glisser le doigt ailleurs sur l'écran : tourner la caméra ;
- * - boutons à droite : sauter / frein à main, monter ou descendre de voiture, carte.
+ * Commandes tactiles (téléphone à l'horizontale), d'après les demandes de Houssem :
+ * - joystick à gauche : les directions. À pied il fait tout (avancer, reculer, tourner ; au bord : courir).
+ *   En voiture ou à moto : gauche / droite pour tourner, bas pour freiner puis reculer ; le haut n'accélère pas ;
+ * - bouton ACCÉLÉRER à droite (à pied : AVANCER) ;
+ * - bouton FREIN À MAIN en voiture, SAUTER à pied ; bouton MONTER / SORTIR pour la voiture ;
+ * - la mini-carte en haut à gauche s'ouvre d'un toucher (pas de bouton de carte) ;
+ * - glisser le doigt ailleurs sur l'écran : tourner la caméra.
+ * Boutons texte simples, sans icône.
  * Les commandes alimentent la même classe Input que le clavier : le jeu ne fait aucune différence.
  */
 export class TouchControls {
@@ -17,6 +20,21 @@ export class TouchControls {
   private lookId: number | null = null;
   private lookLast = { x: 0, y: 0 };
   private held = new Set<string>();
+  private gas: HTMLDivElement;
+  private jump: HTMLDivElement;
+  private car: HTMLDivElement;
+  private driving = false;
+  private stickVector = { x: 0, y: 0 };
+
+  /** À appeler à chaque image : adapte les libellés et le rôle du joystick (à pied ou au volant). */
+  setDriving(driving: boolean): void {
+    if (driving === this.driving) return;
+    this.driving = driving;
+    this.gas.textContent = driving ? 'ACCÉLÉRER' : 'AVANCER';
+    this.jump.textContent = driving ? 'FREIN À MAIN' : 'SAUTER';
+    this.car.textContent = driving ? 'SORTIR' : 'MONTER';
+    this.applyStick();
+  }
 
   constructor(private input: Input, private onFirstTouch: () => void) {
     this.root.className = 'touch';
@@ -24,9 +42,9 @@ export class TouchControls {
     this.knob.className = 'touch-knob';
     this.stick.appendChild(this.knob);
     this.root.appendChild(this.stick);
-    this.button('SAUT', 'touch-jump', 'Space', 'hold');
-    this.button('🚗', 'touch-car', 'KeyF', 'tap');
-    this.button('🗺', 'touch-map', 'KeyM', 'tap');
+    this.gas = this.button('AVANCER', 'touch-gas', 'KeyW', 'hold');
+    this.jump = this.button('SAUTER', 'touch-jump', 'Space', 'hold');
+    this.car = this.button('MONTER', 'touch-car', 'KeyF', 'tap');
     const turn = document.createElement('div');
     turn.className = 'touch-rotate';
     turn.innerHTML = '<div>📱↻</div><p>Tourne ton téléphone<br>à l\'horizontale</p>';
@@ -62,7 +80,7 @@ export class TouchControls {
     } catch { /* plein écran refusé : le jeu marche quand même */ }
   }
 
-  private button(label: string, className: string, code: string, mode: 'hold' | 'tap'): void {
+  private button(label: string, className: string, code: string, mode: 'hold' | 'tap'): HTMLDivElement {
     const b = document.createElement('div');
     b.className = `touch-button ${className}`;
     b.textContent = label;
@@ -81,6 +99,7 @@ export class TouchControls {
     b.addEventListener('touchend', release);
     b.addEventListener('touchcancel', release);
     this.root.appendChild(b);
+    return b;
   }
 
   private stickStart = (e: TouchEvent) => {
@@ -129,13 +148,20 @@ export class TouchControls {
     const length = Math.hypot(dx, dy);
     if (length > 1) { dx /= length; dy /= length; }
     this.knob.style.transform = `translate(${dx * radius * 0.6}px, ${dy * radius * 0.6}px)`;
+    this.stickVector = { x: dx, y: dy };
+    this.applyStick();
+  }
+
+  private applyStick(): void {
+    const { x: dx, y: dy } = this.stickVector;
     const wanted = new Set<string>();
-    if (dy < -0.35) wanted.add('KeyW');
+    // Au volant, pousser vers le haut n'accélère pas : c'est le rôle du bouton ACCÉLÉRER.
+    if (dy < -0.35 && !this.driving) wanted.add('KeyW');
     if (dy > 0.35) wanted.add('KeyS');
     if (dx < -0.35) wanted.add('KeyA');
     if (dx > 0.35) wanted.add('KeyD');
-    if (Math.hypot(dx, dy) > 0.92) wanted.add('ShiftLeft'); // poussé jusqu'au bord : courir
-    for (const code of this.held) if (!wanted.has(code)) this.input.setVirtual(code, false);
+    if (Math.hypot(dx, dy) > 0.92 && !this.driving) wanted.add('ShiftLeft'); // poussé jusqu'au bord, à pied : courir
+    for (const code of this.held) if (!wanted.has(code) && !(code === 'KeyW' && this.gas.classList.contains('on'))) this.input.setVirtual(code, false);
     for (const code of wanted) this.input.setVirtual(code, true);
     this.held = wanted;
   }

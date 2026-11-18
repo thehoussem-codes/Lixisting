@@ -445,3 +445,15 @@ Skills chargés : `physics-tuning`, `game-ai`, `audio-design`, `threejs-material
   vitesse, absent du garage) et tracteur. Roues séparées (elles tournent), textures intégrées.
 - Style plus simple et plus « jouet » que le pack de voitures : à retirer si Houssem le juge trop différent.
 - Ils roulent dans la circulation (plus rares que les voitures) et sont exposés au Garage de l'Est (19 véhicules).
+
+## Retrait des véhicules Kenney — véhicules réalistes uniquement (18/11/2026)
+
+- Les 7 véhicules Kenney (style jouet, formes carrées) ont été retirés à la demande du propriétaire du projet.
+- **Règle permanente** : le jeu est réaliste, dans l'esprit GTA. Seuls des modèles de véhicules réalistes (proportions réelles, vraies marques/modèles du parc algérien) sont acceptés. Jamais de modèles jouets, cartoon ou « low-poly stylisés carrés ».
+- Recherche dans les fichiers envoyés : Skoda Rapid gendarmerie, Renault Master ambulance, fourgon police et BRI sont déjà dans le jeu, ainsi que le pack générique de 9 voitures. La Mercedes G63 police est dans une archive .rar qui ne peut pas être ouverte ici : à extraire sur le Mac et renvoyer.
+
+## Commandes tactiles simplifiées (18/11/2026)
+
+- Joystick à gauche : directions seulement. Pousser vers l'avant ne fait plus avancer la voiture ; tirer vers l'arrière freine puis recule.
+- À droite, boutons texte simples (sans logo) : AVANCER/ACCÉLÉRER (gros bouton), SAUTER/FREIN À MAIN, MONTER/SORTIR. Les libellés changent quand on est dans un véhicule.
+- La mini-carte en haut à gauche s'ouvre en plein écran d'un toucher ; plus de bouton « carte ».

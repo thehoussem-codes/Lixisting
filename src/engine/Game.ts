@@ -534,6 +534,7 @@ export class Game {
     this.time += dt;
     this.water?.update(this.time, this.camera.position);
     this.harbor?.update(this.time, this.camera.position);
+    this.touch?.setDriving(this.driving !== null);
     this.trees?.update(this.camera.position.x, this.camera.position.z);
     // Résolution automatique : on allège le calcul si le jeu rame, on le raffine s'il a de la marge.
     this.scaleTimer -= elapsed;
