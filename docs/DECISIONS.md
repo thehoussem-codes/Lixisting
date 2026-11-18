@@ -465,3 +465,10 @@ Skills chargés : `physics-tuning`, `game-ai`, `audio-design`, `threejs-material
 - **Voitures** : on peut sauter par-dessus une voiture et se poser sur son toit ; deux voitures l'une au-dessus de l'autre ne se percutent plus.
 - **Végétation** : source satellite ESA WorldCover 10 m (2021, CC BY 4.0). Arbres → forêt serrée de pins et chênes ; broussailles → maquis clair ; herbe → quelques plantes ; ville, port, cultures, sol nu → rien. Les bois OSM ne sont plantés que là où le satellite voit du vert. Arbres d'alignement seulement sur les grandes avenues, jamais sur le port de pêche. Couleur du sol d'après la même carte.
 - **Téléphone** : trois boutons ronds — pédale d'accélérateur (dessin, aucun emoji n'existe), FREIN (au volant seulement, frein à main) et 🚗 pour monter/sortir. Plus de bouton sauter.
+
+## Corniche Chapuis d'après la vidéo de Houssem (18/11/2026)
+
+- Source : 11 captures d'une vidéo « CORNICHE CHAPUIS » (trajet vers le nord, mer à droite), recalées sur une vue aérienne Esri World Imagery utilisée seulement comme repère (téléchargée par une action GitHub, jamais mise dans le jeu ni gardée dans le dépôt).
+- Nouveau module `src/world/Chapuis.ts` : hôtel jaune ocre (tour à fenêtres en arc, aile basse à arcades, pavillons à toits de tuiles, clôture), tour ronde blanche à bandeaux de balcons et commerces, restaurant Savannah (cadre d'acier rouge, enseigne), « Machawi La Marina », tour blanche et tour en brique au bout ; promenade côté mer (bande de briques rouges, pavés gris, muret), palmiers, lampadaires à un bras et à deux bras sur le terre-plein, corbeilles, panneau « Plage Rizzi Amor » ; villas blanches et murets à grille verte côté ouest.
+- Six emprises OSM remplacées ; les autres bâtiments d'OSM restent. Emprises tenues à au moins 1 m des rues d'OSM.
+- Limites : hauteurs comptées sur la vidéo ; tours du bout placées à ±15 m (vue aérienne penchée) ; nom de l'hôtel illisible, donc non inventé. Pas encore faits : la sculpture « 6 » du rond-point, les bâtiments blancs à arcades et l'immeuble à frise mauresque après le virage.

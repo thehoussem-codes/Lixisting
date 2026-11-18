@@ -8,6 +8,7 @@ import { createAsphaltTexture, createPavementTexture, createRoadTexture, createC
 import { addPlant } from './Trees';
 import { Water } from './Water';
 import { STAIRS_APPROACH } from './SousTerrain';
+import { chapuisHasOwnLamps, restyleChapuis } from './Chapuis';
 import { addGrandePoste } from './GrandePoste';
 import { buildLandmarks, type LandmarkEdits } from './Landmarks';
 import type { WorldData } from './WorldData';
@@ -206,6 +207,7 @@ export function buildAnnabaWorld(scene: THREE.Scene, data: WorldData, terrain: T
       const x = bx + (-(bn - an) / length) * offset, z = -(bn + ((bx - ax) / length) * offset);
       const [cx0, cn0, cx1, cn1] = STAIRS_APPROACH;
       if (x > cx0 && x < cx1 && -z > cn0 && -z < cn1) continue; // devant le grand escalier du Sous-Terrain
+      if (chapuisHasOwnLamps(x, -z)) continue; // corniche Chapuis : lampadaires d'après la vidéo (Chapuis.ts)
       const key = `${Math.floor(x / CHUNK)},${Math.floor(z / CHUNK)}`;
       let builder = lamps.get(key);
       if (!builder) { builder = new MeshBuilder(); lamps.set(key, builder); }
@@ -217,6 +219,7 @@ export function buildAnnabaWorld(scene: THREE.Scene, data: WorldData, terrain: T
   for (const builder of lamps.values()) add(builder, lampMaterial);
 
   addGrandePoste(data); // îlot de la Grande Poste, absent d'OSM
+  restyleChapuis(data); // villas blanches de la corniche Chapuis (vidéo)
   const collider = buildBuildings(scene, data, ground);
   const edits = buildLandmarks(scene, data, ground, collider, terrain);
 

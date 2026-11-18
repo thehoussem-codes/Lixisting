@@ -300,7 +300,7 @@ export function buildBuildings(scene: THREE.Scene, data: WorldData, ground: (x: 
     const estate = (building.t === 'apartment' || building.t === 'tower')
       && MODERN_ESTATES.some((zone) => Math.hypot(p[0] - zone.x, p[1] - zone.n) < zone.r);
     if (estate) look = { style: building.t === 'tower' ? 'citetour' : 'cite', walls: ESTATE_WALLS, roofs: look.roofs };
-    const wall = new THREE.Color(look.walls[index % look.walls.length]);
+    const wall = new THREE.Color(building.c ?? look.walls[index % look.walls.length]);
     const roofColor = new THREE.Color(look.roofs[(index * 7) % look.roofs.length]);
 
     // Sol le plus bas et le plus haut sous le bâtiment, centre et point le plus éloigné du centre.
