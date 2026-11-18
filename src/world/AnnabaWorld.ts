@@ -10,6 +10,7 @@ import { Water } from './Water';
 import { STAIRS_APPROACH } from './SousTerrain';
 import { chapuisHasOwnLamps, restyleChapuis } from './Chapuis';
 import { addGrandePoste } from './GrandePoste';
+import { restyleSaintCloud } from './SaintCloud';
 import { buildLandmarks, type LandmarkEdits } from './Landmarks';
 import type { WorldData } from './WorldData';
 
@@ -220,6 +221,7 @@ export function buildAnnabaWorld(scene: THREE.Scene, data: WorldData, terrain: T
 
   addGrandePoste(data); // îlot de la Grande Poste, absent d'OSM
   restyleChapuis(data); // villas blanches de la corniche Chapuis (vidéo)
+  restyleSaintCloud(data); // enduits crème et villa jaune de la corniche Saint-Cloud (vidéo)
   const collider = buildBuildings(scene, data, ground);
   const edits = buildLandmarks(scene, data, ground, collider, terrain);
 

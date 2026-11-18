@@ -62,7 +62,7 @@ const POLE = new THREE.Color(0x2b2e33), CONCRETE = new THREE.Color(0xcfcac0);
 
 // ---------------------------------------------------------------- textures (dessinées, aucune photo copiée)
 
-function noise(ctx: CanvasRenderingContext2D, w: number, h: number, rgb: string, count: number, seed: number): void {
+export function noise(ctx: CanvasRenderingContext2D, w: number, h: number, rgb: string, count: number, seed: number): void {
   const r = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
   for (let i = 0; i < count; i++) { ctx.fillStyle = `rgba(${rgb},${0.04 + r() * 0.08})`; ctx.fillRect(r() * w, r() * h, 2 + r() * 10, 1 + r() * 5); }
 }
@@ -181,7 +181,7 @@ function savannahWall(): THREE.CanvasTexture {
   });
 }
 
-function textSign(width: number, height: number, background: string, color: string, lines: [string, number][]): THREE.CanvasTexture {
+export function textSign(width: number, height: number, background: string, color: string, lines: [string, number][]): THREE.CanvasTexture {
   return canvasTexture(width, height, (ctx) => {
     ctx.fillStyle = background; ctx.fillRect(0, 0, width, height);
     ctx.fillStyle = color; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -204,7 +204,7 @@ function beachSign(): THREE.CanvasTexture {
   }, false);
 }
 
-function pavers(base: string, joint: string, size: number, herring: boolean): THREE.CanvasTexture {
+export function pavers(base: string, joint: string, size: number, herring: boolean): THREE.CanvasTexture {
   return canvasTexture(128, 128, (ctx) => {
     ctx.fillStyle = base; ctx.fillRect(0, 0, 128, 128); noise(ctx, 128, 128, '40,30,30', 90, size);
     ctx.fillStyle = joint;
@@ -220,7 +220,7 @@ function pavers(base: string, joint: string, size: number, herring: boolean): TH
 // ---------------------------------------------------------------- géométrie
 
 /** Murs d'un contour, UV : u = longueur parcourue / du, v = (y - y0) / dv (étages calés sur y0). */
-function walls(b: MeshBuilder, ring: Ring, y0: number, y1: number, du: number, dv: number, color: THREE.Color, from = y0): void {
+export function walls(b: MeshBuilder, ring: Ring, y0: number, y1: number, du: number, dv: number, color: THREE.Color, from = y0): void {
   let along = 0;
   for (let i = 0; i < ring.length; i++) {
     const [ax, an] = ring[i], [bx, bn] = ring[(i + 1) % ring.length];
@@ -234,7 +234,7 @@ function walls(b: MeshBuilder, ring: Ring, y0: number, y1: number, du: number, d
 }
 
 /** Toit en croupe sur un rectangle (c0→c1 = grand côté), débord `o` ; pyramide si les côtés sont proches. */
-function hipRoof(b: MeshBuilder, ring: Ring, top: number, rise: number, color: THREE.Color, o = 0.6): void {
+export function hipRoof(b: MeshBuilder, ring: Ring, top: number, rise: number, color: THREE.Color, o = 0.6): void {
   const [cx, cn] = ring.reduce(([x, n], [a, c]) => [x + a / 4, n + c / 4], [0, 0]);
   const grow = ring.map(([x, n]) => { const dx = x - cx, dn = n - cn, l = Math.hypot(dx, dn); return [x + (dx / l) * o * 1.41, n + (dn / l) * o * 1.41] as [number, number]; });
   const L = Math.hypot(grow[1][0] - grow[0][0], grow[1][1] - grow[0][1]), W = Math.hypot(grow[2][0] - grow[1][0], grow[2][1] - grow[1][1]);
@@ -249,7 +249,7 @@ function hipRoof(b: MeshBuilder, ring: Ring, top: number, rise: number, color: T
 }
 
 /** Poutre entre deux points de l'espace (section carrée t). */
-function beam(b: MeshBuilder, p: [number, number, number], q: [number, number, number], t: number, color: THREE.Color): void {
+export function beam(b: MeshBuilder, p: [number, number, number], q: [number, number, number], t: number, color: THREE.Color): void {
   const d = new THREE.Vector3(q[0] - p[0], q[1] - p[1], q[2] - p[2]);
   const up = Math.abs(d.y) > 0.9 * d.length() ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0);
   const s1 = new THREE.Vector3().crossVectors(d, up).normalize().multiplyScalar(t / 2);
@@ -275,7 +275,7 @@ function lamp(b: MeshBuilder, x: number, y: number, z: number, arms: [number, nu
   }
 }
 
-function inRing(ring: Ring, x: number, n: number): boolean {
+export function inRing(ring: Ring, x: number, n: number): boolean {
   let hit = false;
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
     const [ax, an] = ring[i], [bx, bn] = ring[j];
@@ -284,13 +284,13 @@ function inRing(ring: Ring, x: number, n: number): boolean {
   return hit;
 }
 
-function grownRing(ring: Ring, d: number): Ring {
+export function grownRing(ring: Ring, d: number): Ring {
   const [cx, cn] = ring.reduce(([x, n], [a, c]) => [x + a / ring.length, n + c / ring.length], [0, 0]);
   return ring.map(([x, n]) => { const dx = x - cx, dn = n - cn, l = Math.hypot(dx, dn) || 1; return [x + (dx / l) * d, n + (dn / l) * d] as [number, number]; });
 }
 
 /** Points d'une ligne tous les `step` mètres : position, direction (vers le nord) et normale est. */
-function samples(line: Ring, step: number, from = 0): { x: number; n: number; tx: number; tn: number }[] {
+export function samples(line: Ring, step: number, from = 0): { x: number; n: number; tx: number; tn: number }[] {
   const out: { x: number; n: number; tx: number; tn: number }[] = [];
   let carry = from;
   for (let i = 0; i + 1 < line.length; i++) {
@@ -301,7 +301,7 @@ function samples(line: Ring, step: number, from = 0): { x: number; n: number; tx
   return out;
 }
 
-const distToLine = (line: Ring, x: number, n: number): number => {
+export const distToLine = (line: Ring, x: number, n: number): number => {
   let best = Infinity;
   for (let i = 0; i + 1 < line.length; i++) {
     const [ax, an] = line[i], [bx, bn] = line[i + 1], dx = bx - ax, dn = bn - an, L = dx * dx + dn * dn;

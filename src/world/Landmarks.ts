@@ -4,6 +4,7 @@ import { MeshBuilder } from './MeshBuilder';
 import { buildSheratonGrounds } from './SheratonGrounds';
 import { buildSousTerrain } from './SousTerrain';
 import { CHAPUIS_REPLACED, buildChapuis } from './Chapuis';
+import { SAINT_CLOUD_REPLACED, buildSaintCloud } from './SaintCloud';
 import { buildGrandePoste } from './GrandePoste';
 import { GARAGE_CENTROID, GARAGE_NAME, type Garage, buildGarage } from './Garage';
 import { buildStreetDetails } from './StreetDetails';
@@ -31,6 +32,7 @@ const OWNED: [number, number][] = [
   [206.0, 935.5], // Hôtel Seybouse International (OSM way 165582442, 18 niveaux)
   THEATRE_CENTROID, // Théâtre Azzedine Medjoubi (OSM way 341076691)
   GARAGE_CENTROID, // Garage de l'Est (OSM way 341068653) : salle d'exposition des voitures
+  ...SAINT_CLOUD_REPLACED, // corniche Saint-Cloud : la tour crème sur pilotis (SaintCloud.ts)
   ...CHAPUIS_REPLACED, // corniche Chapuis : hôtel jaune, tour ronde, Savannah, tours du bout (Chapuis.ts)
 ];
 
@@ -416,10 +418,11 @@ export function buildLandmarks(scene: THREE.Scene, data: WorldData, ground: Grou
   const details = buildStreetDetails(scene, data, ground, collider);
   const garage = buildGarage(scene, data, ground, collider);
   const chapuis = buildChapuis(scene, data, ground, collider);
+  const saintCloud = buildSaintCloud(scene, data, ground, collider);
   return {
-    ground: (x, z, y) => sousTerrain.ground(x, z, y) ?? theatre?.ground(x, z) ?? chapuis.ground(x, z) ?? null,
-    keepTree: (x, n) => grounds.keepTree(x, n) && !sousTerrain.inside(x, n) && (theatre?.keepTree(x, n) ?? true) && poste.keepTree(x, n) && details.keepTree(x, n) && !(garage?.inside(x, n) ?? false) && chapuis.keepTree(x, n),
-    trees: [...grounds.palms.map(([x, n, s]): [string, number, number, number] => ['palm', x, n, s]), ...(theatre?.extra ?? []), ...poste.trees, ...chapuis.trees],
+    ground: (x, z, y) => sousTerrain.ground(x, z, y) ?? theatre?.ground(x, z) ?? chapuis.ground(x, z) ?? saintCloud.ground(x, z) ?? null,
+    keepTree: (x, n) => grounds.keepTree(x, n) && !sousTerrain.inside(x, n) && (theatre?.keepTree(x, n) ?? true) && poste.keepTree(x, n) && details.keepTree(x, n) && !(garage?.inside(x, n) ?? false) && chapuis.keepTree(x, n) && saintCloud.keepTree(x, n),
+    trees: [...grounds.palms.map(([x, n, s]): [string, number, number, number] => ['palm', x, n, s]), ...(theatre?.extra ?? []), ...poste.trees, ...chapuis.trees, ...saintCloud.trees],
     labels: theatre ? [{ name: THEATRE_NAME, x: 100, n: 473, radius: 45 }] : [],
     garage: garage ? { ...garage, name: GARAGE_NAME } : null,
   };

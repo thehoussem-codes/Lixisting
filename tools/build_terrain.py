@@ -42,8 +42,11 @@ CORNICHE_AXIS = [(241.0, 3284.0, 2.85), (236.9, 3299.1, 2.85), (231.4, 3317.0, 2
                  (162.3, 3531.8, 5.0), (156.5, 3550.5, 5.0), (150.7, 3569.1, 5.0), (144.9, 3587.7, 5.0), (139.2, 3606.4, 5.0),
                  (133.4, 3625.0, 5.0), (127.9, 3642.5, 5.0), (122.7, 3658.9, 5.0), (117.4, 3675.2, 5.0), (112.0, 3691.6, 5.0),
                  (106.3, 3707.9, 5.0), (99.6, 3723.2, 5.0), (93.5, 3735.7, 5.0), (86.4, 3748.8, 5.0)]
-CORNICHE_WEST = 17.0      # du côté terre : jusqu'au-delà du trottoir de la chaussée ouest
-CORNICHE_EAST = 9.4       # côté mer, au-delà du bord de chaussée : la promenade jusqu'à son muret
+# Corniche Saint-Cloud (boulevard Fellah Rachid, OSM), du sud-est au nord-ouest : vidéo de Houssem, route plate,
+# promenade en dalles grises côté mer (à droite en roulant vers le nord-ouest).
+SAINT_CLOUD_AXIS = [(808.7, 2345.5, 4.0), (795.0, 2359.5, 4.0), (781.3, 2373.6, 4.0), (767.6, 2387.7, 4.0), (754.0, 2401.7, 4.0), (740.9, 2415.5, 4.0), (728.6, 2428.8, 4.0), (717.0, 2441.4, 4.0), (707.0, 2452.9, 4.0), (696.6, 2465.4, 4.0), (685.6, 2478.9, 4.0), (674.7, 2492.4, 4.0), (663.7, 2505.8, 4.0), (651.4, 2521.4, 4.0), (639.0, 2537.0, 4.0), (626.7, 2552.5, 4.0), (614.4, 2568.1, 4.0), (602.1, 2583.6, 4.0), (589.7, 2599.2, 4.0), (577.4, 2614.8, 4.0), (565.1, 2630.3, 4.0), (553.2, 2645.1, 4.0), (541.3, 2659.9, 4.0), (529.5, 2674.7, 4.0), (518.2, 2688.6, 4.0), (506.9, 2702.5, 4.0), (495.6, 2716.4, 4.0), (485.1, 2729.5, 4.0), (475.4, 2741.7, 4.0), (464.9, 2755.2, 4.0), (454.0, 2769.2, 4.0), (442.8, 2783.8, 4.0), (431.6, 2798.3, 4.0), (420.4, 2812.9, 4.0), (412.0, 2825.1, 4.0), (405.5, 2836.4, 4.0), (397.4, 2855.4, 4.0), (391.0, 2871.8, 4.0), (387.8, 2879.9, 4.0)]
+# (axe, du côté terre depuis l'axe, côté mer depuis le bord de chaussée) ; la mer est à droite du sens de l'axe.
+CORNICHES = [("Chapuis", CORNICHE_AXIS, 17.0, 9.4), ("Saint-Cloud", SAINT_CLOUD_AXIS, 8.5, 8.4)]
 GRADING_ZONES = [(155.0, 880.0, 170.0)]   # rue du 24 Février 1956, au nord du Cours de la Révolution
 MAX_GRADE = 0.035                          # pente maximale d'une rue taillée (3,5 %)
 WALLS = []                                 # murs de soutènement produits : x0, n0, x1, n1, bas0, haut0, bas1, haut1
@@ -264,41 +267,30 @@ def main():
         interior = interior[cKDTree(axis).query(interior)[0] > edge + 3.5]
         print(f"rue taillée : {road.get('n') or road['k']}, {steps[-1]:.0f} m, entaille maximale {(natural - profile).max():.1f} m, "
               f"altitude {profile.min():.1f} à {profile.max():.1f} m (avant : jusqu'à {natural.max():.1f} m)")
-    # --- corniche Chapuis : chaussées, terre-plein et promenade d'un seul plan, plat en travers ;
+    # --- corniches (Chapuis, Saint-Cloud) : chaussées et promenade d'un seul plan, plat en travers ;
     # en long, le relief à 30 m très adouci (moyenne glissante sur ~80 m), raccordé au terrain aux deux bouts.
-    line = np.array([(x, n) for x, n, _ in CORNICHE_AXIS]); halves = np.array([h for _, _, h in CORNICHE_AXIS])
-    steps = np.concatenate([[0], np.cumsum(np.hypot(*np.diff(line, axis=0).T))])
-    marks = np.arange(0, steps[-1] + 0.01, 4.0)
-    axis = np.column_stack([np.interp(marks, steps, line[:, 0]), np.interp(marks, steps, line[:, 1])])
-    half = np.interp(marks, steps, halves)
-    tangent = np.gradient(axis, axis=0)
-    tangent /= np.maximum(np.linalg.norm(tangent, axis=1, keepdims=True), 1e-6)
-    east = np.column_stack([tangent[:, 1], -tangent[:, 0]])
-    offsets = [-CORNICHE_WEST - 1.0, -CORNICHE_WEST, -11.0, -5.0, 0.0, 1.0, 5.0, 9.0, CORNICHE_EAST]
-    # Décalages en travers : négatifs depuis l'axe vers la terre ; positifs depuis le bord de chaussée vers la mer.
-    across = [axis + east * o if o <= 0 else axis + east * (half + (0.0 if o == 1.0 else o))[:, None] for o in offsets]
-    natural = np.median(np.stack([height(a[:, 0], a[:, 1]) for a in across[1:-1]]), axis=0)
-    from scipy.ndimage import gaussian_filter1d
-    profile = gaussian_filter1d(natural, 20, mode="nearest")
-    ends = np.clip(np.minimum(marks, marks[-1] - marks) / 30.0, 0, 1)   # raccord sur 30 m à chaque bout
-    profile = natural * (1 - ends) + profile * ends
-    print(f"corniche Chapuis : {marks[-1]:.0f} m, relief {natural.min():.1f}–{natural.max():.1f} m -> profil {profile.min():.1f}–{profile.max():.1f} m, "
-          f"pente max {np.abs(np.diff(profile) / 4.0).max() * 100:.1f} %")
-    for k, ring in enumerate(across):
-        if k == 0:   # crête côté terre : le terrain naturel s'il est plus haut (talus), sinon la corniche
-            crest = np.maximum(profile, height(ring[:, 0], ring[:, 1]))
-            graded_points.append(ring); graded_heights.append(crest)
-            for j in range(len(ring) - 1):   # mur de soutènement si le talus dépasse 1,2 m
-                if crest[j] - profile[j] > 1.2 or crest[j + 1] - profile[j + 1] > 1.2:
-                    foot = across[1]
-                    WALLS.extend(round(float(v), 2) for v in (foot[j, 0], foot[j, 1], foot[j + 1, 0], foot[j + 1, 1],
-                                 profile[j] - 0.4, crest[j] + 0.9, profile[j + 1] - 0.4, crest[j + 1] + 0.9))
-        else:
-            graded_points.append(ring); graded_heights.append(profile.copy())
-    corridor = np.vstack(across)
-    corniche = (len(offsets), len(marks), ends)   # recalculé après l'abaissement du rivage (voir plus bas)
-    interior = interior[cKDTree(corridor).query(interior)[0] > 6.0]
-    coast_points = coast_points[cKDTree(corridor).query(coast_points)[0] > 3.0]
+    corniche_blocks = []   # (nom, début dans les points ajoutés, rangées, points par rangée, raccord)
+    for name, axis_points, land_side, sea_side in CORNICHES:
+        line = np.array([(x, n) for x, n, _ in axis_points]); halves = np.array([h for _, _, h in axis_points])
+        steps = np.concatenate([[0], np.cumsum(np.hypot(*np.diff(line, axis=0).T))])
+        marks = np.arange(0, steps[-1] + 0.01, 4.0)
+        axis = np.column_stack([np.interp(marks, steps, line[:, 0]), np.interp(marks, steps, line[:, 1])])
+        half = np.interp(marks, steps, halves)
+        tangent = np.gradient(axis, axis=0)
+        tangent /= np.maximum(np.linalg.norm(tangent, axis=1, keepdims=True), 1e-6)
+        east = np.column_stack([tangent[:, 1], -tangent[:, 0]])   # à droite du sens de l'axe : la mer
+        # Décalages en travers : négatifs depuis l'axe vers la terre ; positifs depuis le bord de chaussée vers la mer.
+        inner = [-land_side - 1.0, -land_side] + [o for o in (-11.0, -5.0) if o > -land_side] + [0.0]
+        offsets = inner + [1.0, 5.0, sea_side - 0.4, sea_side]
+        across = [axis + east * o if o <= 0 else axis + east * (half + (0.0 if o == 1.0 else o))[:, None] for o in offsets]
+        ends = np.clip(np.minimum(marks, marks[-1] - marks) / 30.0, 0, 1)   # raccord sur 30 m à chaque bout
+        start = sum(len(g) for g in graded_points)
+        for k, ring in enumerate(across):
+            graded_points.append(ring); graded_heights.append(height(ring[:, 0], ring[:, 1]))   # recalculé plus bas
+        corniche_blocks.append((name, start, len(offsets), len(marks), ends))
+        corridor = np.vstack(across)
+        interior = interior[cKDTree(corridor).query(interior)[0] > 6.0]
+        coast_points = coast_points[cKDTree(corridor).query(coast_points)[0] > 3.0]
     graded_count = sum(len(g) for g in graded_points)
 
     points = np.vstack([coast_points, interior] + graded_points)
@@ -337,28 +329,34 @@ def main():
     # Plaine très basse (Seybouse, faux rivage) : la terre reste au-dessus de l'eau, sans flaques de mer dans les terres.
     heights = np.where(reach > 2, np.maximum(heights, np.minimum(0.25 + 0.02 * reach, 0.9)), heights)
     if graded_count:
-        lowered_corniche = heights[-corniche[0] * corniche[1]:].reshape(corniche[0], corniche[1]).copy()
+        first = len(points) - graded_count
+        lowered = heights.copy()
         heights[-graded_count:] = np.concatenate(graded_heights)
-        # Corniche : profil tiré du sol tel qu'il est dans le jeu (rivage abaissé), pour rester au niveau de la plage.
-        c_rows, c_count, c_ends = corniche
-        natural = np.median(lowered_corniche[1:-1], axis=0)
         from scipy.ndimage import gaussian_filter1d
-        profile = gaussian_filter1d(natural, 2.5, mode="nearest") * (1 - c_ends) + gaussian_filter1d(natural, 20, mode="nearest") * c_ends
-        steepest = int(np.argmax(np.abs(np.diff(profile))))
-        print("  pente la plus forte à", round(steepest * 4.0), "m du début sur", round(c_count * 4.0), "m")
-        block = np.tile(profile, (c_rows, 1))
-        block[0] = np.maximum(profile, lowered_corniche[0])   # crête côté terre
-        heights[-c_rows * c_count:] = block.ravel()
-        # Plage au pied de la promenade (vidéo : le sable est à peine plus bas que le muret) : pente régulière
-        # du pied du muret (1,3 m sous la promenade) jusqu'au bord de l'eau.
-        wall_row = points[-c_count:]
-        d, j = cKDTree(wall_row).query(points)
-        sand = on_beach & (d < 90) & (np.arange(len(points)) < len(points) - c_rows * c_count)
-        t = d / np.maximum(d + reach, 1e-6)
-        target = (profile[j] - 1.3) * (1 - t) + 0.25 * t
-        heights = np.where(sand, np.maximum(heights, target), heights)
-        print("  plage relevée au pied de la promenade :", int((sand & (target > heights - 1e-6)).sum()), "points")
-        print(f"corniche Chapuis après rivage : profil {profile.min():.1f}–{profile.max():.1f} m, pente max {np.abs(np.diff(profile) / 4.0).max() * 100:.1f} %")
+        for name, start, c_rows, c_count, c_ends in corniche_blocks:
+            # Profil tiré du sol tel qu'il est dans le jeu (rivage abaissé), pour rester au niveau de la plage.
+            block_at = first + start
+            ground_now = lowered[block_at:block_at + c_rows * c_count].reshape(c_rows, c_count)
+            natural = np.median(ground_now[1:-1], axis=0)
+            profile = gaussian_filter1d(natural, 2.5, mode="nearest") * (1 - c_ends) + gaussian_filter1d(natural, 20, mode="nearest") * c_ends
+            block = np.tile(profile, (c_rows, 1))
+            block[0] = np.maximum(profile, ground_now[0])   # crête côté terre : le talus s'il est plus haut
+            heights[block_at:block_at + c_rows * c_count] = block.ravel()
+            ring = points[block_at:block_at + c_rows * c_count].reshape(c_rows, c_count, 2)
+            for j in range(c_count - 1):   # mur de soutènement côté terre si le talus dépasse 1,2 m
+                if block[0, j] - profile[j] > 1.2 or block[0, j + 1] - profile[j + 1] > 1.2:
+                    foot = ring[1]
+                    WALLS.extend(round(float(v), 2) for v in (foot[j, 0], foot[j, 1], foot[j + 1, 0], foot[j + 1, 1],
+                                 profile[j] - 0.4, block[0, j] + 0.9, profile[j + 1] - 0.4, block[0, j + 1] + 0.9))
+            # Plage au pied de la promenade : pente régulière du muret jusqu'au bord de l'eau.
+            wall_row = ring[-1]
+            d, j = cKDTree(wall_row).query(points)
+            sand = on_beach & (d < 90) & ((np.arange(len(points)) < first))
+            t = d / np.maximum(d + reach, 1e-6)
+            target = (profile[j] - 1.3) * (1 - t) + 0.25 * t
+            heights = np.where(sand, np.maximum(heights, target), heights)
+            print(f"corniche {name} : {c_count * 4:.0f} m, profil {profile.min():.1f}–{profile.max():.1f} m, "
+                  f"pente max {np.abs(np.diff(profile) / 4.0).max() * 100:.1f} %")
     print("rivage abaissé :", int(lowered.sum()), "points du terrain")
 
     # --- couleur de chaque point : type de sol OSM, sinon selon l'altitude et la pente
