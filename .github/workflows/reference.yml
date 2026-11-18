@@ -8,6 +8,9 @@ on:
         description: "x0 n0 x1 n1 [zoom] (mètres du jeu)"
         required: true
 
+permissions:
+  contents: write
+
 jobs:
   fetch:
     runs-on: ubuntu-latest
@@ -18,8 +21,12 @@ jobs:
           python-version: "3.12"
       - run: pip install pillow numpy
       - run: python tools/reference_imagery.py ${{ inputs.rect }}
-      - uses: actions/upload-artifact@v4
-        with:
-          name: reference
-          path: reference.jpg
-          retention-days: 1
+      # Branche temporaire (supprimée dès que l'image est récupérée), jamais fusionnée dans main.
+      - run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout --orphan tmp-reference
+          git rm -rfq --cached .
+          git add -f reference.jpg
+          git commit -qm "reference temporaire"
+          git push -f origin tmp-reference
