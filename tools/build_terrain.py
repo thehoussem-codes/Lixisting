@@ -290,7 +290,7 @@ def main():
         corniche_blocks.append((name, start, len(offsets), len(marks), ends))
         corridor = np.vstack(across)
         interior = interior[cKDTree(corridor).query(interior)[0] > 6.0]
-        coast_points = coast_points[cKDTree(corridor).query(coast_points)[0] > 3.0]
+        # (Les points de la côte restent tous : le talus sous-marin est construit anneau par anneau à partir d'eux.)
     graded_count = sum(len(g) for g in graded_points)
 
     points = np.vstack([coast_points, interior] + graded_points)
@@ -389,7 +389,12 @@ def main():
     beach_tree = cKDTree(np.vstack(beach_rings)) if beach_rings else None
     for ring in coast:
         count = len(ring)
-        top = np.arange(start, start + count)
+        # Le haut du talus a ses propres sommets (copies de la côte) : sinon l'éclairage moyenné de la plage et
+        # du talus assombrit le sable le long du rivage (dents sombres).
+        positions.append(positions[0][start:start + count].copy())
+        color_list.append(colors[start:start + count].copy())
+        top = np.arange(offset, offset + count)
+        offset += count
         # Fond marin : chaque point de la côte est prolongé vers le large, en pente douce
         # devant une plage, en pente raide au pied d'une falaise ou d'un quai.
         tangent = np.roll(ring, -1, axis=0) - np.roll(ring, 1, axis=0)

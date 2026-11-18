@@ -477,6 +477,7 @@ export class Game {
 
   private setupShadows(): void {
     this.scene.traverse((node) => { if ((node as THREE.DirectionalLight).isDirectionalLight) this.sun = node as THREE.DirectionalLight; });
+    if (this.sun) this.water?.setSun(this.sun.position.clone().normalize());
     if (!this.sun || !SHADOWS) return;
     this.sunDirection.copy(this.sun.position).normalize();
     this.renderer.shadowMap.enabled = true;

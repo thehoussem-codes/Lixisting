@@ -20,3 +20,7 @@ Le lissage du volant (vitesse de rotation limitée, plus lente à haute vitesse,
 Emplacement des forêts, broussailles et prairies : **ESA WorldCover 10 m 2021 v200**, licence [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 © ESA WorldCover project / Contains modified Copernicus Sentinel data (2021) processed by ESA WorldCover consortium.
 Données extraites par `tools/extract_landcover.py` dans `data/landcover/`.
+
+## Profondeur de la mer
+
+Fonds marins : **EMODnet Bathymetry**, modèle numérique moyen (maille 1/16 de minute), licence [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Repli possible : NOAA ETOPO1 (domaine public). Extraction : `tools/extract_bathymetry.py` ; carte du jeu : `tools/build_sea.py` → `public/world/sea.png`.
