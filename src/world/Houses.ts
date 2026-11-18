@@ -1,3 +1,4 @@
+import { MOBILE } from '../engine/Mobile';
 import * as THREE from 'three';
 import type { MeshBuilder } from './MeshBuilder';
 import type { FacadeStyle } from './Textures';
@@ -140,7 +141,7 @@ export function buildHouse(h: HouseContext): void {
     }
 
     // Balcon en saillie sur la façade principale, à chaque étage.
-    if (isFront && kind !== 'medina' && kind !== 'unfinished' && length >= 5) {
+    if (isFront && kind !== 'medina' && kind !== 'unfinished' && length >= 5 && !MOBILE) {
       const dx = (c[0] - a[0]) / length, dn = (c[1] - a[1]) / length, ox = dn, on = -dx; // extérieur : à droite du sens de parcours
       const DEPTH = 0.9, from = 0.07, to = kind === 'villa' ? 0.93 : 0.55;
       for (let k = 1; k < storeys; k++) {
@@ -205,7 +206,7 @@ export function buildHouse(h: HouseContext): void {
   }
 
   // Citerne d'eau sur le toit plat (très courante), une maison sur deux.
-  if ((kind === 'villa' || kind === 'unfinished') && hash % 2 === 0 && area > 40) {
+  if ((kind === 'villa' || kind === 'unfinished') && hash % 2 === 0 && area > 40 && !MOBILE) {
     const [x, n] = ring[(h.index * 3) % count], tx = cx + (x - cx) * 0.45, tn = cn + (n - cn) * 0.45, y = top + (kind === 'villa' ? 0.22 : 0);
     boxAt(h.solid, tx, tn, 0.1, y, y + 0.6, CONCRETE);
     boxAt(h.solid, tx, tn, 0.5, y + 0.6, y + 1.55, TANK[h.index % TANK.length]);

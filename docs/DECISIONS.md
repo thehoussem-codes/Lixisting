@@ -397,3 +397,14 @@ Skills chargés : `physics-tuning`, `game-ai`, `audio-design`, `threejs-material
 - Mode allégé : pas d'ombres ni d'anticrénelage, résolution 0,7 (ajustée ensuite automatiquement), vue à 850 m avec
   brouillard plus dense, arbres affichés à 360 m, une plante de forêt sur deux (houppiers élargis).
 - Vérifié en émulation téléphone (844 × 390) : joystick, caméra au doigt, écran vertical. Pas sur un vrai téléphone.
+
+## Plantage sur téléphone : mémoire
+
+- Cause probable : pic de 1,67 Go de mémoire JavaScript pendant la construction de la ville (+ ≈ 460 Mo de
+  géométrie), au-delà de ce qu'un navigateur de téléphone accorde à un onglet.
+- `MeshBuilder` stocke désormais sommets, couleurs (1 octet par canal), coordonnées de texture et indices dans des
+  tableaux typés qui grandissent par doublement, libérés après `build()` ; indices sur 16 bits quand c'est possible.
+- Décor fixe : la copie en mémoire des maillages est libérée dès leur envoi à la carte graphique.
+- Téléphone : pas de corniches, de stores, de balcons d'immeubles ou de maisons, ni de citernes (moitié moins de
+  géométrie de bâtiments).
+- Mesuré en émulation téléphone : pic 1 670 → 543 Mo, mémoire après chargement 687 → 373 Mo, géométrie 462 → ≈ 295 Mo.

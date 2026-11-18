@@ -1,3 +1,4 @@
+import { MOBILE } from '../engine/Mobile';
 import * as THREE from 'three';
 import { ownedByLandmark } from './Landmarks';
 import { Collider } from './Collider';
@@ -357,7 +358,7 @@ export function buildBuildings(scene: THREE.Scene, data: WorldData, ground: (x: 
         const u = Math.max(1, Math.round(length / FACADE_WIDTH[groundStyle]));
         wallQuad(builderIn(walls, `${groundStyle}|${cell}`), ax, az, bx, bz, base, upperFrom, wall, 0.8, 0.9, u, 0, 1);
         // Stores en toile au-dessus des vitrines (immeubles d'habitation à commerces).
-        if (groundStyle === 'shop' && length > 5) {
+        if (groundStyle === 'shop' && length > 5 && !MOBILE) {
           const ox = -(bz - az) / length, oz = (bx - ax) / length, bays = Math.max(1, Math.round(length / 3.2));
           for (let b = 0; b < bays; b++) {
             if ((index + b * 3 + i) % 3 === 0) continue; // une vitrine sur trois sans store
@@ -385,8 +386,8 @@ export function buildBuildings(scene: THREE.Scene, data: WorldData, ground: (x: 
           wallQuad(rails, a1[0], a1[2], b1[0], b1[2], y, y + 1.0, WHITE, 1, 1, Math.max(1, Math.round(length / 1.1)), 0, 1);
         }
       }
-      // Immeubles d'habitation : balcons superposés à garde-corps maçonné, sur une façade longue sur deux.
-      if (tall && !colonial && length > 9 && (estate ? i % 2 === 0 : (index * 31 + i * 17) % 2 === 0)) {
+      // Immeubles d'habitation (pas sur téléphone : trop de géométrie) : balcons superposés à garde-corps maçonné, sur une façade longue sur deux.
+      if (!MOBILE && tall && !colonial && length > 9 && (estate ? i % 2 === 0 : (index * 31 + i * 17) % 2 === 0)) {
         const ox = -(bz - az) / length, oz = (bx - ax) / length;
         const dx = (bx - ax) / length, dz = (bz - az) / length;
         const spans = length > 16 ? [[0.1, 0.42], [0.58, 0.9]] : [[0.22, 0.78]];
@@ -425,7 +426,7 @@ export function buildBuildings(scene: THREE.Scene, data: WorldData, ground: (x: 
     }
 
     // Corniche en saillie en tête de façade (immeubles et bâtiments publics) : le toit ne finit plus en arête nue.
-    if (tall || building.t === 'public' || building.t === 'school' || building.t === 'hospital') {
+    if (!MOBILE && (tall || building.t === 'public' || building.t === 'school' || building.t === 'hospital')) {
       const outer = grow(ring, 0.38), tone = colonial ? CORNICE : wall.clone().multiplyScalar(0.96);
       for (let i = 0; i < count; i++) {
         const j = (i + 1) % count;

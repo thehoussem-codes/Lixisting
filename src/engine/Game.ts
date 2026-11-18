@@ -146,6 +146,23 @@ export class Game {
       rows.sort((a, b) => b.tris - a.tris);
       return { total: rows.length, unchunked: rows.filter((r) => !r.chunked).reduce((s, r) => s + r.tris, 0), top: rows.slice(0, 25) };
     };
+    // Essais : mémoire des maillages envoyés à la carte graphique (Mo), par type de matériau.
+    (window as unknown as Record<string, unknown>).__scene = this.scene;
+    (window as unknown as Record<string, unknown>).lixitingGpu = () => {
+      const seen = new Set<THREE.BufferGeometry>(), out: Record<string, number> = {};
+      let total = 0;
+      this.scene.traverse((object) => {
+        const mesh = object as THREE.Mesh;
+        if (!mesh.isMesh || !mesh.geometry || seen.has(mesh.geometry)) return;
+        seen.add(mesh.geometry);
+        let bytes = mesh.geometry.index ? mesh.geometry.index.count * 2 : 0;
+        for (const a of Object.values(mesh.geometry.attributes)) bytes += (a as THREE.BufferAttribute).count * (a as THREE.BufferAttribute).itemSize * 4;
+        const key = (mesh.material as THREE.Material).type + (((mesh.material as THREE.MeshLambertMaterial).map) ? '+map' : '') + ':' + (mesh.name || ((mesh.material as THREE.MeshLambertMaterial).vertexColors ? 'vc' : '') + (mesh.renderOrder ? 'r' + mesh.renderOrder : ''));
+        out[key] = (out[key] ?? 0) + bytes / 1e6; total += bytes / 1e6;
+      });
+      for (const k of Object.keys(out)) out[k] = Math.round(out[k]);
+      return { total: Math.round(total), geometries: seen.size, ...out };
+    };
     (window as unknown as Record<string, unknown>).lixitingDebug = () => ({
       traffic: this.traffic?.cars.filter((c) => c.object.visible).length ?? 0,
       nearestTraffic: Math.min(...(this.traffic?.cars ?? []).map((c) => c.object.position.distanceTo(this.player.object.position))),
@@ -215,9 +232,12 @@ export class Game {
       // En mer et sur la pente du rivage (sous 40 cm), pas de décalage : c'est le fond marin.
       this.ground = (x, z) => { const h = terrain.heightAt(x, z); return h > 0.39 ? h + ROAD_SURFACE : h; };
       Car.waterLevel = 0;
+      const heap = () => Math.round(((performance as unknown as { memory?: { usedJSHeapSize: number } }).memory?.usedJSHeapSize ?? 0) / 1e6);
+      const h0 = heap();
       const t0 = performance.now();
       const world = buildAnnabaWorld(this.scene, data, terrain);
       const t1 = performance.now();
+      const h1 = heap();
       this.collider = world.collider;
       this.sky = world.sky;
       this.water = world.water;
@@ -240,6 +260,7 @@ export class Game {
       const treeCount = this.trees.count;
       buildWalls(this.scene, trees.wall, this.collider);
       const t2 = performance.now();
+      const h2 = heap();
       Locations.load(data).then((locations) => { this.locations = locations; });
       // Grands maillages d'un seul tenant (terrain, chaussées, trottoirs…) : découpés en secteurs de 400 m.
       const whole: THREE.Mesh[] = [];
@@ -256,6 +277,17 @@ export class Game {
         mesh.geometry.dispose();
       }
       // Blocs de décor (bâtiments, arbres, lampadaires) : on notera lesquels sont assez proches pour être affichés.
+      // Décor fixe : une fois envoyé à la carte graphique, la copie en mémoire n'est plus utile ; on la libère
+      // (le téléphone n'a pas assez de mémoire pour garder les deux). Terrain, eau et objets animés exclus.
+      const release = function (this: THREE.BufferAttribute) { (this as unknown as { array: unknown }).array = null; };
+      this.scene.traverse((object) => {
+        const mesh = object as THREE.Mesh;
+        if (!mesh.isMesh || mesh.parent !== this.scene || !mesh.geometry || mesh.geometry === terrain.mesh.geometry) return;
+        if ((mesh as unknown as THREE.InstancedMesh).isInstancedMesh || !(mesh.material instanceof THREE.MeshLambertMaterial)) return;
+        mesh.geometry.computeBoundingSphere();
+        for (const attribute of Object.values(mesh.geometry.attributes)) (attribute as THREE.BufferAttribute).onUpload(release);
+        mesh.geometry.index?.onUpload(release);
+      });
       this.scene.traverse((object) => {
         const mesh = object as THREE.Mesh;
         if (!mesh.isMesh || mesh.parent !== this.scene || !mesh.frustumCulled) return; // ni la mer ni le ciel
@@ -263,7 +295,7 @@ export class Game {
         const sphere = mesh.geometry.boundingSphere;
         if (sphere && sphere.radius > 6 && sphere.radius < 700) this.chunks.push({ mesh, x: sphere.center.x, z: sphere.center.z, reach: sphere.radius + ((mesh.userData.viewDistance as number | undefined) ?? VIEW_DISTANCE) });
       });
-      console.info(`Construction : ville ${Math.round(t1 - t0)} ms, végétation ${Math.round(t2 - t1)} ms, secteurs ${Math.round(performance.now() - t2)} ms, ${this.chunks.length} blocs`);
+      console.info(`Construction : ville ${Math.round(t1 - t0)} ms, végétation ${Math.round(t2 - t1)} ms, secteurs ${Math.round(performance.now() - t2)} ms, ${this.chunks.length} blocs ; mémoire ${h0} → ${h1} → ${h2} → ${heap()} Mo`);
       this.places = data.places;
       this.traffic = new Traffic(data, (car) => this.scene.add(car.object));
       this.lights = new TrafficLights(this.scene, data, this.ground);

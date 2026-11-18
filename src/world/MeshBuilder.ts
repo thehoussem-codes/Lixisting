@@ -6,25 +6,42 @@ import * as THREE from 'three';
  * permet au jeu de rester fluide (peu de "draw calls").
  */
 export class MeshBuilder {
-  private positions: number[] = [];
-  private colors: number[] = [];
-  private uvs: number[] = [];
-  private indices: number[] = [];
+  // Tableaux typés qui grandissent par doublement : deux fois moins de mémoire que des tableaux JavaScript
+  // ordinaires pendant la construction de la ville (sur téléphone, c'était ce pic de mémoire qui faisait planter).
+  private pos = new Float32Array(3 * 256);
+  private col = new Uint8Array(3 * 256);
+  private uv = new Float32Array(2 * 256);
+  private idx = new Uint32Array(3 * 256);
+  private vertexCount = 0;
+  private indexCount = 0;
 
   get isEmpty(): boolean {
-    return this.indices.length === 0;
+    return this.indexCount === 0;
+  }
+
+  /** Nombre de sommets déjà posés (numéro du prochain sommet). */
+  private get base(): number {
+    return this.vertexCount;
   }
 
   /** Ajoute un sommet, renvoie son numéro. u, v : position dans la texture. */
   vertex(x: number, y: number, z: number, color: THREE.Color, shade = 1, u = 0, v = 0): number {
-    this.positions.push(x, y, z);
-    this.colors.push(color.r * shade, color.g * shade, color.b * shade);
-    this.uvs.push(u, v);
-    return this.positions.length / 3 - 1;
+    const i = this.vertexCount;
+    if (i * 3 + 3 > this.pos.length) {
+      const grow = <T extends Float32Array | Uint8Array>(a: T): T => { const b = new (a.constructor as new (n: number) => T)(a.length * 2); b.set(a); return b; };
+      this.pos = grow(this.pos); this.col = grow(this.col); this.uv = grow(this.uv);
+    }
+    this.pos[i * 3] = x; this.pos[i * 3 + 1] = y; this.pos[i * 3 + 2] = z;
+    const c = (value: number) => Math.max(0, Math.min(255, Math.round(value * shade * 255)));
+    this.col[i * 3] = c(color.r); this.col[i * 3 + 1] = c(color.g); this.col[i * 3 + 2] = c(color.b);
+    this.uv[i * 2] = u; this.uv[i * 2 + 1] = v;
+    this.vertexCount++;
+    return i;
   }
 
   triangle(a: number, b: number, c: number): void {
-    this.indices.push(a, b, c);
+    if (this.indexCount + 3 > this.idx.length) { const b2 = new Uint32Array(this.idx.length * 2); b2.set(this.idx); this.idx = b2; }
+    this.idx[this.indexCount++] = a; this.idx[this.indexCount++] = b; this.idx[this.indexCount++] = c;
   }
 
   /**
@@ -37,7 +54,7 @@ export class MeshBuilder {
     if (contour.length < 3) return;
     if (THREE.ShapeUtils.isClockWise(contour)) contour.reverse();
     const faces = THREE.ShapeUtils.triangulateShape(contour, []);
-    const base = this.positions.length / 3;
+    const base = this.base;
     for (const p of contour) this.vertex(p.x, y, -p.y, color);
     for (const face of faces) this.triangle(base + face[0], base + face[1], base + face[2]);
   }
@@ -51,7 +68,7 @@ export class MeshBuilder {
     const count = points.length / 2;
     if (count < 2) return;
     const half = width / 2;
-    const base = this.positions.length / 3;
+    const base = this.base;
     let travelled = 0;
     for (let i = 0; i < count; i++) {
       const x = points[i * 2];
@@ -99,13 +116,18 @@ export class MeshBuilder {
     for (let i = 0; i < segments; i++) this.triangle(center, ring[(i + 1) % segments], ring[i]);
   }
 
+  /** Produit la géométrie et libère la mémoire de construction (le constructeur repart à vide). */
   build(): THREE.BufferGeometry {
     const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.Float32BufferAttribute(this.positions, 3));
-    geometry.setAttribute('color', new THREE.Float32BufferAttribute(this.colors, 3));
-    geometry.setAttribute('uv', new THREE.Float32BufferAttribute(this.uvs, 2));
-    geometry.setIndex(this.indices);
+    const n = this.vertexCount;
+    geometry.setAttribute('position', new THREE.BufferAttribute(this.pos.slice(0, n * 3), 3));
+    geometry.setAttribute('color', new THREE.BufferAttribute(this.col.slice(0, n * 3), 3, true)); // couleurs sur 1 octet
+    geometry.setAttribute('uv', new THREE.BufferAttribute(this.uv.slice(0, n * 2), 2));
+    const indices = this.idx.subarray(0, this.indexCount);
+    geometry.setIndex(new THREE.BufferAttribute(n <= 65535 ? Uint16Array.from(indices) : indices.slice(), 1));
     geometry.computeVertexNormals();
+    this.pos = new Float32Array(3 * 256); this.col = new Uint8Array(3 * 256); this.uv = new Float32Array(2 * 256); this.idx = new Uint32Array(3 * 256);
+    this.vertexCount = 0; this.indexCount = 0;
     return geometry;
   }
 }
