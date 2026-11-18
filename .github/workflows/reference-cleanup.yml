@@ -1,0 +1,15 @@
+# Supprime la branche temporaire de la vue aérienne de référence.
+name: Effacer la vue aérienne de référence
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  clean:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: git push origin --delete tmp-reference || true
