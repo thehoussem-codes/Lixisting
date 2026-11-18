@@ -13,3 +13,9 @@
 ## Idées de conduite
 
 Le lissage du volant (vitesse de rotation limitée, plus lente à haute vitesse, retour rapide au centre) et l'épure d'Ackermann s'inspirent du projet libre [codingedger/car-game](https://github.com/codingedger/car-game) (GPL v3). Aucun code ni fichier de ce projet n'a été copié : notre version est réécrite pour notre moteur.
+
+## Véhicules utilitaires (Kenney Car Kit 3.1)
+
+| Fichiers | Titre | Auteur | Page | Licence |
+| --- | --- | --- | --- | --- |
+| models/vehicles/kenney-{van,delivery,delivery-flat,truck-flat,garbage-truck,firetruck,tractor}.glb | Car Kit (3.1) | Kenney | https://kenney.nl/assets/car-kit (copie : github.com/Arslan12216775/kenney_car-kit) | CC0 1.0 (domaine public) |

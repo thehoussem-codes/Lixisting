@@ -594,6 +594,251 @@
       "weight": 0.5,
       "plates": true,
       "topSpeed": 130
+    },
+    "fourgon": {
+      "enabled": true,
+      "base": "suv",
+      "label": "Fourgon",
+      "model": "models/vehicles/kenney-van.glb",
+      "keepWheels": false,
+      "length": 3.48,
+      "width": 1.9,
+      "height": 1.71,
+      "wheelRadius": 0.38,
+      "wheels": [
+        [
+          0.507,
+          -0.963
+        ],
+        [
+          -0.507,
+          -0.963
+        ],
+        [
+          0.507,
+          0.963
+        ],
+        [
+          -0.507,
+          0.963
+        ]
+      ],
+      "collision": {
+        "halfLength": 1.74,
+        "halfWidth": 0.95
+      },
+      "weight": 0.5,
+      "topSpeed": 140
+    },
+    "camion-caisse": {
+      "enabled": true,
+      "base": "suv",
+      "label": "Camion à caisse",
+      "model": "models/vehicles/kenney-delivery.glb",
+      "keepWheels": false,
+      "length": 4.55,
+      "width": 2.1,
+      "height": 2.31,
+      "wheelRadius": 0.42,
+      "wheels": [
+        [
+          0.56,
+          -0.854
+        ],
+        [
+          -0.56,
+          -0.854
+        ],
+        [
+          0.56,
+          1.414
+        ],
+        [
+          -0.56,
+          1.414
+        ]
+      ],
+      "collision": {
+        "halfLength": 2.27,
+        "halfWidth": 1.05
+      },
+      "weight": 0.35,
+      "topSpeed": 110
+    },
+    "camion-plateau": {
+      "enabled": true,
+      "base": "suv",
+      "label": "Camion plateau",
+      "model": "models/vehicles/kenney-delivery-flat.glb",
+      "keepWheels": false,
+      "length": 4.55,
+      "width": 2.1,
+      "height": 1.89,
+      "wheelRadius": 0.42,
+      "wheels": [
+        [
+          0.63,
+          -0.854
+        ],
+        [
+          -0.63,
+          -0.854
+        ],
+        [
+          0.63,
+          1.414
+        ],
+        [
+          -0.63,
+          1.414
+        ]
+      ],
+      "collision": {
+        "halfLength": 2.27,
+        "halfWidth": 1.05
+      },
+      "weight": 0.3,
+      "topSpeed": 110
+    },
+    "camionnette": {
+      "enabled": true,
+      "base": "suv",
+      "label": "Camionnette plateau",
+      "model": "models/vehicles/kenney-truck-flat.glb",
+      "keepWheels": false,
+      "length": 3.39,
+      "width": 1.85,
+      "height": 1.6,
+      "wheelRadius": 0.37,
+      "wheels": [
+        [
+          0.493,
+          -0.786
+        ],
+        [
+          -0.493,
+          -0.786
+        ],
+        [
+          0.493,
+          0.966
+        ],
+        [
+          -0.493,
+          0.966
+        ]
+      ],
+      "collision": {
+        "halfLength": 1.7,
+        "halfWidth": 0.93
+      },
+      "weight": 0.4,
+      "topSpeed": 130
+    },
+    "benne": {
+      "enabled": true,
+      "base": "suv",
+      "label": "Benne à ordures",
+      "model": "models/vehicles/kenney-garbage-truck.glb",
+      "keepWheels": false,
+      "length": 5.17,
+      "width": 2.4,
+      "height": 2.4,
+      "wheelRadius": 0.45,
+      "wheels": [
+        [
+          0.6,
+          -0.765
+        ],
+        [
+          -0.6,
+          -0.765
+        ],
+        [
+          0.6,
+          1.665
+        ],
+        [
+          -0.6,
+          1.665
+        ]
+      ],
+      "collision": {
+        "halfLength": 2.58,
+        "halfWidth": 1.2
+      },
+      "weight": 0.1,
+      "topSpeed": 90
+    },
+    "pompiers": {
+      "enabled": true,
+      "base": "suv",
+      "label": "Pompiers (Protection civile)",
+      "model": "models/vehicles/kenney-firetruck.glb",
+      "keepWheels": false,
+      "length": 5.55,
+      "width": 2.45,
+      "height": 2.78,
+      "wheelRadius": 0.49,
+      "wheels": [
+        [
+          0.817,
+          -1.078
+        ],
+        [
+          -0.817,
+          -1.078
+        ],
+        [
+          0.817,
+          1.568
+        ],
+        [
+          -0.817,
+          1.568
+        ]
+      ],
+      "collision": {
+        "halfLength": 2.77,
+        "halfWidth": 1.23
+      },
+      "weight": 0.06,
+      "topSpeed": null
+    },
+    "tracteur": {
+      "enabled": true,
+      "base": "suv",
+      "label": "Tracteur",
+      "model": "models/vehicles/kenney-tractor.glb",
+      "keepWheels": false,
+      "length": 3.11,
+      "width": 1.9,
+      "height": 2.27,
+      "wheelRadius": 0.425,
+      "wheels": [
+        [
+          0.467,
+          -0.814
+        ],
+        [
+          -0.467,
+          -0.814
+        ],
+        [
+          0.467,
+          1.035
+        ],
+        [
+          -0.467,
+          1.035
+        ]
+      ],
+      "collision": {
+        "halfLength": 1.55,
+        "halfWidth": 0.95
+      },
+      "weight": 0.04,
+      "topSpeed": 40
     }
   },
   "props": {}

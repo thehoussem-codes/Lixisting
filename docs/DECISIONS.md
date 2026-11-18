@@ -435,3 +435,13 @@ Skills chargés : `physics-tuning`, `game-ai`, `audio-design`, `threejs-material
   change moins souvent (toutes les 3 s au plus), chaque changement coûtant une image saccadée.
 - « Voitures du PDF » : aucun PDF reçu ; toutes les voitures des fichiers fournis sont déjà dans le jeu, sauf la
   Mercedes G63 de police (non intégrée).
+
+## Véhicules utilitaires (Kenney Car Kit, CC0)
+
+- Aucune autre voiture n'était exploitable dans les fichiers fournis (Mercedes G63 de police : archive .rar que
+  l'environnement de travail ne sait pas ouvrir ; scooter indien : un seul bloc, roues non séparées).
+- Ajout de 7 véhicules du Car Kit de Kenney (CC0, domaine public), à l'échelle réelle par la largeur : fourgon,
+  camion à caisse, camion plateau, camionnette plateau, benne à ordures, pompiers (Protection civile, sans limite de
+  vitesse, absent du garage) et tracteur. Roues séparées (elles tournent), textures intégrées.
+- Style plus simple et plus « jouet » que le pack de voitures : à retirer si Houssem le juge trop différent.
+- Ils roulent dans la circulation (plus rares que les voitures) et sont exposés au Garage de l'Est (19 véhicules).

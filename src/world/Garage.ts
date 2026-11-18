@@ -113,7 +113,7 @@ export function buildGarage(scene: THREE.Scene, data: WorldData, ground: Ground,
     boxAt(neon, x, -n, 3, 0.25, base + HEIGHT - 0.25, base + HEIGHT - 0.12, WHITE, Math.atan2(-dn, dx));
   }
 
-  const add = (b: MeshBuilder, material: THREE.Material, shadow = true) => { const m = new THREE.Mesh(b.build(), material); m.castShadow = shadow; m.receiveShadow = true; scene.add(m); };
+  const add = (b: MeshBuilder, material: THREE.Material, shadow = true) => { const m = new THREE.Mesh(b.build(), material); m.castShadow = shadow; m.receiveShadow = !shadow; scene.add(m); };
   add(shell, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }));
   add(trim, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }));
   add(floor, new THREE.MeshLambertMaterial({ vertexColors: true, emissive: 0x24221e }), false);
