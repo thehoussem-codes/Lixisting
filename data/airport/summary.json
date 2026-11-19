@@ -1,0 +1,37 @@
+{
+  "extracted_at": "2026-11-19T23:24:42+00:00",
+  "bbox_south_west_north_east": [
+    36.795,
+    7.78,
+    36.85,
+    7.86
+  ],
+  "elements": 2023,
+  "by_kind": {
+    "building=yes": 1685,
+    "highway=service": 159,
+    "aeroway=parking_position": 30,
+    "aeroway=taxiway": 28,
+    "highway=unclassified": 27,
+    "highway=trunk": 22,
+    "highway=tertiary": 13,
+    "landuse=farmland": 10,
+    "aeroway=holding_position": 8,
+    "landuse=residential": 8,
+    "highway=secondary": 5,
+    "landuse=orchard": 4,
+    "aeroway=apron": 4,
+    "aeroway=runway": 3,
+    "barrier=fence": 3,
+    "landuse=industrial": 3,
+    "aeroway=helipad": 3,
+    "aeroway=terminal": 2,
+    "aeroway=aerodrome": 1,
+    "landuse=grass": 1,
+    "landuse=farmyard": 1,
+    "landuse=construction": 1,
+    "landuse=cemetery": 1,
+    "building=mosque": 1
+  },
+  "licence": "ODbL, © contributeurs OpenStreetMap"
+}
