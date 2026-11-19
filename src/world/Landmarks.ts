@@ -5,6 +5,7 @@ import { buildSheratonGrounds } from './SheratonGrounds';
 import { buildSousTerrain } from './SousTerrain';
 import { CHAPUIS_REPLACED, buildChapuis } from './Chapuis';
 import { SAINT_CLOUD_REPLACED, buildSaintCloud } from './SaintCloud';
+import { type Marina, buildTocheMarina } from './TocheMarina';
 import { buildGrandePoste } from './GrandePoste';
 import { GARAGE_CENTROID, GARAGE_NAME, type Garage, buildGarage } from './Garage';
 import { buildStreetDetails } from './StreetDetails';
@@ -404,6 +405,8 @@ export interface LandmarkEdits {
   labels: { name: string; x: number; n: number; radius: number }[];
   /** Garage où sont exposées toutes les voitures normales du jeu. */
   garage: (Garage & { name: string }) | null;
+  /** Ponton de la plage Toche et ses bateaux à moteur. */
+  marina: Marina;
 }
 
 export function buildLandmarks(scene: THREE.Scene, data: WorldData, ground: Ground, collider: Collider, terrain: Terrain): LandmarkEdits {
@@ -419,11 +422,13 @@ export function buildLandmarks(scene: THREE.Scene, data: WorldData, ground: Grou
   const garage = buildGarage(scene, data, ground, collider);
   const chapuis = buildChapuis(scene, data, ground, collider);
   const saintCloud = buildSaintCloud(scene, data, ground, collider);
+  const marina = buildTocheMarina(scene, ground, collider);
   return {
-    ground: (x, z, y) => sousTerrain.ground(x, z, y) ?? theatre?.ground(x, z) ?? chapuis.ground(x, z) ?? saintCloud.ground(x, z) ?? null,
+    ground: (x, z, y) => sousTerrain.ground(x, z, y) ?? theatre?.ground(x, z) ?? chapuis.ground(x, z) ?? saintCloud.ground(x, z) ?? marina.ground(x, z) ?? null,
     keepTree: (x, n) => grounds.keepTree(x, n) && !sousTerrain.inside(x, n) && (theatre?.keepTree(x, n) ?? true) && poste.keepTree(x, n) && details.keepTree(x, n) && !(garage?.inside(x, n) ?? false) && chapuis.keepTree(x, n) && saintCloud.keepTree(x, n),
     trees: [...grounds.palms.map(([x, n, s]): [string, number, number, number] => ['palm', x, n, s]), ...(theatre?.extra ?? []), ...poste.trees, ...chapuis.trees, ...saintCloud.trees],
     labels: theatre ? [{ name: THEATRE_NAME, x: 100, n: 473, radius: 45 }] : [],
     garage: garage ? { ...garage, name: GARAGE_NAME } : null,
+    marina,
   };
 }

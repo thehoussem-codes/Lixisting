@@ -8,6 +8,8 @@ import { Input } from './Input';
 import { Player } from '../player/Player';
 import { ThirdPersonCamera } from '../player/ThirdPersonCamera';
 import { Car } from '../vehicles/Car';
+import { Boat } from '../vehicles/Boat';
+import type { Marina } from '../world/TocheMarina';
 import { CAR_CATALOG, MOTO_CATALOG, applyVehicleAssets } from '../vehicles/CarModels';
 import { assets } from '../assets/AssetLibrary';
 import { Traffic } from '../vehicles/Traffic';
@@ -94,6 +96,11 @@ export class Game {
   private frameTime = 1 / 60;
   /** Voiture conduite en ce moment (null = à pied). */
   private driving: Car | null = null;
+  /** Bateaux à moteur du joueur (ponton de la plage Toche) et celui qu'il pilote. */
+  private boats: Boat[] = [];
+  private boating: Boat | null = null;
+  private marina: Marina | null = null;
+  private helm = new THREE.Vector3();
   /** Ce qui bloque le personnage à pied : bâtiments et voitures. */
   private obstacles = {
     blocked: (x: number, z: number, radius: number, y?: number): boolean =>
@@ -184,6 +191,24 @@ export class Game {
       for (const k of Object.keys(out)) out[k] = Math.round(out[k]);
       return { total: Math.round(total), geometries: seen.size, ...out };
     };
+    // Essais : monter à bord du bateau le plus proche, quelle que soit la distance ; état des bateaux.
+    (window as unknown as Record<string, unknown>).lixitingBoat = (board = true) => {
+      if (board && !this.boating) { if (this.driving) this.toggleCar(); const near = this.nearestBoat(Infinity); if (near) this.board(near.boat); }
+      return this.boats.map((b) => ({ x: Math.round(b.position.x * 10) / 10, n: Math.round(-b.position.z * 10) / 10, y: Math.round(b.position.y * 100) / 100, kmh: Math.round(b.speed * 3.6), heading: Math.round((b.heading * 180) / Math.PI), piloted: b === this.boating }));
+    };
+    // Essais : fait naviguer le bateau piloté `seconds` secondes (pas de 1/60 s) avec les touches données.
+    (window as unknown as Record<string, unknown>).lixitingBoatSim = (seconds: number, keys: string[]) => {
+      const boat = this.boating, water = this.water;
+      if (!boat || !water) return null;
+      const fake = { isDown: (code: string) => keys.includes(code) } as unknown as Input;
+      const rows: unknown[] = [];
+      for (let i = 1; i <= Math.round(seconds * 60); i++) {
+        this.time += 1 / 60;
+        boat.update(1 / 60, fake, water, this.time, this.collider, this.ground);
+        if (i % 30 === 0) rows.push({ t: i / 60, kmh: Math.round(boat.speed * 36) / 10, x: Math.round(boat.position.x * 10) / 10, n: Math.round(-boat.position.z * 10) / 10, y: Math.round(boat.position.y * 100) / 100, heading: Math.round((boat.heading * 180) / Math.PI), ...boat.attitude });
+      }
+      return rows;
+    };
     (window as unknown as Record<string, unknown>).lixitingDebug = () => ({
       traffic: this.traffic?.cars.filter((c) => c.object.visible).length ?? 0,
       nearestTraffic: Math.min(...(this.traffic?.cars ?? []).map((c) => c.object.position.distanceTo(this.player.object.position))),
@@ -196,6 +221,7 @@ export class Game {
       scale: this.renderScale,
       swimming: this.player.swimming,
       character: this.player.probe(),
+      boat: this.boating ? { kmh: Math.round(this.boating.speed * 3.6), y: Math.round(this.boating.position.y * 100) / 100 } : null,
       car: this.driving ? { id: this.driving.spec.id, topKmh: Math.round(this.driving.topSpeed * 3.6), sprint: this.driving.spec.sprint ?? 1, gear: this.driving.gear, kmh: Math.round(this.driving.speed * 3.6), above: Math.round((this.driving.object.position.y - this.ground(this.driving.object.position.x, this.driving.object.position.z)) * 100) / 100, ...this.driving.telemetry } : null,
     });
   }
@@ -282,6 +308,9 @@ export class Game {
       }
       for (const [species, x, n, size] of world.edits.trees) ((trees as unknown as Record<string, number[]>)[species] ??= []).push(x, n, size);
       this.labels = world.edits.labels;
+      // Bateaux à moteur amarrés au ponton de la plage Toche (on les prend avec F, comme une voiture).
+      this.marina = world.edits.marina;
+      for (const spawn of this.marina.boats) this.boats.push(new Boat(this.scene, spawn.x, -spawn.n, spawn.heading, spawn.hull, spawn.stripe));
       // Port de pêche d'Annaba (36.90375, 7.77451) : bassin abrité par les jetées, rayon 330 m.
       this.harbor = new Harbor(this.scene, data, 1392, 920, 330, this.ground);
       this.trees = buildTrees(this.scene, trees, terrain.heightAt);
@@ -369,6 +398,7 @@ export class Game {
       this.setupShadows();
       this.setupReflections();
       Car.onCrash = (strength) => this.sound.crash(strength);
+      Boat.onBump = (strength) => this.sound.crash(strength * 0.6);
       // Adresse du type ...?at=x,n : démarre à ce point de la carte (mètres depuis la gare, n = nord).
       const at = new URLSearchParams(window.location.search).get('at')?.split(',').map(Number);
       if (at && at.length === 2 && at.every(Number.isFinite)) this.player.teleport(at[0], this.ground(at[0], -at[1]), -at[1]);
@@ -401,6 +431,7 @@ export class Game {
       this.driving = null;
       this.player.object.visible = true;
     }
+    if (this.boating) this.leaveBoat();
     this.player.teleport(place.x, this.ground(place.x, -place.n), -place.n);
   }
 
@@ -424,6 +455,11 @@ export class Game {
   /** Touche F : monter dans la voiture la plus proche, ou en descendre. */
   private toggleCar(reach = ENTER_DISTANCE): void {
     const position = this.player.object.position;
+    if (this.boating) {
+      if (Math.abs(this.boating.speed) > 3) return; // on ne saute pas d'un bateau lancé
+      this.leaveBoat();
+      return;
+    }
     if (this.driving) {
       const car = this.driving;
       if (Math.abs(car.speed) > 3) return; // on ne descend pas en roulant
@@ -446,6 +482,9 @@ export class Game {
       const d = car.object.position.distanceTo(position);
       if (d < best) { best = d; nearest = car; }
     }
+    // Un bateau à portée (depuis le ponton ou en nageant) passe avant une voiture plus lointaine.
+    const boat = this.nearestBoat(reach === ENTER_DISTANCE ? 5.5 : reach);
+    if (boat && boat.distance < best + 1) { this.board(boat.boat); return; }
     if (nearest) {
       // Une voiture de la circulation devient une voiture du joueur.
       if (!this.cars.includes(nearest)) {
@@ -456,6 +495,43 @@ export class Game {
       this.player.object.visible = false;
       if (this.driving) this.driving.rider = true;
     }
+  }
+
+  /** Bateau le plus proche du joueur (distance à plat), dans la limite `reach`. */
+  private nearestBoat(reach: number): { boat: Boat; distance: number } | null {
+    const me = this.player.object.position;
+    let found: { boat: Boat; distance: number } | null = null;
+    for (const boat of this.boats) {
+      const d = Math.hypot(boat.position.x - me.x, boat.position.z - me.z);
+      if (d < reach && (!found || d < found.distance)) found = { boat, distance: d };
+    }
+    return found;
+  }
+
+  /** Prendre la barre : le personnage se tient debout au poste de pilotage. */
+  private board(boat: Boat): void {
+    this.boating = boat;
+    boat.rider = true;
+    this.player.swimming = false;
+  }
+
+  /** Débarquer : sur le ponton s'il est tout près, sinon à l'eau à côté du bateau (on nage). */
+  private leaveBoat(): void {
+    const boat = this.boating;
+    if (!boat) return;
+    this.boating = null;
+    boat.rider = false;
+    const p = boat.position;
+    const deck = this.marina?.nearestDeck(p.x, -p.z);
+    let x: number, z: number;
+    if (deck && deck.distance < 6) {
+      x = deck.x; z = -deck.n;
+    } else {
+      const sideX = Math.cos(boat.heading), sideZ = -Math.sin(boat.heading);
+      x = p.x + sideX * 2.3; z = p.z + sideZ * 2.3;
+    }
+    this.player.teleport(x, Math.max(this.ground(x, z), -0.4), z);
+    this.player.object.rotation.set(0, boat.heading, 0);
   }
 
   /** Ombres portées du soleil (bâtiments, arbres, véhicules) dans un rayon autour du joueur. Désactivables : ?ombres=0. */
@@ -520,7 +596,19 @@ export class Game {
     for (const car of this.cars) {
       if (car !== this.driving) car.coast(dt, this.collider, everyCar, this.ground);
     }
-    if (this.driving) {
+    // Bateaux : flottent sur la houle ; celui qu'on pilote suit les commandes (mêmes touches que la voiture).
+    if (this.water) for (const boat of this.boats) boat.update(dt, boat === this.boating ? this.input : null, this.water, this.time, this.collider, this.ground);
+    if (this.boating) {
+      const boat = this.boating;
+      const pace = Math.min(1, Math.abs(boat.speed) / 17);
+      this.sound.update({ rpm: Math.min(1, 0.14 + pace * 0.78 + boat.throttle * 0.08), throttle: boat.throttle, skid: 0, small: false });
+      // Le pilote se tient derrière la console (à tribord), et bouge avec le bateau.
+      this.player.object.position.copy(boat.object.localToWorld(this.helm.set(-0.35, 0.43, -0.4)));
+      this.player.object.quaternion.copy(boat.object.quaternion);
+      this.player.stand(dt);
+      const follow = Math.abs(boat.speed) > 1.5 ? boat.heading + Math.PI : null;
+      this.cameraRig.update(this.input, boat.position, this.collider, dt, this.ground, 9 + Math.min(3, Math.abs(boat.speed) * 0.15), follow);
+    } else if (this.driving) {
       const car = this.driving;
       car.drive(dt, this.input, this.collider, everyCar, this.ground);
       car.settle(this.ground, true);
@@ -539,7 +627,7 @@ export class Game {
     const me = this.player.object.position;
     this.lights?.update(dt);
     this.traffic?.update(dt, me.x, me.z, this.driving === null, this.cars, this.ground, this.collider);
-    const heading = this.driving ? this.driving.heading : this.player.object.rotation.y;
+    const heading = this.driving ? this.driving.heading : this.boating ? this.boating.heading : this.player.object.rotation.y;
     this.map?.update(this.player.object.position.x, this.player.object.position.z, heading);
     if (DRONE) { // vue aérienne de contrôle : ?drone=hauteur,cap
       const target = this.player.object.position.clone(), heading = (DRONE[1] ?? 0) * Math.PI / 180;
@@ -561,7 +649,7 @@ export class Game {
     this.time += dt;
     this.water?.update(this.time, this.camera.position);
     this.harbor?.update(this.time, this.camera.position);
-    this.touch?.setDriving(this.driving !== null);
+    this.touch?.setDriving(this.driving !== null || this.boating !== null);
     this.trees?.update(this.camera.position.x, this.camera.position.z);
     // Résolution automatique : on allège le calcul si le jeu rame, on le raffine s'il a de la marge.
     this.scaleTimer -= elapsed;
@@ -586,7 +674,7 @@ export class Game {
         this.district = fix.district;
         this.events.onLocation(this.locations.line(fix), this.inspecting ? `${this.lastDetail}\n\n${this.copied ? 'Copié dans le presse-papiers.' : 'C : copier cette fiche · I : fermer'}` : null);
       }
-      this.events.onHud(this.nearestPlace(), this.driving ? Math.abs(this.driving.speed) * 3.6 : null, Math.round(1 / this.frameTime), this.driving ? (this.driving.gear === 0 ? 'R' : String(this.driving.gear)) : undefined);
+      this.events.onHud(this.nearestPlace(), this.driving ? Math.abs(this.driving.speed) * 3.6 : this.boating ? Math.abs(this.boating.speed) * 3.6 : null, Math.round(1 / this.frameTime), this.driving ? (this.driving.gear === 0 ? 'R' : String(this.driving.gear)) : undefined);
     }
     this.renderer.render(this.scene, this.camera);
   };

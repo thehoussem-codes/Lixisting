@@ -309,6 +309,19 @@ export class Player {
     this.airborne = false;
   }
 
+  /** À bord d'un bateau : debout au poste de pilotage (la position et l'inclinaison sont imposées par le bateau). */
+  stand(dt: number): void {
+    this.swimming = false; this.airborne = false; this.velocityY = 0;
+    this.shadow.visible = false;
+    this.stride = 0;
+    this.legL.rotation.x = this.legR.rotation.x = this.armL.rotation.x = this.armR.rotation.x = 0;
+    if (this.mixer) {
+      this.play('idle');
+      if (this.current) this.current.timeScale = 1;
+      this.mixer.update(dt);
+    }
+  }
+
   update(dt: number, input: Input, cameraYaw: number, collider: Obstacles | null, ground: (x: number, z: number, y?: number) => number): void {
     const position = this.object.position;
     const forward = (input.isDown('KeyW') || input.isDown('ArrowUp') ? 1 : 0)

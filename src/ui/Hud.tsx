@@ -9,7 +9,7 @@ export function Hud({ status, places, zone, speed, gear, fps, location, detail }
       <div className="hud">
         <div className="hud-title">LIXITING</div>
         <div className="hud-help">
-          Clic : souris · W A S D : bouger · Maj : courir · Espace : sauter / frein à main · F : voiture · M : carte
+          Clic : souris · W A S D : bouger · Maj : courir · Espace : sauter / frein à main · F : voiture / bateau · M : carte
           <br />
           {status} · {fps} images/s · version de {new Date(Number(__BUILD_ID__)).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}{location && ` · ${location}`}
         </div>
@@ -21,7 +21,7 @@ export function Hud({ status, places, zone, speed, gear, fps, location, detail }
       )}
       {detail && <pre className="hud-inspect">{detail}</pre>}
       <div className="hud hud-zone">
-        {speed !== null && <div className="hud-speed">{speed} <span>km/h · rapport {gear}</span></div>}
+        {speed !== null && <div className="hud-speed">{speed} <span>km/h{gear ? ` · rapport ${gear}` : ''}</span></div>}
         <div className="hud-zone-name">{zone}</div>
       </div>
       <div className="hud hud-credit">Données cartographiques © contributeurs OpenStreetMap · végétation © ESA WorldCover · fonds marins © EMODnet Bathymetry</div>

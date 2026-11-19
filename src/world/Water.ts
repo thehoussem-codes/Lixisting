@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { createGroundTexture } from './Textures';
 import { MOBILE } from '../engine/Mobile';
 
 /**
@@ -238,10 +239,20 @@ function buildSeabed(scene: THREE.Scene, map: SeaMap): void {
     if (s.shore > reach) { ids.set(key, -1); return -1; }
     // Sous la plage : juste sous le sable (caché par le terrain) ; au bord : pente un peu au-dessus du talus du
     // terrain (qu'elle masque), puis la vraie profondeur.
-    const y = s.land ? -0.35 : -Math.max(0.15 + 2.2 * Math.min(1, s.shore / 24), Math.min(s.depth, 60));
-    const patch = Math.sin(x * 0.031 + Math.sin(n * 0.017) * 2.0) * Math.sin(n * 0.027 - x * 0.011) > 0.35 && s.depth > 4 && s.depth < 28;
-    c.copy(sand).lerp(deep, Math.min(1, s.depth / 25));
-    if (patch) c.lerp(grass, 0.75);
+    // Près du bord, la carte de la mer (pixels de 16 m) est plus profonde que le talus du terrain : le fond suit
+    // d'abord une pente douce juste au-dessus du talus (qu'il masque, sans marche visible), puis rejoint la vraie
+    // profondeur entre 24 et 90 m du rivage.
+    const blend = Math.min(1, Math.max(0, (s.shore - 24) / 66)), ease = blend * blend * (3 - 2 * blend);
+    const slope = 0.15 + 2.2 * Math.min(1, s.shore / 24) + 0.05 * Math.max(0, s.shore - 24);
+    const y = s.land ? -0.35 : -(slope + (Math.min(s.depth, 60) - slope) * ease);
+    // Herbiers (posidonies) : taches irrégulières entre 4 et 28 m, aux bords fondus (auparavant, la limite des 4 m
+    // dessinait une ligne nette parallèle à la plage).
+    const smooth = (a: number, b: number, v: number) => { const t = Math.min(1, Math.max(0, (v - a) / (b - a))); return t * t * (3 - 2 * t); };
+    const wobble = Math.sin(x * 0.013 - n * 0.021) * 2.5 + Math.sin(x * 0.047 + n * 0.039) * 1.2;
+    const noise = Math.sin(x * 0.031 + Math.sin(n * 0.017) * 2.0) * Math.sin(n * 0.027 - x * 0.011);
+    const meadow = smooth(0.2, 0.55, noise) * smooth(3, 8, -y + wobble) * (1 - smooth(22, 30, -y));
+    c.copy(sand).lerp(deep, Math.min(1, -y / 25));
+    c.lerp(grass, 0.7 * meadow);
     positions.push(x, y, -n); colors.push(c.r, c.g, c.b);
     ids.set(key, positions.length / 3 - 1);
     return positions.length / 3 - 1;
@@ -254,9 +265,13 @@ function buildSeabed(scene: THREE.Scene, map: SeaMap): void {
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
   geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  // Même grain de sable que le terrain (mêmes coordonnées de texture) : pas de raccord visible au pied de la plage.
+  const uv = new Float32Array((positions.length / 3) * 2);
+  for (let i = 0; i < positions.length / 3; i++) { uv[i * 2] = positions[i * 3] / 14; uv[i * 2 + 1] = positions[i * 3 + 2] / 14; }
+  geometry.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
   geometry.setIndex(index);
   geometry.computeVertexNormals();
-  const mesh = new THREE.Mesh(geometry, new THREE.MeshLambertMaterial({ vertexColors: true }));
+  const mesh = new THREE.Mesh(geometry, new THREE.MeshLambertMaterial({ vertexColors: true, map: createGroundTexture() }));
   mesh.receiveShadow = false;
   mesh.name = 'fond marin';
   if (new URLSearchParams(window.location.search).get('fond') !== '0') scene.add(mesh);

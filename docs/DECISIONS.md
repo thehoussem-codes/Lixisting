@@ -488,3 +488,16 @@ Skills chargés : `physics-tuning`, `game-ai`, `audio-design`, `threejs-material
 - Fond marin visible par transparence : sable, plus sombre en profondeur, taches d'herbiers.
 - La même houle est calculée en JavaScript (`waveHeight`, `Water.heightAt`) pour faire flotter les bateaux.
 - Corrigé au passage : les points du rivage ne sont plus retirés près des corniches (ils décalaient tout le talus sous-marin), et le talus a ses propres sommets (le sable du rivage n'est plus assombri en dents de scie).
+
+## Bateau à moteur au ponton de la plage Toche (19/11/2026)
+
+- Ponton de jeu en bois sur pieux (34 m vers le large, perpendiculaire à la côte d'OSM, au droit du repère « Plage Toche ») : aménagement inventé pour le jeu, pas un ouvrage relevé sur place. Panneau « PONTON TOCHE ».
+- Deux opens de 6,2 m amarrés de part et d'autre (`src/vehicles/Boat.ts`, modèle fait en code) : coque en V section par section (antifouling rouge sous la flottaison, liseré bleu ou rouge, liston sombre), console à tribord avec pare-brise et volant, siège-appui, banquette arrière, plateforme avant, balcon en inox, moteur hors-bord gris.
+- On monte et descend avec F (ou 🚗 sur téléphone), comme une voiture : depuis le ponton ou à la nage. En descendant près du ponton on se retrouve dessus, sinon à l'eau à côté du bateau. Le pilote reste debout derrière la console.
+- Conduite : W/S gaz et marche arrière, A/D barre, Espace pour casser l'erre. Environ 58 km/h en pointe (31 nœuds), 0 → 46 km/h en 3 s ; la barre n'agit qu'avec de la vitesse ; le bateau dérape un peu en virage.
+- Flottaison : la hauteur de l'eau est lue sous l'étrave, la poupe et les deux bords avec la même houle que la mer affichée ; pilonnement, tangage et roulis suivent par ressorts amortis ; en vitesse l'étrave se lève (déjauge) et le bateau se couche dans les virages. Mesuré : ±0,5 m de pilonnement au large, 5 à 8° de cabrage en pleine vitesse, 7 à 12° de gîte en virage serré.
+- Il s'arrête avant la plage (moins de 0,7 m de fond, ou sol réel trop haut) et heurte les pieux.
+- Sillage : remous blanc derrière le moteur et deux bras en V qui s'écartent selon l'angle de Kelvin (19,5°), qui s'effacent en quelques secondes.
+- Un masque invisible au niveau du plat-bord empêche la surface de la mer d'apparaître sur le pont dans le creux des vagues.
+- Fond marin : même grain de sable que le terrain ; près du bord, pente douce juste au-dessus du talus de la plage puis vraie profondeur entre 24 et 90 m ; bords des herbiers fondus (une ligne nette suivait l'isobathe des 4 m).
+- Vérifié dans Chrome sans carte graphique (1 à 2 images/s) : montée et descente (ponton et nage), pleine vitesse, virages, marche arrière, arrêt devant la plage. Pas encore essayé sur un vrai Mac ni sur téléphone.
