@@ -1,0 +1,22 @@
+{
+  "extracted_at": "2026-11-19T00:09:44+00:00",
+  "source": "Overture Maps Foundation, thème buildings (OSM, Microsoft ML Buildings, Google Open Buildings, Esri)",
+  "licence": "ODbL 1.0",
+  "bbox_west_south_east_north": [
+    7.2,
+    36.55,
+    8.1,
+    37.12
+  ],
+  "buildings": 253283,
+  "by_source": {
+    "OpenStreetMap": 116719,
+    "Microsoft ML Buildings": 89384,
+    "Google Open Buildings": 47180
+  },
+  "with_height_by_source": {
+    "OpenStreetMap": 2078
+  },
+  "skipped": {},
+  "file_mb": 6.7
+}
