@@ -36,6 +36,7 @@ OUT_BUILDINGS = ROOT / "public" / "world" / "region_buildings.bin"
 OUT_LAND = REGION / "land_20m.npz"
 BUILDINGS = ROOT / "data" / "buildings" / "annaba_overture.json.gz"
 BATHY = ROOT / "data" / "bathymetry"
+AIRPORT = ROOT / "data" / "airport" / "aae_osm.json"   # plan de l'aéroport Rabah Bitat (tools/extract_airport.py)
 LAND_STEP = 20.0
 TILE = 1000.0
 ROAD_KINDS = {"motorway": 22, "motorway_link": 7, **{k: v for k, v in ROAD_WIDTH.items() if k in (
@@ -120,6 +121,49 @@ def convex_hull(pts):
     return np.array(lower[:-1] + upper[:-1])
 
 
+def airport_plan(project):
+    """Aéroport d'Annaba d'après OSM : pistes, voies de circulation, aires, aérogares, postes, enceinte."""
+    if not AIRPORT.exists():
+        return None
+    from matplotlib.path import Path as MPath
+    elements = json.loads(AIRPORT.read_text(encoding="utf-8"))["elements"]
+    plan = {"name": "Aéroport d'Annaba – Rabah Bitat", "runways": [], "taxiways": [], "aprons": [], "terminals": [], "stands": [], "boundary": None}
+    leads, nodes = {}, {}
+    for e in elements:
+        tags = e.get("tags", {})
+        kind = tags.get("aeroway")
+        if e["type"] == "node" and kind == "parking_position" and tags.get("ref"):
+            nodes[tags["ref"]] = project(e["lat"], e["lon"])
+        if e["type"] != "way" or not e.get("geometry"):
+            continue
+        line = [project(g["lat"], g["lon"]) for g in e["geometry"] if g]
+        closed = e["nodes"][0] == e["nodes"][-1]
+        if kind == "runway" and tags.get("ref"):
+            plan["runways"].append({"ref": tags["ref"], "w": float(tags.get("width", 45)), "p": flat(line)})
+        elif kind == "taxiway":
+            width = float(str(tags.get("width", "0")).split()[0] or 0) or (23.0 if tags.get("ref") else 18.0)
+            plan["taxiways"].append({"w": width, "p": flat(line), **({"ref": tags["ref"]} if tags.get("ref") else {})})
+        elif kind == "apron" and closed:
+            plan["aprons"].append(flat(line[:-1]))
+        elif kind == "terminal" and closed:
+            plan["terminals"].append({"p": flat(line[:-1]), "n": tags.get("name:fr") or tags.get("name") or "Aérogare"})
+        elif kind == "aerodrome" and closed:
+            plan["boundary"] = flat(line[:-1], 0)
+        elif kind == "parking_position" and tags.get("ref"):
+            leads[tags["ref"]] = line
+    for ref, (x, n) in sorted(nodes.items(), key=lambda kv: int(kv[0]) if kv[0].isdigit() else 99):
+        line = leads.get(ref)
+        heading = 0.0
+        if line:
+            a, b = (line[-1], line[0]) if math.dist(line[-1], (x, n)) < math.dist(line[0], (x, n)) else (line[0], line[-1])
+            # Cap de sortie : de la position d'arrêt vers l'autre bout de la ligne d'entrée (nez vers la voie de circulation).
+            heading = math.atan2(b[0] - a[0], -(b[1] - a[1]))
+        plan["stands"].append({"ref": ref, "x": round(x, 1), "n": round(n, 1), "h": round(heading, 3)})
+    print("aéroport :", len(plan["runways"]), "pistes,", len(plan["taxiways"]), "voies,", len(plan["aprons"]), "aires,",
+          len(plan["terminals"]), "aérogares,", len(plan["stands"]), "postes")
+    return plan
+
+
 def main():
     world = json.loads(WORLD.read_text(encoding="utf-8"))
     meta = json.loads((REGION / "summary.json").read_text(encoding="utf-8"))
@@ -191,6 +235,18 @@ def main():
     land_h = np.where(d > 0, np.maximum(land_h, 0.35 + 0.01 * np.minimum(d, 60)), land_h)
     sea_h = -np.minimum(0.4 + 0.06 * np.maximum(-d, 0), np.maximum(depth, 2.5))
     height = np.where(d > 0, land_h, sea_h)
+    # Aéroport : le relief à 60 m (bruité de ±2 m) rendrait les pistes bosselées. Dans l'enceinte, sol plat à
+    # l'altitude médiane du terrain, raccordé au relief alentour sur 200 m.
+    plan = airport_plan(project)
+    if plan and plan["boundary"]:
+        from matplotlib.path import Path as MPath
+        from scipy.ndimage import distance_transform_edt as edt
+        ring = np.array(plan["boundary"], dtype=float).reshape(-1, 2)
+        inside = MPath(ring).contains_points(np.column_stack([gx.ravel(), gn.ravel()])).reshape(gx.shape)
+        level = float(np.median(height[inside]))
+        blend = np.clip(1 - edt(~inside) * step / 200, 0, 1)
+        height = height * (1 - blend) + level * blend
+        print(f"aéroport : sol aplani à {level:.1f} m sur {int(inside.sum())} points")
     encoded = np.clip(np.round(height * 10) + 32768, 0, 65535).astype(np.uint32)
 
     # --- sol (WorldCover) ramené au pas de 60 m : classe la plus fréquente des 4 cases de 30 m
@@ -293,6 +349,24 @@ def main():
 
     # --- bâtiments hors de la ville : boîtes orientées par cases de 1 km
     buildings = json.load(gzip.open(BUILDINGS, "rt", encoding="utf-8"))["buildings"]
+    # Pas de boîte sur les pistes, les voies, les aires ni dans les aérogares (dessinées à part dans le jeu).
+    airport_block = None
+    if plan:
+        from matplotlib.path import Path as MPath
+        areas = [MPath(np.array(r, dtype=float).reshape(-1, 2)) for r in plan["aprons"]] + \
+                [MPath(np.array(t["p"], dtype=float).reshape(-1, 2)) for t in plan["terminals"]]
+        strips = [(np.array(w["p"], dtype=float).reshape(-1, 2), w["w"] / 2 + 12) for w in plan["runways"] + plan["taxiways"]]
+
+        def airport_block(x, n):
+            if any(a.contains_point((x, n)) for a in areas):
+                return True
+            for line, reach in strips:
+                for a, b in zip(line, line[1:]):
+                    ab = b - a
+                    t = max(0.0, min(1.0, float(np.dot((x, n) - a, ab) / max(np.dot(ab, ab), 1e-9))))
+                    if math.hypot(*(np.array((x, n)) - a - ab * t)) < reach:
+                        return True
+            return False
     tiles_x, tiles_n = int(math.ceil((rx1 - rx0) / TILE)), int(math.ceil((rn1 - rn0) / TILE))
     per_tile = [[] for _ in range(tiles_x * tiles_n)]
     kept = skipped = 0
@@ -304,6 +378,9 @@ def main():
         if city[0] <= cx <= city[2] and city[1] <= cn <= city[3]:
             continue
         if not (rx0 <= cx < rx1 and rn0 <= cn < rn1) or (b.get("c") is not None and b["c"] < 0.7):
+            skipped += 1
+            continue
+        if airport_block is not None and airport_block(cx, cn):
             skipped += 1
             continue
         centre, length, width, angle = min_area_rect(ring)
@@ -352,6 +429,11 @@ def main():
         "roads": roads, "rails": rails, "rivers": rivers, "lakes": lakes, "wetlands": wetlands, "runways": runways,
         "places": places, "boundaries": boundaries,
     }
+    if plan:
+        out["airport"] = plan
+        # Repère « Aéroport » : sur la carte, dans la liste des lieux, et une voiture garée devant l'aérogare.
+        t = np.array(plan["terminals"][0]["p"]).reshape(-1, 2).mean(axis=0) if plan["terminals"] else np.array(plan["stands"][0][:2])
+        places.insert(0, {"name": plan["name"], "k": "aerodrome", "x": round(float(t[0]), 1), "n": round(float(t[1]), 1)})
     OUT_JSON.write_text(json.dumps(out, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     print(f"region.json : {OUT_JSON.stat().st_size // 1024} ko")
 

@@ -33,6 +33,7 @@ export class TouchControls {
   private brake: HTMLDivElement;
   private car: HTMLDivElement;
   private driving = false;
+  private flying = false;
   private stickVector = { x: 0, y: 0 };
 
   /** À appeler à chaque image : adapte les libellés et le rôle du joystick (à pied ou au volant). */
@@ -44,6 +45,18 @@ export class TouchControls {
     this.applyStick();
   }
 
+  /**
+   * Aux commandes de l'avion : joystick haut = piquer, bas = cabrer (comme un manche), gauche / droite = virer ;
+   * la pédale augmente la poussée, FREIN la réduit et freine (au sol) ou sort les aérofreins (en vol).
+   */
+  setFlying(flying: boolean): void {
+    if (flying === this.flying) return;
+    this.flying = flying;
+    for (const code of this.held) this.input.setVirtual(code, false);
+    this.held = new Set();
+    this.applyStick();
+  }
+
   constructor(private input: Input, private onFirstTouch: () => void) {
     this.root.className = 'touch';
     this.stick.className = 'touch-stick';
@@ -51,7 +64,7 @@ export class TouchControls {
     this.stick.appendChild(this.knob);
     this.root.appendChild(this.stick);
     this.gas = this.button(PEDAL, 'touch-gas', 'KeyW', 'hold');
-    this.brake = this.button('FREIN', 'touch-brake hidden', 'Space', 'hold');
+    this.brake = this.button('FREIN', 'touch-brake hidden', 'Space', 'hold', () => (this.flying ? ['KeyS'] : []));
     this.car = this.button('🚗', 'touch-car', 'KeyF', 'tap');
     const turn = document.createElement('div');
     turn.className = 'touch-rotate';
@@ -88,7 +101,8 @@ export class TouchControls {
     } catch { /* plein écran refusé : le jeu marche quand même */ }
   }
 
-  private button(label: string, className: string, code: string, mode: 'hold' | 'tap'): HTMLDivElement {
+  private button(label: string, className: string, code: string, mode: 'hold' | 'tap', extra: () => string[] = () => []): HTMLDivElement {
+    let pressed: string[] = [];
     const b = document.createElement('div');
     b.className = `touch-button ${className}`;
     b.innerHTML = label;
@@ -96,13 +110,14 @@ export class TouchControls {
       e.preventDefault(); e.stopPropagation();
       this.wake();
       b.classList.add('on');
-      if (mode === 'hold') this.input.setVirtual(code, true);
+      pressed = [code, ...extra()];
+      if (mode === 'hold') for (const c of pressed) this.input.setVirtual(c, true);
       else window.dispatchEvent(new KeyboardEvent('keydown', { code }));
     }, { passive: false });
     const release = (e: TouchEvent) => {
       e.preventDefault();
       b.classList.remove('on');
-      if (mode === 'hold') this.input.setVirtual(code, false);
+      if (mode === 'hold') for (const c of pressed) this.input.setVirtual(c, false);
     };
     b.addEventListener('touchend', release);
     b.addEventListener('touchcancel', release);
@@ -163,6 +178,16 @@ export class TouchControls {
   private applyStick(): void {
     const { x: dx, y: dy } = this.stickVector;
     const wanted = new Set<string>();
+    if (this.flying) {
+      if (dy < -0.35) wanted.add('ArrowUp');
+      if (dy > 0.35) wanted.add('ArrowDown');
+      if (dx < -0.35) wanted.add('KeyA');
+      if (dx > 0.35) wanted.add('KeyD');
+      for (const code of this.held) if (!wanted.has(code)) this.input.setVirtual(code, false);
+      for (const code of wanted) this.input.setVirtual(code, true);
+      this.held = wanted;
+      return;
+    }
     // Au volant, pousser vers le haut n'accélère pas : c'est le rôle du bouton ACCÉLÉRER.
     if (dy < -0.35 && !this.driving) wanted.add('KeyW');
     if (dy > 0.35) wanted.add('KeyS');

@@ -155,7 +155,7 @@ export class MapView {
 
   /** Villes et villages affichés à ce zoom (les hameaux seulement de près). */
   private townShown(kind: string): boolean {
-    return kind === 'city' || kind === 'town' || (kind === 'village' && this.zoom > 0.02) || ((kind === 'suburb' || kind === 'hamlet') && this.zoom > 0.09);
+    return kind === 'city' || kind === 'town' || kind === 'aerodrome' || (kind === 'village' && this.zoom > 0.02) || ((kind === 'suburb' || kind === 'hamlet') && this.zoom > 0.09);
   }
 
   /** La wilaya autour de la ville : image d'ensemble à petite échelle (côte, lacs, routes, limites). */
@@ -344,8 +344,13 @@ export class MapView {
         if (!this.townShown(place.k)) continue;
         const lx = X(place.x), ly = Y(place.n);
         if (lx < -50 || lx > w + 50 || ly < -20 || ly > h + 20) continue;
-        const big = place.k === 'city' || place.k === 'town';
+        const big = place.k === 'city' || place.k === 'town' || place.k === 'aerodrome';
         ctx.font = `${big ? 'bold 13px' : '11px'} "Trebuchet MS", Verdana, sans-serif`;
+        if (place.k === 'aerodrome') {   // pictogramme d'avion à la place du point
+          ctx.fillStyle = '#1f3d6b'; ctx.lineWidth = 3; ctx.strokeStyle = '#ffffff';
+          ctx.strokeText('✈ ' + place.name, lx - 6, ly + 4); ctx.fillText('✈ ' + place.name, lx - 6, ly + 4);
+          continue;
+        }
         ctx.fillStyle = big ? '#5a2f1b' : '#6d5a48';
         ctx.beginPath(); ctx.arc(lx, ly, big ? 5 : 3.5, 0, Math.PI * 2); ctx.fill();
         ctx.lineWidth = 3; ctx.strokeStyle = '#ffffff';

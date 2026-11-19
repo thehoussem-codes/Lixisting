@@ -10,6 +10,10 @@ export class Sound {
   private engineFilter!: BiquadFilterNode;
   private oscillators: OscillatorNode[] = [];
   private skidGain!: GainNode;
+  private jetGain!: GainNode;
+  private jetFilter!: BiquadFilterNode;
+  private whine!: OscillatorNode;
+  private whineGain!: GainNode;
   muted = false;
 
   unlock(): void {
@@ -51,6 +55,39 @@ export class Sound {
     this.skidGain.gain.value = 0;
     noise.connect(band).connect(this.skidGain).connect(effects);
     noise.start();
+
+    // Réacteurs d'avion : souffle (bruit grave filtré) et sifflement de la soufflante qui monte avec la poussée.
+    const roar = ctx.createBufferSource();
+    roar.buffer = buffer; roar.loop = true;
+    this.jetFilter = ctx.createBiquadFilter();
+    this.jetFilter.type = 'lowpass'; this.jetFilter.frequency.value = 300; this.jetFilter.Q.value = 0.5;
+    this.jetGain = ctx.createGain();
+    this.jetGain.gain.value = 0;
+    roar.connect(this.jetFilter).connect(this.jetGain).connect(effects);
+    roar.start();
+    this.whine = ctx.createOscillator();
+    this.whine.type = 'triangle'; this.whine.frequency.value = 420;
+    this.whineGain = ctx.createGain();
+    this.whineGain.gain.value = 0;
+    this.whine.connect(this.whineGain).connect(effects);
+    this.whine.start();
+  }
+
+  /** spool : régime des réacteurs, 0 (arrêt) à 1 (pleine poussée). null : on n'est pas dans l'avion. */
+  jet(spool: number | null): void {
+    const ctx = this.context;
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    if (spool === null) {
+      this.jetGain.gain.setTargetAtTime(0, now, 0.3);
+      this.whineGain.gain.setTargetAtTime(0, now, 0.3);
+      return;
+    }
+    const s = Math.max(0, Math.min(1, spool));
+    this.jetFilter.frequency.setTargetAtTime(260 + s * 1400, now, 0.4);
+    this.jetGain.gain.setTargetAtTime(0.08 + s * 0.32, now, 0.4);
+    this.whine.frequency.setTargetAtTime(380 + s * 900, now, 0.6);
+    this.whineGain.gain.setTargetAtTime(0.012 + s * 0.02, now, 0.4);
   }
 
   /** Klaxon d'une voiture de la circulation : deux notes, plus faible quand elle est loin. */

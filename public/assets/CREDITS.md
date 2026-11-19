@@ -37,3 +37,7 @@ Empreintes de bâtiments absents d'OpenStreetMap, détectées automatiquement su
 - Sol et forêts : **ESA WorldCover 10 m 2021 v200**, CC BY 4.0.
 - Fonds marins : **EMODnet Bathymetry**, CC BY 4.0.
 Fabrication : `tools/build_region.py` (relief, routes, bâtiments en boîtes orientées) et `tools/build_sea.py` (carte de la mer de la wilaya).
+
+## Aéroport d'Annaba – Rabah Bitat
+
+Pistes, voies de circulation, aires de stationnement, aérogares, postes de stationnement et enceinte : © contributeurs **OpenStreetMap**, licence [ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/) (`tools/extract_airport.py` → `data/airport/aae_osm.json`, dessin : `tools/build_region.py` et `src/world/Airport.ts`). L'avion de ligne est un modèle fait pour le jeu (`src/vehicles/Plane.ts`) aux couleurs inspirées d'Air Algérie, sans logo ni nom de la compagnie.

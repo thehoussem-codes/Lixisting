@@ -27,7 +27,7 @@ const WITH_SIDEWALK = new Set(['primary', 'secondary', 'tertiary', 'residential'
 /** Matériau d'une couche posée au sol. offset : évite le scintillement entre couches superposées. */
 function layer(offset: number, map?: THREE.Texture): THREE.MeshLambertMaterial {
   return new THREE.MeshLambertMaterial({
-    vertexColors: true, map, side: THREE.DoubleSide,
+    vertexColors: true, side: THREE.DoubleSide, ...(map ? { map } : {}),   // map absent : pas d'avertissement de three.js
     polygonOffset: true, polygonOffsetFactor: -offset, polygonOffsetUnits: -offset * 4,
   });
 }

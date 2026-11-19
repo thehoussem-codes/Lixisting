@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { MOBILE } from '../engine/Mobile';
+import type { AirportPlan } from './Airport';
 import type { Collider } from './Collider';
 import { MeshBuilder } from './MeshBuilder';
 import { FACADE_WIDTH, type FacadeStyle, createFacadeTexture, createFoliageTexture, createGroundTexture, createRoadTexture } from './Textures';
@@ -32,6 +33,8 @@ export interface RegionData {
   lakes: number[][];
   wetlands: number[][];
   runways: { w: number; p: number[] }[];
+  /** Plan de l'aéroport (pistes, voies, aires, aérogares, postes) : dessiné par Airport.ts. */
+  airport?: AirportPlan;
   places: RegionPlace[];
   boundaries: { name: string; rings: number[][] }[];
 }
@@ -223,18 +226,21 @@ export class Region {
     return (this.materials[style] ??= new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, map: createFacadeTexture(style) }));
   }
 
-  /** Construit les cases proches (au plus une par appel, sauf `budget` plus large), libère les lointaines. */
-  update(x: number, z: number, budget = 6): void {
+  /**
+   * Construit les cases proches (au plus une par appel, sauf `budget` plus large), libère les lointaines.
+   * extra : portée supplémentaire (m), en avion quand on vole haut et que le brouillard s'éclaircit.
+   */
+  update(x: number, z: number, budget = 6, extra = 0): void {
     if (!this.scene) return;
     const start = performance.now();
     for (const tile of this.tiles.values()) {
       const d = Math.hypot(tile.cx - x, tile.cz - z);
-      if (d > DROP_REACH) { this.drop(tile); continue; }
-      for (const mesh of tile.meshes) mesh.visible = d < VIEW + 720;
+      if (d > DROP_REACH + extra) { this.drop(tile); continue; }
+      for (const mesh of tile.meshes) mesh.visible = d < VIEW + 720 + extra;
       for (const mesh of tile.trees) mesh.visible = d < TREE_REACH;
     }
     const n = -z;
-    const reach = Math.ceil(BUILD_REACH / this.tileSize);
+    const reach = Math.ceil((BUILD_REACH + extra) / this.tileSize);
     const ctx = Math.floor((x - this.tx0) / this.tileSize), ctn = Math.floor((n - this.tn0) / this.tileSize);
     const wanted: [number, number, number][] = [];
     for (let dn = -reach; dn <= reach; dn++) for (let dx = -reach; dx <= reach; dx++) {
@@ -244,7 +250,7 @@ export class Region {
       if (this.tiles.has(key)) continue;
       const cx = this.tx0 + (tx + 0.5) * this.tileSize, cn = this.tn0 + (tn + 0.5) * this.tileSize;
       const d = Math.hypot(cx - x, cn - n);
-      if (d < BUILD_REACH) wanted.push([d, tx, tn]);
+      if (d < BUILD_REACH + extra) wanted.push([d, tx, tn]);
     }
     wanted.sort((a, b) => a[0] - b[0]);
     for (const [, tx, tn] of wanted) {
@@ -349,7 +355,7 @@ export class Region {
       for (let i = 0; i < ring.length; i += 2) low = Math.min(low, this.height(ring[i], -ring[i + 1]));
       water.flatPolygon(ring, Math.max(low, 0) + 0.4, blue);
     }
-    for (const runway of this.data.runways) {
+    for (const runway of this.data.airport ? [] : this.data.runways) {
       if (this.tileKey(runway.p[0], runway.p[1]) !== key) continue;
       major.ribbon(this.densify(runway.p, 0, runway.p.length / 2 - 1, 20), runway.w, SURFACE + 0.02, white, (gx, gz) => this.surface(gx, gz), 30);
     }
@@ -417,6 +423,7 @@ export class Region {
         const px = cellX + (hash(seed, t * 2) - 0.5) * this.step, pn = cellN + (hash(seed, t * 2 + 1) - 0.5) * this.step;
         const y = this.height(px, -pn);
         if (y < 1 || roadCells.has(Math.floor(px / 8) * 100003 + Math.floor(pn / 8))) continue;
+        if (this.inAirport(px, pn)) continue;           // aérodrome dégagé : ni arbre ni buisson
         let inside = false;
         for (let k = 0; k < homes.length && !inside; k += 3) inside = Math.hypot(homes[k] - px, homes[k + 1] - pn) < homes[k + 2];
         if (inside) continue;
@@ -429,6 +436,18 @@ export class Region {
       }
     }
     this.add(tile, leaves, this.materials.leaves, 0, true);
+  }
+
+  /** Dans l'enceinte de l'aéroport (contour OSM de l'aérodrome). */
+  inAirport(x: number, n: number): boolean {
+    const ring = this.data.airport?.boundary;
+    if (!ring) return false;
+    let inside = false;
+    for (let i = 0, j = ring.length - 2; i < ring.length; j = i, i += 2) {
+      const xi = ring[i], ni = ring[i + 1], xj = ring[j], nj = ring[j + 1];
+      if ((ni > n) !== (nj > n) && x < ((xj - xi) * (n - ni)) / (nj - ni) + xi) inside = !inside;
+    }
+    return inside;
   }
 
   /** Sol sous une chaussée (jamais sous l'eau) ; la chaussée est posée SURFACE plus haut. */

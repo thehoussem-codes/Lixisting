@@ -103,6 +103,24 @@ export class Collider {
   }
 
   /**
+   * Pour un avion : y a-t-il un obstacle au point x, z à la hauteur y ? Les obstacles sans toit connu (murets,
+   * poteaux, monuments) bloquent partout dans `inside` ; ici on les suppose moins hauts que `roofless` mètres
+   * au-dessus du sol `floor`, sinon un avion à 400 m heurterait un muret de la ville.
+   */
+  solidFor(x: number, z: number, y: number, floor: number, roofless = 60): boolean {
+    const cell = this.grid.get(`${Math.floor(x / CELL)},${Math.floor(z / CELL)}`);
+    if (!cell) return false;
+    for (const f of cell) {
+      if (x < f.minX || x > f.maxX || z < f.minZ || z > f.maxZ) continue;
+      if (y < f.yMin || y > f.yMax) continue;
+      if (!Collider.contains(f, x, z)) continue;
+      if (f.roof ? y >= Collider.roofHeight(f, x, z) : y > floor + roofless) continue;
+      return true;
+    }
+    return false;
+  }
+
+  /**
    * Toit le plus haut sous le point x, z qui ne dépasse pas `reach` (hauteur des pieds + marche franchissable).
    * Renvoie -Infinity s'il n'y en a pas : le sol est alors le terrain.
    */

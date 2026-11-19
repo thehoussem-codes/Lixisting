@@ -307,6 +307,11 @@ export class Water {
   seaRegion: SeaMap | null = null;
 
   /** cityRect : rectangle de la ville détaillée (x0, n0, x1, n1) ; le fond marin détaillé s'y limite. */
+  /** Densité du brouillard de la mer (la même que celle de la scène, réduite en altitude). */
+  setFog(density: number): void {
+    this.material.uniforms.uFogDensity.value = density;
+  }
+
   constructor(scene: THREE.Scene, fogColor: number, fogDensity: number, cityRect?: number[]) {
     // En attendant la carte : eau profonde partout (pixel 1 × 1).
     const placeholder = new THREE.DataTexture(new Uint8Array([255, 200, 0, 255]), 1, 1, THREE.RGBAFormat);
