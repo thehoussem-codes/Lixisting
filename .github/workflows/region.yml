@@ -1,0 +1,34 @@
+# Télécharge les données légères de toute la wilaya (routes principales, côte, villes, relief, végétation)
+# et les enregistre dans data/region/.
+name: Extraire la wilaya
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - tools/extract_region.py
+      - .github/workflows/region.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pillow numpy rasterio
+      - run: python tools/extract_region.py
+      - name: Enregistrer les données dans le dépôt
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/region
+          git diff --cached --quiet || git commit -m "Update light data for the whole wilaya of Annaba"
+          git pull --rebase
+          git push
