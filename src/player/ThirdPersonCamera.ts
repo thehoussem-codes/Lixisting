@@ -15,8 +15,16 @@ export class ThirdPersonCamera {
   private pitch = 0.3;
   private distance = 6.5;
   private target = new THREE.Vector3();
+  /** Secousse (0 à 1) : s'ajoute puis retombe ; l'image tremble selon son carré (léger choc : à peine). */
+  private trauma = 0;
+  private shakeTime = 0;
 
   constructor(private camera: THREE.PerspectiveCamera) {}
+
+  /** Secoue la caméra (retombée de bateau, choc). */
+  shake(amount: number): void {
+    this.trauma = Math.min(1, this.trauma + amount);
+  }
 
   /**
    * maxDistance : recul de la caméra (plus grand en voiture).
@@ -61,5 +69,14 @@ export class ThirdPersonCamera {
     // La caméra reste toujours au-dessus du sol, même au pied d'une colline.
     this.camera.position.set(camX, Math.max(ground(camX, camZ) + 0.7, this.target.y + dirY * this.distance), camZ);
     this.camera.lookAt(this.target);
+    if (this.trauma > 0) {
+      // Sinus de fréquences sans rapport entre elles : un tremblement doux, pas un grésillement.
+      this.trauma = Math.max(0, this.trauma - dt * 1.6);
+      this.shakeTime += dt * 30;
+      const k = this.trauma * this.trauma;
+      this.camera.position.x += 0.35 * k * Math.sin(this.shakeTime * 1.7);
+      this.camera.position.y += 0.25 * k * Math.sin(this.shakeTime * 2.3);
+      this.camera.rotation.z += 0.04 * k * Math.sin(this.shakeTime * 1.1);
+    }
   }
 }

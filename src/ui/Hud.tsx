@@ -21,7 +21,7 @@ export function Hud({ status, places, zone, speed, gear, fps, location, detail }
       )}
       {detail && <pre className="hud-inspect">{detail}</pre>}
       <div className="hud hud-zone">
-        {speed !== null && <div className="hud-speed">{speed} <span>km/h{gear ? ` · rapport ${gear}` : ''}</span></div>}
+        {speed !== null && <div className="hud-speed">{speed} <span>km/h{gear ? (/^[0-9R]$/.test(gear) ? ` · rapport ${gear}` : ` · ${gear}`) : ''}</span></div>}
         <div className="hud-zone-name">{zone}</div>
       </div>
       <div className="hud hud-credit">© contributeurs OpenStreetMap · Overture Maps (Microsoft, Google) · ESA WorldCover · EMODnet</div>

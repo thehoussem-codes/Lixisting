@@ -73,6 +73,23 @@ export class Sound {
   }
 
   /** Bruit de choc : un coup sourd filtré, plus fort et plus grave quand le choc est violent. */
+  /** Coque qui retombe sur l'eau : bruit sourd et éclaboussure (force 0 à 1). */
+  splash(strength: number): void {
+    const ctx = this.context;
+    if (!ctx || this.muted || strength < 0.1) return;
+    const length = 0.6, buffer = ctx.createBuffer(1, Math.floor(ctx.sampleRate * length), ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / data.length, 2.2);
+    const source = ctx.createBufferSource(), filter = ctx.createBiquadFilter(), gain = ctx.createGain();
+    source.buffer = buffer;
+    filter.type = 'bandpass';
+    filter.frequency.value = 350 + 700 * Math.min(1, strength);
+    filter.Q.value = 0.7;
+    gain.gain.value = 0.25 + 0.6 * Math.min(1, strength);
+    source.connect(filter).connect(gain).connect(this.master);
+    source.start();
+  }
+
   crash(strength: number): void {
     const ctx = this.context;
     if (!ctx || this.muted || strength < 1.5) return;

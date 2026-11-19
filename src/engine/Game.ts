@@ -455,7 +455,13 @@ export class Game {
       this.setupShadows();
       this.setupReflections();
       Car.onCrash = (strength) => this.sound.crash(strength);
-      Boat.onBump = (strength) => this.sound.crash(strength * 0.6);
+      Boat.onBump = (strength) => this.sound.crash(3 + strength * 10);
+      // Retombée sur l'eau (en sautant une vague) : éclaboussure, secousse de la caméra si on pilote.
+      Boat.onSlam = (boat, strength) => {
+        if (boat !== this.boating) return;
+        this.sound.splash(strength);
+        this.cameraRig.shake(0.25 + 0.5 * strength);
+      };
       // Adresse du type ...?at=x,n : démarre à ce point de la carte (mètres depuis la gare, n = nord).
       const at = new URLSearchParams(window.location.search).get('at')?.split(',').map(Number);
       if (at && at.length === 2 && at.every(Number.isFinite)) this.player.teleport(at[0], this.ground(at[0], -at[1]), -at[1]);
@@ -779,7 +785,7 @@ export class Game {
         this.district = fix.district;
         this.events.onLocation(this.locations.line(fix), this.inspecting ? `${this.lastDetail}\n\n${this.copied ? 'Copié dans le presse-papiers.' : 'C : copier cette fiche · I : fermer'}` : null);
       }
-      this.events.onHud(this.nearestPlace(), this.driving ? Math.abs(this.driving.speed) * 3.6 : this.boating ? Math.abs(this.boating.speed) * 3.6 : null, Math.round(1 / this.frameTime), this.driving ? (this.driving.gear === 0 ? 'R' : String(this.driving.gear)) : undefined);
+      this.events.onHud(this.nearestPlace(), this.driving ? Math.abs(this.driving.speed) * 3.6 : this.boating ? Math.abs(this.boating.speed) * 3.6 : null, Math.round(1 / this.frameTime), this.driving ? (this.driving.gear === 0 ? 'R' : String(this.driving.gear)) : this.boating ? `${Math.round(Math.abs(this.boating.speed) * 1.944)} nœuds` : undefined);
     }
     this.renderer.render(this.scene, this.camera);
   };

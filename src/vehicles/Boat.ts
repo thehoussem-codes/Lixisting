@@ -15,7 +15,9 @@ import type { Water } from '../world/Water';
  */
 
 const LENGTH = 6.2, BEAM = 2.3;
-const MAX_SPEED = 17, MAX_REVERSE = 4;
+const MAX_SPEED = 28, MAX_REVERSE = 4;
+const GRAVITY = 9.81;
+const SPRAY = 420;
 
 function hull(color: THREE.Color, stripe: THREE.Color): THREE.BufferGeometry {
   const b = new MeshBuilder();
@@ -186,6 +188,19 @@ function foamTexture(): THREE.CanvasTexture {
 
 const TRAIL = 72, WAKE_LIFE = 7;
 
+/** Goutte d'embrun : disque blanc aux bords fondus. */
+function dropTexture(): THREE.CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 32;
+  const ctx = canvas.getContext('2d')!;
+  const g = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
+  g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.5, 'rgba(255,255,255,0.6)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, 32, 32);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
 /** Ressort amorti (valeur suivie avec un peu d'inertie). */
 function spring(value: number, velocity: number, target: number, stiffness: number, damping: number, dt: number): [number, number] {
   const a = (target - value) * stiffness - velocity * damping;
@@ -196,6 +211,8 @@ function spring(value: number, velocity: number, target: number, stiffness: numb
 export class Boat {
   /** Choc contre un haut-fond, un quai ou un pieu (force 0 à 1) : bruit d'impact. */
   static onBump: ((strength: number) => void) | null = null;
+  /** Retombée sur l'eau après un saut de vague (force 0 à 1). */
+  static onSlam: ((boat: Boat, strength: number) => void) | null = null;
   readonly object = new THREE.Group();
   heading: number;
   speed = 0;
@@ -205,9 +222,19 @@ export class Boat {
   private vz = 0;
   private yawRate = 0;
   private y = 0; private vy = 0;
-  private pitch = 0; private vPitch = 0;
+  private pitch = 0;
   private roll = 0; private vRoll = 0;
   private wake: THREE.Mesh;
+  /** Niveau moyen de l'eau sous la coque à l'image précédente (pour sa vitesse verticale). */
+  private lastWater: number | null = null;
+  private pitchRate = 0;
+  private inWater = true;
+  /** Embruns : gouttes projetées par l'étrave et lors des retombées. */
+  private spray: THREE.Points;
+  private sprayVel = new Float32Array(SPRAY * 3);
+  private sprayLife = new Float32Array(SPRAY);
+  private sprayNext = 0;
+  private sprayDebt = 0;
   /** Points du sillage laissés par la poupe : position, âge, vitesse et travers du bateau à ce moment-là. */
   private trail: { x: number; z: number; age: number; speed: number; sx: number; sz: number; along: number }[] = [];
   private travelled = 0;
@@ -240,15 +267,25 @@ export class Boat {
     this.wake = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ map: foamTexture(), vertexColors: true, transparent: true, depthWrite: false, side: THREE.DoubleSide, fog: true }));
     this.wake.frustumCulled = false;
     this.wake.renderOrder = 2;
+
+    const sprayGeometry = new THREE.BufferGeometry();
+    sprayGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(SPRAY * 3), 3));
+    sprayGeometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(SPRAY * 4), 4));
+    this.spray = new THREE.Points(sprayGeometry, new THREE.PointsMaterial({ size: 0.8, map: dropTexture(), vertexColors: true, transparent: true, depthWrite: false, sizeAttenuation: true }));
+    this.spray.frustumCulled = false;
+    this.spray.renderOrder = 3;
+    scene.add(this.spray);
     scene.add(this.wake);
   }
 
   get position(): THREE.Vector3 { return this.object.position; }
   /** Assiette en degrés (tangage : étrave haute positive ; roulis : bâbord haut positif), pour les essais. */
-  get attitude(): { pitch: number; roll: number } { return { pitch: Math.round((this.pitch * 1800) / Math.PI) / 10, roll: Math.round((this.roll * 1800) / Math.PI) / 10 }; }
+  get attitude(): { pitch: number; roll: number; air: boolean; slams: number } { return { pitch: Math.round((this.pitch * 1800) / Math.PI) / 10, roll: Math.round((this.roll * 1800) / Math.PI) / 10, air: !this.inWater, slams: this.slams }; }
+  /** Nombre de retombées franches depuis le départ (essais). */
+  slams = 0;
 
   /** Pilotage (W/S : gaz et marche arrière, A/D : barre ; Espace : couper les gaz). Sans pilote : il dérive au mouillage. */
-  update(dt: number, input: Input | null, water: Water, time: number, collider: Collider | null, ground: (x: number, z: number) => number): void {
+  update(dt: number, input: Input | null, sea: Water, time: number, collider: Collider | null, ground: (x: number, z: number) => number): void {
     const forwardX = Math.sin(this.heading), forwardZ = Math.cos(this.heading);
     let throttle = 0, steer = 0;
     if (input) {
@@ -259,12 +296,14 @@ export class Boat {
     this.throttle += (Math.abs(throttle) - this.throttle) * Math.min(1, dt * 3);
     // Poussée, traînée de l'eau (linéaire + quadratique), plafond de vitesse.
     // Poussée de l'hélice (elle faiblit en approchant de la vitesse maxi) contre la traînée de la coque :
-    // environ 0 → 30 km/h en 2 s, 50 km/h en 6 s, plafond vers 58 km/h (31 nœuds, un open de 6 m avec 115 ch).
-    const thrust = throttle > 0 ? 6 * throttle * Math.max(0, 1 - (this.speed / 19) ** 2) : throttle < 0 ? (this.speed > 0 ? 7 : 2.6) * throttle : 0;
-    this.speed += (thrust - this.speed * 0.02 - this.speed * Math.abs(this.speed) * 0.0055 - (throttle === 0 ? this.speed * 0.08 : 0)) * dt;
+    // 0 → 50 km/h en 2,5 s environ, plafond vers 94 km/h (51 nœuds, gros hors-bord de 250 ch).
+    // Coque en l'air (saut de vague) : l'hélice brasse l'air, plus de poussée ni de freinage par l'eau.
+    const wet = this.inWater ? 1 : 0.15;
+    const thrust = wet * (throttle > 0 ? 7.5 * throttle * Math.max(0, 1 - (this.speed / 30) ** 2) : throttle < 0 ? (this.speed > 0 ? 7 : 2.6) * throttle : 0);
+    this.speed += (thrust - wet * (this.speed * 0.015 + this.speed * Math.abs(this.speed) * 0.0022 + (throttle === 0 ? this.speed * 0.08 : 0))) * dt;
     this.speed = Math.max(-MAX_REVERSE, Math.min(MAX_SPEED, this.speed));
     // Barre : efficace seulement avec de l'erre ; virage plus serré à moyenne vitesse.
-    const authority = Math.min(1, Math.abs(this.speed) / 3.5) * (1 - Math.min(0.45, Math.abs(this.speed) / MAX_SPEED * 0.45));
+    const authority = (this.inWater ? 1 : 0.1) * Math.min(1, Math.abs(this.speed) / 3.5) * (1 - Math.min(0.55, Math.abs(this.speed) / MAX_SPEED * 0.55));
     const targetYaw = steer * 0.85 * authority * Math.sign(this.speed || 1);
     this.yawRate += (targetYaw - this.yawRate) * Math.min(1, dt * 2.5);
     this.heading += this.yawRate * dt;
@@ -278,7 +317,7 @@ export class Boat {
     const nx = p.x + this.vx * dt, nz = p.z + this.vz * dt;
     const bowX = nx + forwardX * LENGTH * 0.5, bowZ = nz + forwardZ * LENGTH * 0.5;
     // Trop peu d'eau : terre sur la carte de la mer, moins de 0,9 m de fond, ou sol réel (plage, ponton) trop haut.
-    const shallow = (x: number, z: number) => { const s = water.sample(x, -z); return (!!s && (s.land || s.depth < 0.7)) || ground(x, z) > -0.6; };
+    const shallow = (x: number, z: number) => { const s = sea.sample(x, -z); return (!!s && (s.land || s.depth < 0.7)) || ground(x, z) > -0.6; };
     if (shallow(bowX, bowZ) || shallow(nx, nz) || collider?.blocked(nx, nz, 1.1, this.y + 0.3) || collider?.blocked(bowX, bowZ, 0.5, this.y + 0.3)) {
       if (Math.abs(this.speed) > 2.5 && this.rider) Boat.onBump?.(Math.min(1, Math.abs(this.speed) / 14));
       this.speed *= -0.2; this.vx *= -0.2; this.vz *= -0.2;
@@ -288,20 +327,102 @@ export class Boat {
 
     // Flottaison : eau sous l'étrave, la poupe et les deux bords.
     const sideX = Math.cos(this.heading), sideZ = -Math.sin(this.heading);
-    const h = (u: number, v: number) => water.heightAt(p.x + forwardX * u + sideX * v, p.z + forwardZ * u + sideZ * v, time);
+    const h = (u: number, v: number) => sea.heightAt(p.x + forwardX * u + sideX * v, p.z + forwardZ * u + sideZ * v, time);
     const bow = h(2.4, 0), stern = h(-2.4, 0), port = h(0, 1.0), starboard = h(0, -1.0);
-    const planing = Math.max(0, Math.min(1, (Math.abs(this.speed) - 5) / 7));
-    const level = (bow + stern + port + starboard) / 4 - 0.12 + planing * 0.18;
-    [this.y, this.vy] = spring(this.y, this.vy, level, 30, 7, dt);
-    [this.pitch, this.vPitch] = spring(this.pitch, this.vPitch, Math.atan2(bow - stern, 4.8) + planing * 0.085 + this.throttle * 0.02, 22, 6, dt);
-    [this.roll, this.vRoll] = spring(this.roll, this.vRoll, Math.atan2(port - starboard, 2.0) - this.yawRate * Math.abs(this.speed) * 0.018, 18, 5, dt);
+    const planing = Math.max(0, Math.min(1, (Math.abs(this.speed) - 5) / 9));
+    // Flottaison : poussée d'Archimède (ressort) et amortissement par rapport au mouvement de l'eau elle-même.
+    // L'eau sous la coque monte et descend d'autant plus vite qu'on la traverse vite : en haut d'une vague, à
+    // pleine vitesse, la surface s'enfuit plus vite que la gravité ne fait tomber le bateau, qui décolle, puis
+    // retombe (éclaboussure, secousse) ; à l'arrêt, il se balance simplement sur la houle.
+    const water = (bow + stern + port + starboard) / 4;
+    const rise = this.lastWater === null || dt <= 0 ? 0 : Math.max(-8, Math.min(8, (water - this.lastWater) / dt));
+    this.lastWater = water;
+    const rest = water - 0.12 + planing * 0.2;
+    const press = rest - this.y;                          // positif : coque enfoncée sous sa ligne de flottaison
+    const touching = press > -0.12;
+    if (touching && !this.inWater) {
+      const impact = Math.max(0, rise - this.vy);         // vitesse de la coque vers l'eau, au contact
+      if (impact > 1.6) {
+        const strength = Math.min(1, (impact - 1.6) / 5);
+        this.speed *= 1 - 0.08 * strength;
+        this.pitchRate *= 0.3;
+        this.burst(18 + Math.round(42 * strength), 2 + 4 * strength);
+        this.slams++;
+        Boat.onSlam?.(this, strength);
+      }
+    }
+    this.inWater = touching;
+    if (touching) this.vy += (GRAVITY * Math.min(4, press / 0.12) - (this.vy - rise) * 7) * dt;
+    else this.vy -= GRAVITY * dt;
+    this.y += this.vy * dt;
+    // Tangage : suit la pente de l'eau dans l'eau ; en l'air, garde son élan et pique doucement du nez.
+    const pitchTarget = Math.atan2(bow - stern, 4.8) + planing * 0.085 + this.throttle * 0.02;
+    if (touching) this.pitchRate += ((pitchTarget - this.pitch) * 22 - this.pitchRate * 6) * dt;
+    else this.pitchRate += (-0.35 - this.pitchRate * 0.4) * dt;
+    this.pitch = Math.max(-0.5, Math.min(0.6, this.pitch + this.pitchRate * dt));
+    if (touching) [this.roll, this.vRoll] = spring(this.roll, this.vRoll, Math.atan2(port - starboard, 2.0) - this.yawRate * Math.abs(this.speed) * 0.016, 18, 5, dt);
+    else this.roll += this.vRoll * dt;
     p.y = this.y;
     this.object.rotation.set(0, 0, 0);
     this.object.rotateY(this.heading);
     this.object.rotateX(-this.pitch);
     this.object.rotateZ(this.roll);
 
-    this.updateWake(dt, water, time, forwardX, forwardZ);
+    this.updateWake(dt, sea, time, forwardX, forwardZ);
+    this.updateSpray(dt, forwardX, forwardZ, water);
+  }
+
+  /** Gouttes lancées en gerbe autour de la coque (retombée sur l'eau). */
+  private burst(count: number, power: number): void {
+    const p = this.object.position;
+    for (let k = 0; k < count; k++) {
+      const a = Math.random() * Math.PI * 2, out = power * (0.5 + Math.random());
+      this.emit(p.x + Math.cos(a) * 1.4, p.y + 0.1, p.z + Math.sin(a) * 2.2, Math.cos(a) * out + this.vx * 0.4, power * (0.8 + Math.random()), Math.sin(a) * out + this.vz * 0.4, 0.8 + Math.random() * 0.6);
+    }
+  }
+
+  private emit(x: number, y: number, z: number, vx: number, vy: number, vz: number, life: number): void {
+    const i = this.sprayNext;
+    this.sprayNext = (this.sprayNext + 1) % SPRAY;
+    (this.spray.geometry.attributes.position as THREE.BufferAttribute).setXYZ(i, x, y, z);
+    this.sprayVel[i * 3] = vx; this.sprayVel[i * 3 + 1] = vy; this.sprayVel[i * 3 + 2] = vz;
+    this.sprayLife[i] = life;
+  }
+
+  /** Embruns d'étrave (à partir de 25 km/h, des deux côtés) et mouvement des gouttes. */
+  private updateSpray(dt: number, forwardX: number, forwardZ: number, water: number): void {
+    const p = this.object.position, speed = Math.abs(this.speed);
+    if (this.inWater && speed > 7 && this.speed > 0) {
+      this.sprayDebt += (speed - 7) * 9 * dt;
+      const sideX = Math.cos(this.heading), sideZ = -Math.sin(this.heading);
+      while (this.sprayDebt >= 1) {
+        this.sprayDebt -= 1;
+        if (speed > 12 && Math.random() < 0.3) {
+          // Gerbe de l'hélice derrière le moteur (« queue de coq »), à grande vitesse.
+          this.emit(p.x - forwardX * 3.6 + (Math.random() - 0.5) * 0.4, water + 0.1, p.z - forwardZ * 3.6 + (Math.random() - 0.5) * 0.4,
+            this.vx * 0.35 + (Math.random() - 0.5), 2.5 + Math.random() * 2.5, this.vz * 0.35 + (Math.random() - 0.5), 0.6 + Math.random() * 0.5);
+          continue;
+        }
+        const side = Math.random() < 0.5 ? -1 : 1, along = 0.6 + Math.random() * 1.4, out = 2 + Math.random() * 3 + speed * 0.12;
+        this.emit(p.x + forwardX * along + sideX * side * 1.05, water + 0.05, p.z + forwardZ * along + sideZ * side * 1.05,
+          sideX * side * out + this.vx * 0.55, 1.2 + Math.random() * 2 + speed * 0.05, sideZ * side * out + this.vz * 0.55, 0.5 + Math.random() * 0.5);
+      }
+    }
+    const pos = this.spray.geometry.attributes.position as THREE.BufferAttribute;
+    const col = this.spray.geometry.attributes.color as THREE.BufferAttribute;
+    for (let i = 0; i < SPRAY; i++) {
+      const life = this.sprayLife[i];
+      if (life <= 0) { col.setW(i, 0); continue; }
+      this.sprayLife[i] = life - dt;
+      this.sprayVel[i * 3 + 1] -= GRAVITY * dt;
+      const k = Math.exp(-0.8 * dt); // la gerbe est freinée par l'air
+      this.sprayVel[i * 3] *= k; this.sprayVel[i * 3 + 2] *= k;
+      const y = pos.getY(i) + this.sprayVel[i * 3 + 1] * dt;
+      pos.setXYZ(i, pos.getX(i) + this.sprayVel[i * 3] * dt, y, pos.getZ(i) + this.sprayVel[i * 3 + 2] * dt);
+      if (y < water - 0.6) this.sprayLife[i] = 0;
+      col.setXYZW(i, 0.96, 0.98, 1, Math.max(0, Math.min(0.85, this.sprayLife[i] * 1.4)));
+    }
+    pos.needsUpdate = true; col.needsUpdate = true;
   }
 
   private updateWake(dt: number, water: Water, time: number, forwardX: number, forwardZ: number): void {

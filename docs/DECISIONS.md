@@ -529,3 +529,10 @@ Skills chargés : `physics-tuning`, `game-ai`, `audio-design`, `threejs-material
 - Végétation de la ville : beaucoup de verdure était du maquis, pas de la forêt. Vert foncé : 55 % d'arbres et 45 % de buissons (au lieu de 90 % d'arbres) ; broussailles : buissons (quelques chênes) ; herbe : buissons épars seulement ; bois OSM : un tiers de buissons ; maquis OSM : buissons. Même mélange dans la wilaya.
 - Troncs solides : 216 520 troncs (arbres, palmiers, rochers) arrêtent le joueur et les voitures ; les buissons se traversent. Mesuré : le joueur s'arrête à 1 m du centre d'un ficus.
 - Toits solides en voiture : en conduite normale (arcade), la voiture ne « voyait » jamais les toits et tombait au travers jusque dans l'immeuble. Le sol tient maintenant compte des toits à la hauteur de la voiture avant chaque pas ; une voiture prise dans un bâtiment est posée sur le toit s'il est à moins de 1,8 m au-dessus, sinon ramenée dehors contre le mur. Mesuré : chute sur un toit (posée à 27,5 m, toit à 27,54 m), à cheval sur le bord (reste sur le toit), contre le mur sous le toit (rebond, jamais dedans).
+
+## Bateau plus rapide qui saute sur les vagues (20/11/2026)
+
+- Vitesse : environ 94 km/h en pointe (51 nœuds, gros hors-bord), 0 → 50 km/h en 2,5 s ; le compteur affiche km/h et nœuds.
+- Flottaison refaite : poussée d'Archimède et amortissement par rapport au mouvement de l'eau elle-même. À grande vitesse, l'eau sous la coque monte et descend vite : en haut des vagues le bateau décolle (jusqu'à 0,7 m), en l'air l'hélice ne pousse plus et la barre ne répond presque plus, puis il retombe : gerbe d'eau, bruit d'éclaboussure, secousse de la caméra, légère perte de vitesse. Mesuré face à la houle à 92 km/h : 7 retombées en 12 s.
+- Embruns d'étrave des deux côtés à partir de 25 km/h, gerbe derrière le moteur à grande vitesse.
+- Corrigé : le bruit de choc du bateau contre un pieu ou un haut-fond ne se déclenchait jamais (force trop faible).
