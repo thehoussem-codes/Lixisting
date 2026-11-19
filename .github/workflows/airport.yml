@@ -1,0 +1,32 @@
+# Télécharge le plan de l'aéroport d'Annaba (OSM) dans data/airport/.
+name: Extraire l'aéroport
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - tools/extract_airport.py
+      - .github/workflows/airport.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python tools/extract_airport.py
+      - name: Enregistrer les données dans le dépôt
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/airport
+          git diff --cached --quiet || git commit -m "Update Annaba airport plan from OSM"
+          git pull --rebase
+          git push
