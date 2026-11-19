@@ -164,7 +164,7 @@ export class Game {
       if (!car) return null;
       const p = car.object.position;
       return { x: Math.round(p.x * 10) / 10, n: Math.round(-p.z * 10) / 10, y: Math.round(p.y * 100) / 100, ground: Math.round(this.ground(p.x, p.z) * 100) / 100,
-        roof: Math.round(this.collider.roofAt(p.x, p.z, Infinity) * 100) / 100, inside: this.collider.inside(p.x, p.z, p.y + 0.3), kmh: Math.round(car.speed * 3.6) };
+        roof: Math.round((this.collider?.roofAt(p.x, p.z, Infinity) ?? -Infinity) * 100) / 100, inside: this.collider?.inside(p.x, p.z, p.y + 0.3) ?? false, kmh: Math.round(car.speed * 3.6) };
     };
     (window as unknown as Record<string, unknown>).lixitingDrive = () => {
       // Essais : avec ?voiture=identifiant, on amène ce modèle sous le joueur avant de monter dedans.
