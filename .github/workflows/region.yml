@@ -22,7 +22,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install pillow numpy rasterio
+      - run: pip install pillow numpy rasterio "overturemaps>=1.0" shapely
       - run: python tools/extract_region.py
       - name: Enregistrer les données dans le dépôt
         run: |

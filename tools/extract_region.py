@@ -42,18 +42,21 @@ TERRARIUM = "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}
 WORLDCOVER = "https://esa-worldcover.s3.eu-central-1.amazonaws.com/v200/2021/map/ESA_WorldCover_10m_2021_v200_N36E006_Map.tif"
 SERVERS = [
     "https://overpass-api.de/api/interpreter",
+    "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
     "https://overpass.kumi.systems/api/interpreter",
     "https://overpass.private.coffee/api/interpreter",
 ]
 
 
-def overpass_query():
+ROAD_KINDS = "motorway|motorway_link|trunk|trunk_link|primary|primary_link|secondary|secondary_link|tertiary|tertiary_link|unclassified|residential"
+
+
+def light_query():
+    """Côte, villes, limites, eau, voies ferrées, pistes : peu d'objets, une seule requête."""
     b = ",".join(str(v) for v in BBOX)
-    roads = "motorway|motorway_link|trunk|trunk_link|primary|primary_link|secondary|secondary_link|tertiary|tertiary_link|unclassified|residential"
     return f"""
-[out:json][timeout:600][maxsize:2147483648];
+[out:json][timeout:300];
 (
-  way["highway"~"^({roads})$"]({b});
   way["natural"="coastline"]({b});
   way["railway"="rail"]({b});
   way["waterway"~"^(river|canal)$"]({b});
@@ -61,29 +64,94 @@ def overpass_query():
   relation["natural"="water"]({b});
   way["landuse"="reservoir"]({b});
   way["natural"="wetland"]({b});
-  way["aeroway"~"^(runway|aerodrome)$"]({b});
+  way["aeroway"="runway"]({b});
   node["place"~"^(city|town|village|suburb|hamlet)$"]({b});
-  relation["boundary"="administrative"]["admin_level"~"^(4|6)$"]({b});
+  relation["boundary"="administrative"]["admin_level"="4"]({b});
 );
 out geom qt;
 """
 
 
-def download_osm():
-    data = urllib.parse.urlencode({"data": overpass_query()}).encode()
+def roads_query(box):
+    b = ",".join(f"{v:.4f}" for v in box)
+    return f"""
+[out:json][timeout:300];
+way["highway"~"^({ROAD_KINDS})$"]({b});
+out geom qt;
+"""
+
+
+def overpass(query, label):
+    data = urllib.parse.urlencode({"data": query}).encode()
     last = None
-    for server in SERVERS:
-        for attempt in range(2):
+    for attempt in range(3):
+        for server in SERVERS:
             try:
-                print(f"Overpass : {server} (essai {attempt + 1})", flush=True)
+                print(f"Overpass ({label}) : {server} (essai {attempt + 1})", flush=True)
                 request = urllib.request.Request(server, data=data, headers={"User-Agent": "lixiting-game-extract/0.2"})
-                with urllib.request.urlopen(request, timeout=900) as response:
-                    return json.loads(response.read())
+                with urllib.request.urlopen(request, timeout=360) as response:
+                    result = json.loads(response.read())
+                if "remark" in result and "runtime error" in str(result.get("remark")):
+                    raise RuntimeError(result["remark"])
+                return result
             except Exception as error:
                 last = error
                 print("  échec :", error, flush=True)
-                time.sleep(20)
-    raise SystemExit(f"Aucun serveur Overpass n'a répondu : {last}")
+                time.sleep(10)
+    print(f"  Overpass indisponible pour {label} : {last}", flush=True)
+    return None
+
+
+def overture_roads(box):
+    """Repli : les mêmes routes OSM, lues dans Overture Maps (transportation/segment)."""
+    import shapely.wkb
+    try:
+        from overturemaps import record_batch_reader
+    except ImportError:
+        from overturemaps.core import record_batch_reader
+    south, west, north, east = box
+    reader = record_batch_reader("segment", bbox=(west, south, east, north))
+    elements, wanted = [], set(ROAD_KINDS.split("|"))
+    for batch in reader or []:
+        data = batch.to_pydict()
+        for i in range(batch.num_rows):
+            if data.get("subtype", [None])[i] != "road" or data.get("class", [None])[i] not in wanted:
+                continue
+            line = shapely.wkb.loads(data["geometry"][i])
+            if line.geom_type != "LineString":
+                continue
+            tags = {"highway": data["class"][i]}
+            names = data.get("names", [None] * batch.num_rows)[i]
+            if names and names.get("primary"):
+                tags["name"] = names["primary"]
+            flags = data.get("road_flags", [None] * batch.num_rows)[i] or []
+            if any("is_bridge" in (f.get("values") or []) for f in flags if f):
+                tags["bridge"] = "yes"
+            geometry = [{"lat": y, "lon": x} for x, y in line.coords]
+            elements.append({"type": "way", "id": hash(data["id"][i]) & 0x7FFFFFFFFFFF, "tags": tags,
+                             "nodes": list(range(len(geometry))), "geometry": geometry})
+    print(f"  Overture : {len(elements)} routes", flush=True)
+    return elements
+
+
+def download_osm():
+    light = overpass(light_query(), "côte, villes, eau")
+    if light is None:
+        raise SystemExit("Overpass indisponible pour la côte et les villes.")
+    elements, seen = list(light["elements"]), {(e["type"], e["id"]) for e in light["elements"]}
+    south, west, north, east = BBOX
+    rows, cols = 3, 3
+    for r in range(rows):
+        for c in range(cols):
+            box = (south + (north - south) * r / rows, west + (east - west) * c / cols,
+                   south + (north - south) * (r + 1) / rows, west + (east - west) * (c + 1) / cols)
+            result = overpass(roads_query(box), f"routes {r * cols + c + 1}/9")
+            found = result["elements"] if result else overture_roads(box)
+            for e in found:
+                if (e["type"], e["id"]) not in seen:
+                    seen.add((e["type"], e["id"]))
+                    elements.append(e)
+    return {"elements": elements}
 
 
 def tile_xy(lat, lon, zoom):
