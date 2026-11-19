@@ -1,0 +1,78 @@
+{
+  "extracted_at": "2026-11-19T01:17:38+00:00",
+  "bbox_south_west_north_east": [
+    36.55,
+    7.2,
+    37.12,
+    8.1
+  ],
+  "rect_m": [
+    -49793.0,
+    -38334.5,
+    30391.0,
+    24921.9
+  ],
+  "osm": {
+    "elements": 10984,
+    "by_kind": {
+      "highway=residential": 7443,
+      "highway=unclassified": 836,
+      "highway=secondary": 479,
+      "highway=tertiary": 356,
+      "highway=primary": 343,
+      "railway=rail": 312,
+      "highway=trunk": 252,
+      "highway=trunk_link": 212,
+      "highway=motorway": 105,
+      "place=hamlet": 104,
+      "natural=water": 89,
+      "place=village": 86,
+      "natural=coastline": 65,
+      "highway=primary_link": 64,
+      "highway=motorway_link": 61,
+      "highway=secondary_link": 52,
+      "waterway=river": 33,
+      "natural=wetland": 25,
+      "highway=tertiary_link": 20,
+      "landuse=reservoir": 16,
+      "place=town": 12,
+      "waterway=canal": 7,
+      "place=suburb": 4,
+      "boundary=administrative": 4,
+      "aeroway=runway": 3,
+      "place=city": 1
+    },
+    "licence": "ODbL, © contributeurs OpenStreetMap"
+  },
+  "dem": {
+    "x0": -49793.0,
+    "n0": -38334.5,
+    "step": 60.0,
+    "cols": 1338,
+    "rows": 1056,
+    "encoding": "décimètres + 10000, ligne 0 = sud",
+    "zoom": 11,
+    "min_m": -167.1,
+    "max_m": 999.2,
+    "source": "Terrain Tiles (AWS Open Data, Terrarium)"
+  },
+  "cover": {
+    "x0": -49793.0,
+    "n0": -38334.5,
+    "step": 30.0,
+    "cols": 2674,
+    "rows": 2110,
+    "row0": "sud",
+    "classes": {
+      "10": 1510619,
+      "20": 284947,
+      "30": 839643,
+      "40": 1113968,
+      "50": 134266,
+      "60": 30166,
+      "80": 1633075,
+      "90": 95456
+    },
+    "source": "ESA WorldCover 10 m 2021 v200, CC BY 4.0"
+  }
+}
