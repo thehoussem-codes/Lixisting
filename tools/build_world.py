@@ -14,6 +14,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 RAW = ROOT / "data" / "osm" / "annaba_raw.json.gz"
+DETECTED = ROOT / "data" / "buildings" / "annaba_overture.json.gz"   # empreintes détectées sur images aériennes
 OUT = ROOT / "public" / "world" / "annaba.json"
 
 LEVEL_HEIGHT = 3.0
@@ -358,6 +359,125 @@ def building_height(tags, footprint_area, way_id):
     return levels * LEVEL_HEIGHT + 1, True
 
 
+DETECTED_SKIP_ZONES = [  # (x, n, rayon) : ports (conteneurs et navires pris pour des bâtiments), lieux faits à la main
+    (1392.0, 920.0, 380.0), (700.0, -250.0, 900.0),       # port de pêche et port de commerce
+]
+# Corniches refaites d'après les vidéos (axes dans tools/build_terrain.py, la mer à droite du sens de l'axe) :
+# aucun ajout côté mer à moins de 45 m de l'axe (promenade, pavillons faits à la main), ni côté terre à moins de 10 m.
+
+
+def add_detected_buildings(project, rect, land, osm_buildings, areas, roads, push_back, axis_segments):
+    """Bâtiments détectés automatiquement (Overture : Microsoft, Google) là où OSM n'a rien. Renvoie (liste, stats)."""
+    import numpy as np
+    from matplotlib.path import Path as MPath
+
+    if not DETECTED.exists():
+        return [], {"fichier absent": str(DETECTED)}
+    data = json.load(gzip.open(DETECTED, "rt", encoding="utf-8"))
+    rx0, ry0, rx1, ry1 = rect
+    stats = {"candidats": 0, "sur OSM": 0, "doublon": 0, "hors terre": 0, "zone exclue": 0, "taille": 0, "confiance": 0, "bord": 0}
+    CELL = 50.0
+
+    def cells_of(xs, ns):
+        for i in range(int(min(xs) // CELL), int(max(xs) // CELL) + 1):
+            for j in range(int(min(ns) // CELL), int(max(ns) // CELL) + 1):
+                yield (i, j)
+
+    index = {}
+
+    def register(ring, detected=False):
+        path = MPath(ring)
+        xs, ns = ring[:, 0], ring[:, 1]
+        entry = (path, ring.mean(axis=0), detected)
+        for key in cells_of(xs, ns):
+            index.setdefault(key, []).append(entry)
+
+    for b in osm_buildings:
+        register(np.array(b["p"], dtype=float).reshape(-1, 2))
+    blocked = [MPath(np.array(a["p"], dtype=float).reshape(-1, 2)) for a in areas if a["k"] in ("beach", "pitch")]
+    land_paths = [MPath(np.array(r, dtype=float)) for r in land]
+
+    from build_terrain import CORNICHES  # import tardif : build_terrain importe lui-même ce module
+
+    def near_corniche(x, n):
+        for _, axis, _, _ in CORNICHES:
+            for (ax, an, _), (bx, bn, _) in zip(axis, axis[1:]):
+                dx, dn = bx - ax, bn - an
+                t = max(0.0, min(1.0, ((x - ax) * dx + (n - an) * dn) / (dx * dx + dn * dn)))
+                d = math.hypot(x - ax - dx * t, n - an - dn * t)
+                sea = (x - ax) * dn - (n - an) * dx > 0   # à droite du sens de l'axe
+                if d < (45 if sea else 10):
+                    return True
+        return False
+
+    out = []
+    for k, b in enumerate(data["buildings"]):
+        if b["s"] == "o":
+            continue
+        p = b["p"]
+        ring = np.array([project(p[i + 1], p[i]) for i in range(0, len(p), 2)])
+        c = ring.mean(axis=0)
+        if not (rx0 <= c[0] <= rx1 and ry0 <= c[1] <= ry1):
+            continue
+        stats["candidats"] += 1
+        if b.get("c") is not None and b["c"] < 0.7:
+            stats["confiance"] += 1
+            continue
+        a = 0.5 * float(np.dot(ring[:, 0], np.roll(ring[:, 1], -1)) - np.dot(ring[:, 1], np.roll(ring[:, 0], -1)))
+        if not 20 <= abs(a) <= 6000:   # sous 20 m² : surtout des annexes et des cabanons
+            stats["taille"] += 1
+            continue
+        if min(edge_shore(q[0], q[1], rect) for q in ring) < 25:
+            stats["bord"] += 1
+            continue
+        if any(math.hypot(c[0] - zx, c[1] - zn) < r for zx, zn, r in DETECTED_SKIP_ZONES) or \
+                near_corniche(c[0], c[1]) or any(path.contains_point(c) for path in blocked):
+            stats["zone exclue"] += 1
+            continue
+        if not any(path.contains_point(c) for path in land_paths):
+            stats["hors terre"] += 1
+            continue
+        # Chevauchement : centre ou sommets (rapprochés de 30 % vers le centre) dans un bâtiment déjà là, ou
+        # centre d'un bâtiment voisin dans celui-ci.
+        probes = np.vstack([c[None, :], c + (ring - c) * 0.7])
+        own = MPath(ring)
+        hit = None
+        for key in set(cells_of(ring[:, 0], ring[:, 1])):
+            for path, centre, other in index.get(key, ()):
+                if path.contains_points(probes).any() or own.contains_point(centre):
+                    hit = "doublon" if other else "sur OSM"
+                    break
+            if hit:
+                break
+        if hit:
+            stats[hit] += 1
+            continue
+        if a < 0:
+            ring = ring[::-1]
+        register(ring, True)
+        footprint = abs(a)
+        if "h" in b:
+            height = float(b["h"])
+        elif "f" in b:
+            height = b["f"] * LEVEL_HEIGHT + 1
+        else:
+            height, _ = building_height({}, footprint, k)
+        kind = "house" if footprint < 170 and height <= 10 else "apartment"
+        out.append({"h": round(height, 1), "t": kind, "p": flat([tuple(v) for v in ring]), "o": b["s"]})
+    # Les empreintes détectées sont moins précises que les rues d'OSM : on les recule hors de toute la chaussée et
+    # de son trottoir (au lieu de rétrécir la rue autour d'elles, comme pour un bâtiment OSM).
+    bands = []
+    for road in roads:
+        if road["k"] in ("footway", "path", "steps", "track", "construction"):
+            continue
+        clear = road["w"] / 2 + (0.8 if road["k"] in ("service", "pedestrian") else 2.0)
+        line = road["_line"]
+        bands += [(a[0], a[1], b[0], b[1], clear) for a, b in zip(line, line[1:])]
+    kept, moved, dropped = push_back(out, bands + axis_segments)
+    stats.update({"ajoutés": len(kept), "reculés": moved, "retirés (chaussée)": dropped})
+    return kept, stats
+
+
 def main():
     osm = load()
     elements = osm["elements"]
@@ -669,6 +789,16 @@ def main():
     kept, moved, dropped = push_back(buildings, axis_segments)
     buildings = kept
     print(f"Bâtiments reculés hors de la chaussée : {moved} ; retirés (sur la chaussée) : {dropped}")
+
+    # --- Bâtiments absents d'OSM mais visibles sur les images aériennes (Microsoft et Google, via Overture Maps).
+    # Ajoutés à la fin de la liste (les numéros des bâtiments OSM ne changent pas) et seulement là où il n'y a
+    # rien : ni bâtiment OSM, ni autre détection, ni plage, terrain de sport, port, corniche aménagée à la main.
+    detected, detected_stats = add_detected_buildings(project, rect, land, buildings, areas, roads, push_back, axis_segments)
+    buildings += detected
+    for item in detected:
+        kinds[item["t"]] = kinds.get(item["t"], 0) + 1
+    estimated += len(detected)
+    print("Bâtiments détectés sur images aériennes :", detected_stats)
 
     # --- largeur des rues : elles ne doivent pas mordre sur les bâtiments voisins.
     # On mesure, le long de chaque rue, la distance au bâtiment le plus proche.

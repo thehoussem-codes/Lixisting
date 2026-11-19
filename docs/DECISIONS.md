@@ -501,3 +501,12 @@ Skills chargés : `physics-tuning`, `game-ai`, `audio-design`, `threejs-material
 - Un masque invisible au niveau du plat-bord empêche la surface de la mer d'apparaître sur le pont dans le creux des vagues.
 - Fond marin : même grain de sable que le terrain ; près du bord, pente douce juste au-dessus du talus de la plage puis vraie profondeur entre 24 et 90 m ; bords des herbiers fondus (une ligne nette suivait l'isobathe des 4 m).
 - Vérifié dans Chrome sans carte graphique (1 à 2 images/s) : montée et descente (ponton et nage), pleine vitesse, virages, marche arrière, arrêt devant la plage. Pas encore essayé sur un vrai Mac ni sur téléphone.
+
+## Bâtiments manquants, d'après les images aériennes (19/11/2026)
+
+- Source : Overture Maps (thème buildings, ODbL), qui réunit OSM et les bâtiments détectés automatiquement sur images aériennes et satellite par Microsoft (Global ML Building Footprints) et Google (Open Buildings). Téléchargé par une action GitHub pour toute la wilaya (253 283 bâtiments : 116 719 OSM, 89 384 Microsoft, 47 180 Google), dans `data/buildings/`.
+- Dans la ville : 18 805 détections candidates, 12 874 ajoutées (32 452 bâtiments au total au lieu de 19 578). Écartées : confiance Google sous 0,7 (2 613), moins de 20 m² (surtout des annexes) ou plus de 6 000 m² (2 407), chevauchement avec OSM ou doublon (89), ports (conteneurs et navires), plages, terrains de sport, promenades des corniches refaites à la main (570), faux rivage du bord de carte (176). Sur téléphone, les détections de moins de 45 m² ne sont pas affichées (mémoire de la carte graphique).
+- Les bâtiments OSM gardent leur numéro (les détections sont ajoutées à la fin). Les détections sont reculées hors de toute la chaussée et de son trottoir (elles sont moins précises que les rues d'OSM) : les rues ne sont pas rétrécies pour elles ; 76 détections presque entièrement sur une chaussée retirées.
+- Hauteurs : aucune mesure dans ces données pour l'Algérie ; estimées d'après la surface au sol (2 à 5 niveaux), comme les bâtiments OSM sans étiquette. Usage inconnu : maison sous 170 m² et 10 m, immeuble au-delà.
+- Effet visible : les îlots vides des quartiers ouest et sud (Plaine Ouest, Boukhadra, El Bouni…) et l'intérieur de Saint-Cloud sont maintenant bâtis comme sur les vues aériennes. Essai : `?detectes=0` pour revoir la ville avec OSM seul.
+- Limites : les détections automatiques peuvent manquer des bâtiments, en fusionner deux mitoyens ou en voir un de trop ; formes simplifiées (contours au plus près de 0,4 m).

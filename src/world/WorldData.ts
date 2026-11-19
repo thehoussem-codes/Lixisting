@@ -18,8 +18,11 @@ export interface WorldData {
   /** Feux tricolores réels : x, n, numéro du point du réseau routier (-1 si aucun)... */
   signals: number[];
   rails: { p: number[] }[];
-  /** t = usage (house, apartment, tower, mosque, school...) ; s = commerces au rez-de-chaussée. */
-  buildings: { h: number; t: string; p: number[]; n?: string; s?: number[]; c?: number; f?: [number, number] }[];
+  /**
+   * t = usage (house, apartment, tower, mosque, school...) ; s = commerces au rez-de-chaussée ;
+   * o = bâtiment absent d'OSM, détecté sur images aériennes ('m' Microsoft, 'g' Google, via Overture Maps).
+   */
+  buildings: { h: number; t: string; p: number[]; n?: string; s?: number[]; c?: number; f?: [number, number]; o?: string }[];
   /** Murs et clôtures cartographiés : type (wall, fence, city_wall, retaining), tracé x, n..., portails x, n... */
   barriers?: { k: string; p: number[]; g?: number[] }[];
   /** Portails en travers d'une voie : x, n, direction de la voie (dx, dn), demi-largeur... */

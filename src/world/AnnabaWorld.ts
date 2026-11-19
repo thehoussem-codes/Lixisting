@@ -219,6 +219,11 @@ export function buildAnnabaWorld(scene: THREE.Scene, data: WorldData, terrain: T
   const lampMaterial = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
   for (const builder of lamps.values()) add(builder, lampMaterial);
 
+  // Essais : ?detectes=0 retire les bâtiments détectés sur images aériennes (pour comparer avec OSM seul).
+  // Téléphone : sans les petites détections (moins de 45 m²), pour la mémoire de la carte graphique.
+  const area = (p: number[]) => { let s = 0; for (let i = 0; i < p.length; i += 2) { const j = (i + 2) % p.length; s += p[i] * p[j + 1] - p[j] * p[i + 1]; } return Math.abs(s) / 2; };
+  if (new URLSearchParams(window.location.search).get('detectes') === '0') data.buildings = data.buildings.filter((b) => !b.o);
+  else if (MOBILE) data.buildings = data.buildings.filter((b) => !b.o || area(b.p) >= 45);
   addGrandePoste(data); // îlot de la Grande Poste, absent d'OSM
   restyleChapuis(data); // villas blanches de la corniche Chapuis (vidéo)
   restyleSaintCloud(data); // enduits crème et villa jaune de la corniche Saint-Cloud (vidéo)

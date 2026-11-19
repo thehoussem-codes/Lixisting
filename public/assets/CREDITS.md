@@ -24,3 +24,7 @@ Données extraites par `tools/extract_landcover.py` dans `data/landcover/`.
 ## Profondeur de la mer
 
 Fonds marins : **EMODnet Bathymetry**, modèle numérique moyen (maille 1/16 de minute), licence [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Repli possible : NOAA ETOPO1 (domaine public). Extraction : `tools/extract_bathymetry.py` ; carte du jeu : `tools/build_sea.py` → `public/world/sea.png`.
+
+## Bâtiments détectés sur images aériennes
+
+Empreintes de bâtiments absents d'OpenStreetMap, détectées automatiquement sur des images aériennes et satellite : **Microsoft Global ML Building Footprints** et **Google Open Buildings**, réunies par la **Overture Maps Foundation** (thème « buildings »), licence [ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/). Extraction : `tools/extract_buildings.py` → `data/buildings/` ; ajout dans la ville (seulement là où OSM n'a rien) : `tools/build_world.py`. Hauteurs estimées d'après la surface au sol.
