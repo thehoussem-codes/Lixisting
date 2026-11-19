@@ -278,7 +278,7 @@ export class Boat {
     const nx = p.x + this.vx * dt, nz = p.z + this.vz * dt;
     const bowX = nx + forwardX * LENGTH * 0.5, bowZ = nz + forwardZ * LENGTH * 0.5;
     // Trop peu d'eau : terre sur la carte de la mer, moins de 0,9 m de fond, ou sol réel (plage, ponton) trop haut.
-    const shallow = (x: number, z: number) => { const s = water.sea?.sample(x, -z); return (!!s && (s.land || s.depth < 0.7)) || ground(x, z) > -0.6; };
+    const shallow = (x: number, z: number) => { const s = water.sample(x, -z); return (!!s && (s.land || s.depth < 0.7)) || ground(x, z) > -0.6; };
     if (shallow(bowX, bowZ) || shallow(nx, nz) || collider?.blocked(nx, nz, 1.1, this.y + 0.3) || collider?.blocked(bowX, bowZ, 0.5, this.y + 0.3)) {
       if (Math.abs(this.speed) > 2.5 && this.rider) Boat.onBump?.(Math.min(1, Math.abs(this.speed) / 14));
       this.speed *= -0.2; this.vx *= -0.2; this.vz *= -0.2;

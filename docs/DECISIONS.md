@@ -510,3 +510,15 @@ Skills chargés : `physics-tuning`, `game-ai`, `audio-design`, `threejs-material
 - Hauteurs : aucune mesure dans ces données pour l'Algérie ; estimées d'après la surface au sol (2 à 5 niveaux), comme les bâtiments OSM sans étiquette. Usage inconnu : maison sous 170 m² et 10 m, immeuble au-delà.
 - Effet visible : les îlots vides des quartiers ouest et sud (Plaine Ouest, Boukhadra, El Bouni…) et l'intérieur de Saint-Cloud sont maintenant bâtis comme sur les vues aériennes. Essai : `?detectes=0` pour revoir la ville avec OSM seul.
 - Limites : les détections automatiques peuvent manquer des bâtiments, en fusionner deux mitoyens ou en voir un de trop ; formes simplifiées (contours au plus près de 0,4 m).
+
+## Toute la wilaya autour de la ville (19-20/11/2026)
+
+- Zone : de Chetaïbi à l'ouest jusqu'à la limite d'El Tarf à l'est, et au sud jusqu'à Guelma (36,55-37,12° N, 7,20-8,10° E, environ 80 × 63 km). Les abords (El Tarf, Guelma, Skikda) sont dans la même zone, avec le même détail léger. La limite de la wilaya d'Annaba (OSM) est tracée sur la carte.
+- Données : OSM par Overpass (côte, 7 867 routes et rues hors de la ville, voies ferrées, rivières, lacs, pistes, 144 villes et villages, limites), relief Terrain Tiles au pas de 60 m, sol ESA WorldCover, bâtiments Overture (178 728 hors de la ville, en boîtes orientées : rectangle le plus serré autour du vrai contour).
+- Rendu : cases de 1 km construites autour du joueur au fur et à mesure (une par image) et libérées quand il s'éloigne : relief coloré selon le sol (sable au bord de l'eau, falaises), routes posées sur le relief (ponts en ligne droite), rivières et lacs, bâtiments à façades (maisons, briques, ciment, immeubles), forêts de chênes et de pins d'après WorldCover.
+- Plus de faux rivage autour de la ville : la terre continue au-delà du rectangle. Sur les 200 derniers mètres, le relief détaillé rejoint celui de la wilaya ; mesuré aux passages de routes : moins de 10 cm de marche (après correction d'un écart de 1 m dû au lissage des rues). Les cases du bord passent 15 cm sous la ville.
+- Mer : deuxième carte de la mer (pixels de 48 m) pour toute la côte de la wilaya, fondue avec celle de la ville ; le bateau peut aller partout.
+- Une voiture garée dans chaque ville et village (45 au plus). Carte (M) : toute la wilaya, clic sur une ville pour y aller (on arrive au bord de la rue la plus proche).
+- Téléphone : cases construites moins loin, image de la carte deux fois plus petite (mémoire).
+- Corrigé en passant : 807 bâtiments OSM marqués « usage certain » s'affichaient en noir (le drapeau était pris pour une couleur).
+- Limites : détail léger (pas de trottoirs ni de feux, bâtiments en boîtes, relief à 60 m) ; pas de circulation hors de la ville ; Lac Fetzara figure en eau d'après OSM.

@@ -237,10 +237,18 @@ def edge_wobble(along, length):
     return EDGE_INSET + wave * max(0.0, min(1.0, corner / 300))
 
 
+# Depuis que la wilaya entière entoure la ville (tools/build_region.py, data/region/), la terre continue au-delà
+# du rectangle : plus de faux rivage. Sans les données de la wilaya, l'ancienne côte inventée revient.
+REGION_AROUND = (ROOT / "data" / "region" / "summary.json").exists()
+
+
 def edge_shore(x, n, rect):
     """Distance (m) au faux rivage qui longe l'intérieur du rectangle : négative au large, positive à terre.
     La ville n'est entourée par la mer qu'au nord et à l'est ; au sud et à l'ouest, à la demande de Houssem
-    (ville « entourée par la mer, comme une île »), le bord de la carte devient une côte inventée."""
+    (ville « entourée par la mer, comme une île »), le bord de la carte devient une côte inventée.
+    Avec la wilaya autour (REGION_AROUND), il n'y a plus de faux rivage : distance infinie."""
+    if REGION_AROUND:
+        return 1e9
     x0, n0, x1, n1 = rect
     w, h = x1 - x0, n1 - n0
     return min(n - n0 - edge_wobble(x - x0, w), x1 - x - edge_wobble(n - n0, h),
@@ -249,6 +257,8 @@ def edge_shore(x, n, rect):
 
 def inset_edges(ring, rect):
     """Remplace les segments d'un contour de terre qui suivent le bord du rectangle par le faux rivage ondulé."""
+    if REGION_AROUND:
+        return ring
     x0, n0, x1, n1 = rect
     w, h = x1 - x0, n1 - n0
 

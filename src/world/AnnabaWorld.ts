@@ -130,7 +130,7 @@ export function buildAnnabaWorld(scene: THREE.Scene, data: WorldData, terrain: T
   };
 
   // Mer animée au niveau 0 ; le terrain descend en pente sous la surface le long du rivage.
-  const water = new Water(scene, HORIZON, FOG_DENSITY);
+  const water = new Water(scene, HORIZON, FOG_DENSITY, data.meta.rect_m);
 
   // Terre ferme en relief ; plages, bois et pelouses sont peints dans ses couleurs.
   scene.add(terrain.mesh);

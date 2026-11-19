@@ -45,10 +45,12 @@ export class SeaMap {
     readonly depthMax: number, private pixels: Uint8ClampedArray, readonly texture: THREE.Texture,
   ) {}
 
-  static async load(base: string, version: string): Promise<SeaMap> {
-    const meta = await (await fetch(`${base}world/sea.json?v=${version}`)).json();
+  static async load(base: string, version: string, name = 'sea'): Promise<SeaMap> {
+    const response = await fetch(`${base}world/${name}.json?v=${version}`);
+    if (!response.ok) throw new Error(`${name}.json : ${response.status}`);
+    const meta = await response.json();
     const image = new Image();
-    image.src = `${base}world/sea.png?v=${version}`;
+    image.src = `${base}world/${name}.png?v=${version}`;
     await image.decode();
     const canvas = document.createElement('canvas');
     canvas.width = meta.cols; canvas.height = meta.rows;
@@ -75,6 +77,11 @@ export class SeaMap {
     return { shore: lerp(0), depth: this.depthMax * g * g, land: lerp(2) > 127 };
   }
 
+  /** Vrai si x, n est dans la carte, à plus de `inset` mètres du bord. */
+  contains(x: number, n: number, inset: number): boolean {
+    return x > this.x0 + inset && x < this.x0 + this.cols * this.step - inset && n > this.n0 + inset && n < this.n0 + this.rows * this.step - inset;
+  }
+
   /** Rectangle couvert, pour le shader : x0, n0 (sud), largeur, hauteur. */
   rect(): THREE.Vector4 {
     return new THREE.Vector4(this.x0, this.n0, this.cols * this.step, this.rows * this.step);
@@ -94,7 +101,18 @@ const GERSTNER = /* glsl */ `
   const float WAVE_PHASE[${WAVES.length}] = float[](${WAVES.map((w) => w.phase.toFixed(3)).join(', ')});
   uniform sampler2D uSea;
   uniform vec4 uSeaRect;
+  uniform sampler2D uSea2;
+  uniform vec4 uSeaRect2;
   vec2 seaUv(vec2 xz) { return vec2((xz.x - uSeaRect.x) / uSeaRect.z, (-xz.y - uSeaRect.y) / uSeaRect.w); }
+  // Carte détaillée (16 m) autour de la ville, carte de la wilaya (48 m) au-delà, fondues sur 300 m.
+  vec3 seaAt(vec2 xz) {
+    vec2 uv = seaUv(xz);
+    vec2 edge = min(uv, 1.0 - uv) * uSeaRect.zw;
+    float k = smoothstep(50.0, 350.0, min(edge.x, edge.y));
+    vec3 near = texture2D(uSea, uv).rgb;
+    vec3 far = texture2D(uSea2, vec2((xz.x - uSeaRect2.x) / uSeaRect2.z, (-xz.y - uSeaRect2.y) / uSeaRect2.w)).rgb;
+    return mix(far, near, k);
+  }
   float seaDepth(vec3 s) { return 400.0 * s.g * s.g; }
   float waveDamp(float depth) { return 0.22 + 0.78 * smoothstep(0.5, 9.0, depth); }
 `;
@@ -110,7 +128,7 @@ const vertexShader = /* glsl */ `
     vec4 world = modelMatrix * vec4(position, 1.0);
     // Les vagues s'aplatissent vers le bord de la nappe, pour se raccorder à l'étendue fixe.
     float fade = 1.0 - smoothstep(${(NEAR_SIZE * 0.3).toFixed(1)}, ${(NEAR_SIZE * 0.48).toFixed(1)}, distance(world.xz, uCenter.xz));
-    float damp = waveDamp(seaDepth(texture2D(uSea, seaUv(world.xz)).rgb)) * fade;
+    float damp = waveDamp(seaDepth(seaAt(world.xz))) * fade;
     vec3 offset = vec3(0.0);
     vec3 n = vec3(0.0, 1.0, 0.0);
     float crest = 0.0;
@@ -148,7 +166,7 @@ const fragmentShader = /* glsl */ `
   vec3 srgb(vec3 c) { return pow(c, vec3(2.2)); }
 
   void main() {
-    vec3 sea = texture2D(uSea, seaUv(vWorld.xz)).rgb;
+    vec3 sea = seaAt(vWorld.xz);
     float shore = sea.r * 255.0;
     float depth = seaDepth(sea);
 
@@ -225,7 +243,7 @@ function rippleTexture(): THREE.DataTexture {
 }
 
 /** Fond marin : sable clair près du bord, plus sombre en profondeur, taches d'herbiers (posidonies). */
-function buildSeabed(scene: THREE.Scene, map: SeaMap): void {
+function buildSeabed(scene: THREE.Scene, map: SeaMap, cityRect?: number[]): void {
   const stride = MOBILE ? 3 : 2, reach = MOBILE ? 450 : 800;
   const positions: number[] = [], colors: number[] = [], index: number[] = [];
   const ids = new Map<number, number>();
@@ -236,7 +254,9 @@ function buildSeabed(scene: THREE.Scene, map: SeaMap): void {
     if (known !== undefined) return known;
     const x = map.x0 + (col + 0.5) * map.step, n = map.n0 + map.rows * map.step - (row + 0.5) * map.step;
     const s = map.sample(x, n);
-    if (s.shore > reach) { ids.set(key, -1); return -1; }
+    // Hors de la ville détaillée (100 m de marge), c'est le relief de la wilaya qui sert de fond marin.
+    const outside = cityRect && (x < cityRect[0] - 100 || x > cityRect[2] + 100 || n < cityRect[1] - 100 || n > cityRect[3] + 100);
+    if (s.shore > reach || outside) { ids.set(key, -1); return -1; }
     // Sous la plage : juste sous le sable (caché par le terrain) ; au bord : pente un peu au-dessus du talus du
     // terrain (qu'elle masque), puis la vraie profondeur.
     // Près du bord, la carte de la mer (pixels de 16 m) est plus profonde que le talus du terrain : le fond suit
@@ -283,8 +303,11 @@ export class Water {
   private material: THREE.ShaderMaterial;
   /** Carte de la mer (profondeur, rivage) ; null tant qu'elle n'est pas chargée. */
   sea: SeaMap | null = null;
+  /** Carte de la mer de toute la wilaya (plus grossière), utilisée hors de la carte détaillée. */
+  seaRegion: SeaMap | null = null;
 
-  constructor(scene: THREE.Scene, fogColor: number, fogDensity: number) {
+  /** cityRect : rectangle de la ville détaillée (x0, n0, x1, n1) ; le fond marin détaillé s'y limite. */
+  constructor(scene: THREE.Scene, fogColor: number, fogDensity: number, cityRect?: number[]) {
     // En attendant la carte : eau profonde partout (pixel 1 × 1).
     const placeholder = new THREE.DataTexture(new Uint8Array([255, 200, 0, 255]), 1, 1, THREE.RGBAFormat);
     placeholder.needsUpdate = true;
@@ -293,6 +316,8 @@ export class Water {
       uCenter: { value: new THREE.Vector3() },
       uSea: { value: placeholder as THREE.Texture },
       uSeaRect: { value: new THREE.Vector4(-1e5, -1e5, 2e5, 2e5) },
+      uSea2: { value: placeholder as THREE.Texture },
+      uSeaRect2: { value: new THREE.Vector4(-1e5, -1e5, 2e5, 2e5) },
       uRipples: { value: rippleTexture() },
       uSun: { value: new THREE.Vector3(0.6, 0.75, 0.25) },
       uZenith: { value: new THREE.Color(0x5f97cf) },
@@ -319,8 +344,13 @@ export class Water {
       this.sea = map;
       this.material.uniforms.uSea.value = map.texture;
       this.material.uniforms.uSeaRect.value = map.rect();
-      buildSeabed(scene, map);
+      buildSeabed(scene, map, cityRect);
     }).catch((error) => console.warn('Carte de la mer indisponible :', error));
+    SeaMap.load(import.meta.env.BASE_URL, __BUILD_ID__, 'sea_region').then((map) => {
+      this.seaRegion = map;
+      this.material.uniforms.uSea2.value = map.texture;
+      this.material.uniforms.uSeaRect2.value = map.rect();
+    }).catch(() => console.info('Pas de carte de la mer de la wilaya.'));
   }
 
   /** Direction du soleil (vers le soleil), pour les reflets. */
@@ -330,8 +360,15 @@ export class Water {
 
   /** Hauteur de l'eau au point x, z (monde) à l'instant t, vagues comprises (amorties dans les petits fonds). */
   heightAt(x: number, z: number, t: number): number {
-    const damp = this.sea ? waveDamp(this.sea.sample(x, -z).depth) : 1;
-    return waveHeight(x, z, t, damp);
+    const s = this.sample(x, -z);
+    return waveHeight(x, z, t, s ? waveDamp(s.depth) : 1);
+  }
+
+  /** Mer en x, n : carte détaillée près de la ville, carte de la wilaya ailleurs (null avant chargement). */
+  sample(x: number, n: number): { shore: number; depth: number; land: boolean } | null {
+    if (this.sea && this.sea.contains(x, n, 60)) return this.sea.sample(x, n);
+    if (this.seaRegion && this.seaRegion.contains(x, n, 0)) return this.seaRegion.sample(x, n);
+    return this.sea ? this.sea.sample(x, n) : null;
   }
 
   /** À appeler à chaque image : la nappe suit la caméra par pas entiers, pour que les vagues ne glissent pas. */

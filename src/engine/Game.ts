@@ -10,6 +10,7 @@ import { ThirdPersonCamera } from '../player/ThirdPersonCamera';
 import { Car } from '../vehicles/Car';
 import { Boat } from '../vehicles/Boat';
 import type { Marina } from '../world/TocheMarina';
+import { Region } from '../world/Region';
 import { CAR_CATALOG, MOTO_CATALOG, applyVehicleAssets } from '../vehicles/CarModels';
 import { assets } from '../assets/AssetLibrary';
 import { Traffic } from '../vehicles/Traffic';
@@ -41,6 +42,7 @@ const ENTER_DISTANCE = 4.5;
 const SECTOR = 400;          // taille des secteurs du monde (m)
 const VIEW_DISTANCE = MOBILE ? 850 : 1400; // au-delà, tout est noyé dans le brouillard
 const ROAD_SURFACE = 0.2;
+const KEEP_GEOMETRY = new URLSearchParams(window.location.search).has('garder'); // essais : garder les maillages en mémoire
 
 export interface GameEvents {
   onStatus(text: string): void;
@@ -100,6 +102,8 @@ export class Game {
   private boats: Boat[] = [];
   private boating: Boat | null = null;
   private marina: Marina | null = null;
+  /** Toute la wilaya en détail léger, autour de la ville (chargée après elle). */
+  private region: Region | null = null;
   private helm = new THREE.Vector3();
   /** Ce qui bloque le personnage à pied : bâtiments et voitures. */
   private obstacles = {
@@ -176,6 +180,18 @@ export class Game {
     };
     // Essais : mémoire des maillages envoyés à la carte graphique (Mo), par type de matériau.
     (window as unknown as Record<string, unknown>).__scene = this.scene;
+    // Essais : ce qui est sous le point (sx, sy) de l'écran (0 à 1) ; avec ?garder=1 pour le décor fixe.
+    (window as unknown as Record<string, unknown>).lixitingPick = (sx: number, sy: number) => {
+      const ray = new THREE.Raycaster();
+      ray.setFromCamera(new THREE.Vector2(sx * 2 - 1, -(sy * 2 - 1)), this.camera);
+      const hits = ray.intersectObjects(this.scene.children, true).filter((h) => (h.object as THREE.Mesh).isMesh && h.object.visible && (h.object as THREE.Mesh).geometry.attributes.position.array);
+      const hit = hits[0];
+      if (!hit) return null;
+      const mesh = hit.object as THREE.Mesh, material = mesh.material as THREE.MeshLambertMaterial, color = mesh.geometry.attributes.color;
+      return { name: mesh.name, type: material.type, map: material.map ? (material.map.image as HTMLCanvasElement)?.width : null, side: material.side, order: mesh.renderOrder,
+        distance: Math.round(hit.distance), point: hit.point.toArray().map(Math.round), normal: hit.face?.normal.toArray().map((v) => Math.round(v * 100) / 100),
+        color: color && hit.face ? [color.getX(hit.face.a), color.getY(hit.face.a), color.getZ(hit.face.a)].map((v) => Math.round(v * 100) / 100) : null, uv: hit.uv?.toArray().map((v) => Math.round(v * 100) / 100) };
+    };
     (window as unknown as Record<string, unknown>).lixitingGpu = () => {
       const seen = new Set<THREE.BufferGeometry>(), out: Record<string, number> = {};
       let total = 0;
@@ -221,6 +237,7 @@ export class Game {
       scale: this.renderScale,
       swimming: this.player.swimming,
       character: this.player.probe(),
+      regionTiles: this.region?.built ?? null,
       boat: this.boating ? { kmh: Math.round(this.boating.speed * 3.6), y: Math.round(this.boating.position.y * 100) / 100 } : null,
       car: this.driving ? { id: this.driving.spec.id, topKmh: Math.round(this.driving.topSpeed * 3.6), sprint: this.driving.spec.sprint ?? 1, gear: this.driving.gear, kmh: Math.round(this.driving.speed * 3.6), above: Math.round((this.driving.object.position.y - this.ground(this.driving.object.position.x, this.driving.object.position.z)) * 100) / 100, ...this.driving.telemetry } : null,
     });
@@ -277,7 +294,12 @@ export class Game {
       // Personnage et voitures roulent sur la surface des rues, posée 20 cm au-dessus du terrain brut.
       // Sans ce décalage, les roues s'enfonçaient dans la chaussée.
       // En mer et sur la pente du rivage (sous 40 cm), pas de décalage : c'est le fond marin.
-      this.ground = (x, z) => { const h = terrain.heightAt(x, z); return h > 0.39 ? h + ROAD_SURFACE : h; };
+      this.ground = (x, z) => {
+        // Hors du rectangle de la ville détaillée : le relief léger de la wilaya (dès qu'il est chargé).
+        const region = this.region;
+        const h = region && !region.inCity(x, -z) && region.covers(x, -z) ? region.height(x, z) : terrain.heightAt(x, z);
+        return h > 0.39 ? h + ROAD_SURFACE : h;
+      };
       Car.waterLevel = 0;
       const heap = () => Math.round(((performance as unknown as { memory?: { usedJSHeapSize: number } }).memory?.usedJSHeapSize ?? 0) / 1e6);
       const h0 = heap();
@@ -339,7 +361,7 @@ export class Game {
       const release = function (this: THREE.BufferAttribute) { (this as unknown as { array: unknown }).array = null; };
       this.scene.traverse((object) => {
         const mesh = object as THREE.Mesh;
-        if (!mesh.isMesh || mesh.parent !== this.scene || !mesh.geometry || mesh.geometry === terrain.mesh.geometry) return;
+        if (!mesh.isMesh || mesh.parent !== this.scene || !mesh.geometry || mesh.geometry === terrain.mesh.geometry || KEEP_GEOMETRY) return;
         if ((mesh as unknown as THREE.InstancedMesh).isInstancedMesh || !(mesh.material instanceof THREE.MeshLambertMaterial)) return;
         mesh.geometry.computeBoundingSphere();
         for (const attribute of Object.values(mesh.geometry.attributes)) (attribute as THREE.BufferAttribute).onUpload(release);
@@ -361,7 +383,7 @@ export class Game {
       // Garage de l'Est : repère sur la carte, et toutes les voitures normales du jeu exposées à l'intérieur.
       const garage = world.edits.garage;
       if (garage) data.places.push({ name: garage.name, ...garage.place });
-      this.map = new MapView(data, (index) => this.goToPlace(index));
+      this.map = new MapView(data, (index) => this.goToPlace(index), (x, n) => this.goToPoint(x, n));
       this.events.onPlaces(data.places);
       // Une voiture garée à chaque repère, pour en avoir toujours une sous la main.
       data.places.forEach((place, i) => {
@@ -415,6 +437,31 @@ export class Game {
           this.scene.add(car.object);
         });
       }
+      // Le reste de la wilaya (relief, routes, villes, forêts), chargé une fois la ville prête.
+      Region.load(import.meta.env.BASE_URL, __BUILD_ID__).then((region) => {
+        if (this.disposed) return;
+        region.attach(this.scene, world.collider);
+        this.region = region;
+        this.map?.setRegion(region.data);
+        // Une voiture garée au bord de la route principale de chaque ville et de chaque village.
+        let parked = 0;
+        const fleet = CAR_CATALOG.filter((spec) => spec.topSpeed !== null && spec.id !== 'exemple');
+        for (const place of region.data.places) {
+          if (place.k === 'hamlet' || place.k === 'suburb' || parked >= 45) continue;
+          const road = region.nearestRoad(place.x, place.n, 250);
+          if (!road) continue;
+          const { x, n, heading, w } = road;
+          const spec = fleet[parked % fleet.length];
+          const car = new Car(spec, spec.colors[parked % spec.colors.length]);
+          // Côté droit de la chaussée, dans le sens de la route.
+          const side = w / 2 - 1.3;
+          car.place(x - Math.cos(heading) * side, -n + Math.sin(heading) * side, heading);
+          this.cars.push(car);
+          this.scene.add(car.object);
+          parked++;
+        }
+        console.info(`Wilaya : ${region.data.places.length} villes et villages, ${region.data.meta.roads} routes, ${region.data.meta.buildings} bâtiments`);
+      }).catch((error) => console.warn('Wilaya indisponible :', error));
       const estimated = Math.round((100 * data.meta.buildings_height_estimated) / data.meta.buildings);
       this.events.onStatus(`${data.meta.buildings} bâtiments (hauteurs estimées : ${estimated} %) · ${data.meta.roads} tronçons de voies · ${treeCount} arbres · relief réel à 30 m`);
     } catch (error) {
@@ -435,10 +482,32 @@ export class Game {
     this.player.teleport(place.x, this.ground(place.x, -place.n), -place.n);
   }
 
+  /** Téléportation vers un point de la carte (ville ou village de la wilaya). */
+  private goToPoint(x: number, n: number): void {
+    if (this.driving) { this.driving.speed = 0; this.driving = null; this.player.object.visible = true; }
+    if (this.boating) this.leaveBoat();
+    // Les cases autour du point d'arrivée sont construites tout de suite (la première image est un peu plus longue).
+    // On arrive au bord de la rue la plus proche (le point d'une ville tombe souvent sur un bâtiment).
+    const road = this.region?.nearestRoad(x, n, 600);
+    if (road) { x = road.x - Math.cos(road.heading) * (road.w / 2 + 1.2); n = road.n - Math.sin(road.heading) * (road.w / 2 + 1.2); }
+    this.region?.update(x, -n, 600);
+    this.player.teleport(x, this.ground(x, -n), -n);
+  }
+
   /** Nom du repère le plus proche (à moins de 700 m), façon "nom de quartier". */
   private nearestPlace(): string {
     const { x, z } = this.player.object.position;
     for (const label of this.labels) if (Math.hypot(label.x - x, -label.n - z) < label.radius) return label.name;
+    // Hors de la ville : la ville ou le village le plus proche de la wilaya.
+    if (this.region && !this.region.inCity(x, -z)) {
+      let best = Infinity, name = '';
+      for (const place of this.region.data.places) {
+        const reach = place.k === 'city' ? 4000 : place.k === 'town' ? 2500 : place.k === 'village' || place.k === 'suburb' ? 1400 : 700;
+        const d = Math.hypot(place.x - x, -place.n - z);
+        if (d < reach && d / reach < best) { best = d / reach; name = place.name; }
+      }
+      return name;
+    }
     let best = 700, name = '';
     for (const place of this.places) {
       const d = Math.hypot(place.x - x, -place.n - z);
@@ -651,6 +720,7 @@ export class Game {
     this.harbor?.update(this.time, this.camera.position);
     this.touch?.setDriving(this.driving !== null || this.boating !== null);
     this.trees?.update(this.camera.position.x, this.camera.position.z);
+    this.region?.update(this.camera.position.x, this.camera.position.z, this.region.built ? 5 : 400);
     // Résolution automatique : on allège le calcul si le jeu rame, on le raffine s'il a de la marge.
     this.scaleTimer -= elapsed;
     if (AUTO_SCALE && this.scaleTimer <= 0) {

@@ -112,6 +112,33 @@ class LandCover:
         return self._rgb[row, col]
 
 
+class RegionRelief:
+    """Relief léger de la wilaya (public/world/region.png, voir build_region.py), interpolé comme dans le jeu."""
+
+    def __init__(self, heights, x0, n0, step):
+        self.heights, self.x0, self.n0, self.step = heights, x0, n0, step
+
+    @staticmethod
+    def load():
+        path, meta_path = ROOT / "public" / "world" / "region.png", ROOT / "public" / "world" / "region.json"
+        if not path.exists() or not meta_path.exists():
+            return None
+        from PIL import Image
+        relief = json.loads(meta_path.read_text(encoding="utf-8"))["meta"]["relief"]
+        rgb = np.asarray(Image.open(path).convert("RGB")).astype(np.float64)
+        heights = ((rgb[..., 0] * 256 + rgb[..., 1]) - 32768) / 10          # ligne 0 = sud
+        return RegionRelief(heights, relief["x0"], relief["n0"], relief["step"])
+
+    def height(self, x, n):
+        rows, cols = self.heights.shape
+        fx, fy = (np.asarray(x) - self.x0) / self.step, (np.asarray(n) - self.n0) / self.step
+        j, i = np.floor(fx).astype(int), np.floor(fy).astype(int)
+        ax, ay = fx - j, fy - i
+        H = lambda jj, ii: self.heights[np.clip(ii, 0, rows - 1), np.clip(jj, 0, cols - 1)]  # noqa: E731
+        a, b, c, d = H(j, i), H(j + 1, i), H(j + 1, i + 1), H(j, i + 1)
+        return np.where(ax >= ay, a + (b - a) * ax + (c - b) * ay, a + (d - a) * ay + (c - d) * ax)
+
+
 def cours_promenade(world):
     """Promenade centrale du Cours de la Révolution : bande entre ses deux chaussées réelles (OSM),
     du bord du trottoir ouest au bord du trottoir est. Renvoie (anneau, ligne ouest, ligne est) ou None."""
@@ -206,6 +233,15 @@ def main():
         target = soft * (1 - steep) + softer * steep
         grid = np.maximum(grid * (1 - blend) + target * blend, MIN_HEIGHT * fall ** 1.5)
         print("relief lissé le long des rues :", int((blend > 0).sum()), "points de grille")
+    # (Après le lissage des rues, qui sinon décalait le bord.)
+    # Wilaya autour de la ville : sur les 200 derniers mètres avant le bord du rectangle, le relief rejoint celui de
+    # la wilaya (public/world/region.png, même calcul que Region.height dans le jeu) : raccord sans marche.
+    region = RegionRelief.load()
+    if region is not None:
+        edge = np.minimum(np.minimum(gx - x0, x1 - gx), np.minimum(gn - n0, n1 - gn))
+        blend = np.clip(1 - edge / 200, 0, 1) ** 1.5
+        grid = grid * (1 - blend) + np.maximum(region.height(gx, gn), MIN_HEIGHT) * blend
+        print("raccord avec la wilaya :", int((blend > 0).sum()), "points de grille")
 
     def height(x, n):
         """Même calcul que dans le jeu (Terrain.heightAt) : interpolation dans la grille à 30 m."""
