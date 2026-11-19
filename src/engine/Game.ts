@@ -145,6 +145,27 @@ export class Game {
     this.resize();
     void this.loadWorld();
     // Vérifications automatiques : monter dans la voiture la plus proche, quelle que soit la distance.
+    // Essais : la voiture conduite est lâchée de h mètres au-dessus du sol en x, n (cap en degrés), à vitesse v.
+    (window as unknown as Record<string, unknown>).lixitingCarDrop = (x: number, n: number, h: number, headingDeg = 0, v = 0) => {
+      const car = this.driving;
+      if (!car) return null;
+      const heading = (headingDeg * Math.PI) / 180;
+      car.place(x, -n, heading);
+      // La simulation repart de cette position et de cette vitesse au prochain pas.
+      car.object.position.y = this.ground(x, -n) + h;
+      car.speed = v;
+      // Conduite arcade : la voiture repart en l'air, sans souvenir de sa position précédente.
+      Object.assign(car as unknown as Record<string, unknown>, { baseY: car.object.position.y, vy: 0, airborne: true, lastFree: null });
+      return true;
+    };
+    // Essais : la voiture conduite est-elle dans un bâtiment (sous son toit) ?
+    (window as unknown as Record<string, unknown>).lixitingCarState = () => {
+      const car = this.driving;
+      if (!car) return null;
+      const p = car.object.position;
+      return { x: Math.round(p.x * 10) / 10, n: Math.round(-p.z * 10) / 10, y: Math.round(p.y * 100) / 100, ground: Math.round(this.ground(p.x, p.z) * 100) / 100,
+        roof: Math.round(this.collider.roofAt(p.x, p.z, Infinity) * 100) / 100, inside: this.collider.inside(p.x, p.z, p.y + 0.3), kmh: Math.round(car.speed * 3.6) };
+    };
     (window as unknown as Record<string, unknown>).lixitingDrive = () => {
       // Essais : avec ?voiture=identifiant, on amène ce modèle sous le joueur avant de monter dedans.
       const wanted = new URLSearchParams(window.location.search).get('voiture');
@@ -180,6 +201,8 @@ export class Game {
     };
     // Essais : mémoire des maillages envoyés à la carte graphique (Mo), par type de matériau.
     (window as unknown as Record<string, unknown>).__scene = this.scene;
+    (window as unknown as Record<string, unknown>).__camera = this.camera;
+    Object.defineProperty(window, '__collider', { get: () => this.collider, configurable: true });
     // Essais : ce qui est sous le point (sx, sy) de l'écran (0 à 1) ; avec ?garder=1 pour le décor fixe.
     (window as unknown as Record<string, unknown>).lixitingPick = (sx: number, sy: number) => {
       const ray = new THREE.Raycaster();
@@ -238,6 +261,7 @@ export class Game {
       swimming: this.player.swimming,
       character: this.player.probe(),
       regionTiles: this.region?.built ?? null,
+      trunks: this.collider?.trunkCount ?? null,
       boat: this.boating ? { kmh: Math.round(this.boating.speed * 3.6), y: Math.round(this.boating.position.y * 100) / 100 } : null,
       car: this.driving ? { id: this.driving.spec.id, topKmh: Math.round(this.driving.topSpeed * 3.6), sprint: this.driving.spec.sprint ?? 1, gear: this.driving.gear, kmh: Math.round(this.driving.speed * 3.6), above: Math.round((this.driving.object.position.y - this.ground(this.driving.object.position.x, this.driving.object.position.z)) * 100) / 100, ...this.driving.telemetry } : null,
     });
@@ -335,6 +359,17 @@ export class Game {
       for (const spawn of this.marina.boats) this.boats.push(new Boat(this.scene, spawn.x, -spawn.n, spawn.heading, spawn.hull, spawn.stripe));
       // Port de pêche d'Annaba (36.90375, 7.77451) : bassin abrité par les jetées, rayon 330 m.
       this.harbor = new Harbor(this.scene, data, 1392, 920, 330, this.ground);
+      // Troncs solides : on ne traverse plus les arbres (les buissons, eux, se traversent).
+      const TRUNK: Record<string, number> = { pine: 0.26, palm: 0.24, ficus: 0.36, cypress: 0.2, araucaria: 0.24, fpine: 0.22, oak: 0.26,
+        ficus_plain: 0.36, palm_plain: 0.24, rock: 0.5 };
+      for (const [species, values] of Object.entries(trees)) {
+        const r = TRUNK[species];
+        if (!r || !Array.isArray(values)) continue;
+        for (let i = 0; i < values.length; i += 3) {
+          const x = values[i], z = -values[i + 1], size = values[i + 2];
+          this.collider.addTrunk(x, z, Math.min(0.55, Math.max(0.15, r * size)), terrain.heightAt(x, z) + 2.5 + 1.5 * size);
+        }
+      }
       this.trees = buildTrees(this.scene, trees, terrain.heightAt);
       const treeCount = this.trees.count;
       buildWalls(this.scene, trees.wall, this.collider);
@@ -680,7 +715,7 @@ export class Game {
     } else if (this.driving) {
       const car = this.driving;
       car.drive(dt, this.input, this.collider, everyCar, this.ground);
-      car.settle(this.ground, true);
+      car.settle(this.ground, true, this.collider);
       this.sound.update({ rpm: car.rpm, throttle: car.throttle, skid: car.skid, small: !!car.spec.moto });
       this.player.object.position.copy(car.object.position);
       // En roulant, la caméra revient d'elle-même derrière la voiture.
@@ -692,7 +727,7 @@ export class Game {
       this.player.update(dt, this.input, this.cameraRig.yaw, this.obstacles, this.playerGround);
       this.cameraRig.update(this.input, this.player.object.position, this.collider, dt, this.ground);
     }
-    for (const car of this.cars) if (car !== this.driving) car.settle(this.ground, true);
+    for (const car of this.cars) if (car !== this.driving) car.settle(this.ground, true, this.collider);
     const me = this.player.object.position;
     this.lights?.update(dt);
     this.traffic?.update(dt, me.x, me.z, this.driving === null, this.cars, this.ground, this.collider);

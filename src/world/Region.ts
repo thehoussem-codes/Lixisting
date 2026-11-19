@@ -420,9 +420,12 @@ export class Region {
         let inside = false;
         for (let k = 0; k < homes.length && !inside; k += 3) inside = Math.hypot(homes[k] - px, homes[k + 1] - pn) < homes[k + 2];
         if (inside) continue;
-        const kind = cls === 10 ? (hash(seed, t + 90) < 0.55 ? 'oak' : 'fpine') : 'bush';
-        const scale = (cls === 10 ? 1.1 : 0.9) * (0.8 + 0.5 * hash(seed, t + 70)) * (MOBILE ? 1.25 : 1);
+        // Forêt : chênes et pins, avec du maquis (buissons) entre eux ; ailleurs, seulement des buissons.
+        const pick = hash(seed, t + 90);
+        const kind = cls === 10 ? (pick < 0.32 ? 'oak' : pick < 0.58 ? 'fpine' : 'bush') : 'bush';
+        const scale = (kind === 'bush' ? 0.75 : 1.1) * (0.8 + 0.5 * hash(seed, t + 70)) * (MOBILE ? 1.25 : 1);
         addPlant(leaves, kind, seed + t, px, y, -pn, scale);
+        if (kind !== 'bush' && addCollider) this.collider?.addTrunk(px, -pn, Math.min(0.5, 0.24 * scale), y + 2.5 + 1.5 * scale);
       }
     }
     this.add(tile, leaves, this.materials.leaves, 0, true);

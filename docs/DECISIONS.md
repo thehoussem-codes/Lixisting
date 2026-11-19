@@ -522,3 +522,10 @@ Skills chargés : `physics-tuning`, `game-ai`, `audio-design`, `threejs-material
 - Téléphone : cases construites moins loin, image de la carte deux fois plus petite (mémoire).
 - Corrigé en passant : 807 bâtiments OSM marqués « usage certain » s'affichaient en noir (le drapeau était pris pour une couleur).
 - Limites : détail léger (pas de trottoirs ni de feux, bâtiments en boîtes, relief à 60 m) ; pas de circulation hors de la ville ; Lac Fetzara figure en eau d'après OSM.
+
+## Chapuis, végétation, troncs et toits solides (20/11/2026)
+
+- Corniche de Chapuis (et Saint-Cloud) : le bord côté terre de la plate-forme faisait une marche de 1,5 à 2 m (talus de terre) que les rues montantes franchissaient en bosse. Remplacé par quatre rangées de raccord en pente régulière jusqu'au relief naturel (25 m au-delà du plat, pente moyenne 11 % à Chapuis), relief adouci en long ; plus de mur de soutènement côté terre. Carrefour de la route de Coral Bay mesuré : plus de marche.
+- Végétation de la ville : beaucoup de verdure était du maquis, pas de la forêt. Vert foncé : 55 % d'arbres et 45 % de buissons (au lieu de 90 % d'arbres) ; broussailles : buissons (quelques chênes) ; herbe : buissons épars seulement ; bois OSM : un tiers de buissons ; maquis OSM : buissons. Même mélange dans la wilaya.
+- Troncs solides : 216 520 troncs (arbres, palmiers, rochers) arrêtent le joueur et les voitures ; les buissons se traversent. Mesuré : le joueur s'arrête à 1 m du centre d'un ficus.
+- Toits solides en voiture : en conduite normale (arcade), la voiture ne « voyait » jamais les toits et tombait au travers jusque dans l'immeuble. Le sol tient maintenant compte des toits à la hauteur de la voiture avant chaque pas ; une voiture prise dans un bâtiment est posée sur le toit s'il est à moins de 1,8 m au-dessus, sinon ramenée dehors contre le mur. Mesuré : chute sur un toit (posée à 27,5 m, toit à 27,54 m), à cheval sur le bord (reste sur le toit), contre le mur sous le toit (rebond, jamais dedans).

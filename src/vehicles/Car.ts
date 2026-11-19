@@ -81,6 +81,8 @@ export class Car {
   private baseY: number | null = null; // hauteur des roues (sans l'écrasement visuel)
   private vy = 0;
   private airborne = false;
+  /** Dernière position de la caisse hors de tout bâtiment (x, y, z de la simulation). */
+  private lastFree: [number, number, number] | null = null;
   private dip = 0;        // écrasement des suspensions après une réception (m)
   private tiltX = 0;      // tangage affiché
   private tiltZ = 0;      // roulis affiché
@@ -164,10 +166,15 @@ export class Car {
    * dynamic = vrai pour les voitures du joueur : elles peuvent quitter le sol, retomber,
    * s'écraser à la réception et pencher en virage. Sinon (circulation) : simple suivi du sol.
    */
-  settle(ground: (x: number, z: number) => number, dynamic = false): void {
+  settle(groundAt: (x: number, z: number, y?: number) => number, dynamic = false, collider: Collider | null = null): void {
     if (this.physics) return; // la simulation gère déjà sa position
     const position = this.object.position;
     const { x, z } = position;
+    // Sol vu de la voiture à sa hauteur d'avant ce pas : un toit juste en dessous (ou 60 cm au-dessus) la porte.
+    // (Mesuré avant la chute de cette image : même une voiture qui tombe vite se pose sur le toit au lieu de le
+    // traverser et de finir dans l'immeuble.)
+    const reach = dynamic && this.baseY !== null ? this.baseY : undefined;
+    const ground = (gx: number, gz: number) => groundAt(gx, gz, reach);
     const fx = Math.sin(this.heading), fz = Math.cos(this.heading);
     const lx = fz, lz = -fx; // vecteur "à gauche" de la voiture
     const front = ground(x + fx * this.halfLength, z + fz * this.halfLength), back = ground(x - fx * this.halfLength, z - fz * this.halfLength);
@@ -225,6 +232,7 @@ export class Car {
     }
     this.dip *= Math.exp(-7 * dt);
     position.y = this.baseY - this.dip;
+    if (collider) this.unstickArcade(collider);
     this.slopePitch = this.airborne ? 0 : slopePitch;
 
     // --- Attitudes de caisse : discrètes, lissées
@@ -351,9 +359,10 @@ export class Car {
       collides: (x, z, yaw) => {
         const other = this.hitCar(others, x, z, yaw);
         if (other) other.shove(physics.forwardSpeed * 0.5 * Math.cos(other.heading - yaw));
-        return other !== null || (collider !== null && this.hits(collider, x, z, Math.sin(yaw), Math.cos(yaw)));
+        return other !== null || (collider !== null && this.hits(collider, x, z, Math.sin(yaw), Math.cos(yaw), physics.y));
       },
     });
+    if (collider) this.unstick(collider, physics);
     this.object.position.set(physics.x, physics.y, physics.z);
     this.heading = physics.yaw;
     this.speed = physics.forwardSpeed;
@@ -571,13 +580,70 @@ export class Car {
     return null;
   }
 
-  private hits(collider: Collider, x: number, z: number, fx: number, fz: number): boolean {
+  private hits(collider: Collider, x: number, z: number, fx: number, fz: number, y = this.object.position.y): boolean {
     const rx = -fz, rz = fx; // vecteur "à droite" de la voiture
     for (const l of [this.halfLength, 0, -this.halfLength]) {
       for (const w of [this.halfWidth, -this.halfWidth]) {
-        if (collider.inside(x + fx * l + rx * w, z + fz * l + rz * w, this.object.position.y + 0.5)) return true;
+        if (collider.inside(x + fx * l + rx * w, z + fz * l + rz * w, y + 0.5)) return true;
       }
     }
+    // Troncs d'arbres : cercle contre le rectangle de la caisse (un tronc entre deux coins compte aussi).
+    const trunks = collider.trunksNear(x, z, this.halfLength + 1);
+    for (let k = 0; k < trunks.length; k += 4) {
+      if (y + 0.3 > trunks[k + 3]) continue; // la voiture passe au-dessus (saut)
+      const dx = trunks[k] - x, dz = trunks[k + 1] - z;
+      const along = dx * fx + dz * fz, side = dx * rx + dz * rz, r = trunks[k + 2];
+      if (Math.abs(along) < this.halfLength + r && Math.abs(side) < this.halfWidth + r) return true;
+    }
     return false;
+  }
+
+  /** Même chose que unstick, pour la conduite arcade (le mode par défaut). */
+  private unstickArcade(collider: Collider): void {
+    const position = this.object.position;
+    const fx = Math.sin(this.heading), fz = Math.cos(this.heading), rx = -fz, rz = fx;
+    let stuck = false, roof = -Infinity;
+    for (const l of [this.halfLength * 0.9, 0, -this.halfLength * 0.9]) {
+      for (const w of [this.halfWidth * 0.9, 0, -this.halfWidth * 0.9]) {
+        const px = position.x + fx * l + rx * w, pz = position.z + fz * l + rz * w;
+        if (collider.inside(px, pz, position.y + 0.3)) { stuck = true; roof = Math.max(roof, collider.roofAt(px, pz, Infinity)); }
+      }
+    }
+    if (!stuck) { this.lastFree = [position.x, position.y, position.z]; return; }
+    if (roof > -Infinity && roof - position.y < 1.8) {
+      this.baseY = roof + 0.02; position.y = this.baseY;      // posée sur le bord du toit
+      if (this.vy < 0) { this.vy = 0; this.airborne = false; }
+      this.lastFree = [position.x, position.y, position.z];
+    } else if (this.lastFree) {
+      position.x = this.lastFree[0]; position.z = this.lastFree[2];  // ramenée contre le mur, dehors
+      if (this.lastFree[1] > position.y) { position.y = this.lastFree[1]; this.baseY = position.y; }
+      this.speed *= -0.3; this.slideX *= -0.3; this.slideZ *= -0.3;
+    }
+  }
+
+  /**
+   * Après un pas de simulation : si la caisse s'est retrouvée dans un bâtiment (réception à cheval sur un bord de
+   * toit, chute le long d'un mur), elle est posée sur le toit s'il est tout près au-dessus, sinon ramenée à sa
+   * dernière position libre. Plus de voiture coincée à l'intérieur d'un immeuble.
+   */
+  private unstick(collider: Collider, physics: SuspensionPhysics): void {
+    const fx = Math.sin(physics.yaw), fz = Math.cos(physics.yaw), rx = -fz, rz = fx;
+    let stuck = false, roof = -Infinity;
+    for (const l of [this.halfLength * 0.9, 0, -this.halfLength * 0.9]) {
+      for (const w of [this.halfWidth * 0.9, 0, -this.halfWidth * 0.9]) {
+        const px = physics.x + fx * l + rx * w, pz = physics.z + fz * l + rz * w;
+        if (collider.inside(px, pz, physics.y + 0.3)) { stuck = true; roof = Math.max(roof, collider.roofAt(px, pz, Infinity)); }
+      }
+    }
+    if (!stuck) { this.lastFree = [physics.x, physics.y, physics.z]; return; }
+    if (roof > -Infinity && roof - physics.y < 1.8) {
+      physics.y = roof + 0.02;                       // sur le toit
+      if (physics.vy < 0) physics.vy = 0;
+      this.lastFree = [physics.x, physics.y, physics.z];
+    } else if (this.lastFree) {
+      [physics.x, physics.y, physics.z] = this.lastFree;   // contre le mur, dehors
+      physics.vx *= -0.3; physics.vz *= -0.3; physics.forwardSpeed *= -0.3;
+      if (physics.vy < 0) physics.vy *= 0.5;
+    }
   }
 }

@@ -13,8 +13,55 @@ export interface Roof { y: number; apex?: [number, number, number] }
 
 interface Footprint { minX: number; maxX: number; minZ: number; maxZ: number; points: Float32Array; yMin: number; yMax: number; roof?: Roof }
 
+const TRUNK_CELL = 8;
+
 export class Collider {
   private grid = new Map<string, Footprint[]>();
+  /** Troncs d'arbres (les buissons ne bloquent pas) : par case de 8 m, x, z, rayon, hauteur du haut du tronc. */
+  private trunks = new Map<number, number[]>();
+  /** Nombre de troncs enregistrés (essais). */
+  trunkCount = 0;
+
+  private static trunkKey(x: number, z: number): number {
+    return (Math.floor(x / TRUNK_CELL) + 50000) * 100003 + (Math.floor(z / TRUNK_CELL) + 50000);
+  }
+
+  /** Tronc d'arbre : bloque le joueur et les voitures dans un rayon r, du sol jusqu'à `top`. */
+  addTrunk(x: number, z: number, r: number, top: number): void {
+    const key = Collider.trunkKey(x, z);
+    const list = this.trunks.get(key);
+    if (list) list.push(x, z, r, top); else this.trunks.set(key, [x, z, r, top]);
+    this.trunkCount++;
+  }
+
+  /** Un disque de rayon `radius` à la hauteur y touche-t-il un tronc ? */
+  hitsTrunk(x: number, z: number, radius: number, y?: number): boolean {
+    const reach = radius + 0.6;
+    for (let i = Math.floor((x - reach) / TRUNK_CELL); i <= Math.floor((x + reach) / TRUNK_CELL); i++) {
+      for (let j = Math.floor((z - reach) / TRUNK_CELL); j <= Math.floor((z + reach) / TRUNK_CELL); j++) {
+        const list = this.trunks.get((i + 50000) * 100003 + (j + 50000));
+        if (!list) continue;
+        for (let k = 0; k < list.length; k += 4) {
+          if (y !== undefined && y > list[k + 3]) continue;
+          const dx = x - list[k], dz = z - list[k + 1], r = radius + list[k + 2];
+          if (dx * dx + dz * dz < r * r) return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  /** Troncs proches d'un point (x, z, rayon, haut du tronc à la suite), pour les voitures. */
+  trunksNear(x: number, z: number, reach: number): number[] {
+    const out: number[] = [];
+    for (let i = Math.floor((x - reach) / TRUNK_CELL); i <= Math.floor((x + reach) / TRUNK_CELL); i++) {
+      for (let j = Math.floor((z - reach) / TRUNK_CELL); j <= Math.floor((z + reach) / TRUNK_CELL); j++) {
+        const list = this.trunks.get((i + 50000) * 100003 + (j + 50000));
+        if (list) out.push(...list);
+      }
+    }
+    return out;
+  }
 
   /**
    * points : x, n, x, n... (comme dans le fichier de carte).
@@ -98,9 +145,9 @@ export class Collider {
     return roof.y;
   }
 
-  /** Un disque (le joueur) touche-t-il un bâtiment ? */
+  /** Un disque (le joueur) touche-t-il un bâtiment ou un tronc d'arbre ? */
   blocked(x: number, z: number, radius: number, y?: number): boolean {
     return this.inside(x, z, y) || this.inside(x + radius, z, y) || this.inside(x - radius, z, y) ||
-           this.inside(x, z + radius, y) || this.inside(x, z - radius, y);
+           this.inside(x, z + radius, y) || this.inside(x, z - radius, y) || this.hitsTrunk(x, z, radius, y);
   }
 }

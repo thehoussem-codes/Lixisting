@@ -316,14 +316,17 @@ def main():
         tangent /= np.maximum(np.linalg.norm(tangent, axis=1, keepdims=True), 1e-6)
         east = np.column_stack([tangent[:, 1], -tangent[:, 0]])   # à droite du sens de l'axe : la mer
         # Décalages en travers : négatifs depuis l'axe vers la terre ; positifs depuis le bord de chaussée vers la mer.
-        inner = [-land_side - 1.0, -land_side] + [o for o in (-11.0, -5.0) if o > -land_side] + [0.0]
+        # Côté terre, quatre rangées de raccord en pente douce jusqu'au relief naturel (25 m au-delà du plat), au lieu
+        # d'une marche : les rues qui montent depuis la corniche partent en rampe régulière.
+        ramp = [-(land_side + 25.0), -(land_side + 14.0), -(land_side + 6.0), -(land_side + 1.0)]
+        inner = ramp + [-land_side] + [o for o in (-11.0, -5.0) if o > -land_side] + [0.0]
         offsets = inner + [1.0, 5.0, sea_side - 0.4, sea_side]
         across = [axis + east * o if o <= 0 else axis + east * (half + (0.0 if o == 1.0 else o))[:, None] for o in offsets]
         ends = np.clip(np.minimum(marks, marks[-1] - marks) / 30.0, 0, 1)   # raccord sur 30 m à chaque bout
         start = sum(len(g) for g in graded_points)
         for k, ring in enumerate(across):
             graded_points.append(ring); graded_heights.append(height(ring[:, 0], ring[:, 1]))   # recalculé plus bas
-        corniche_blocks.append((name, start, len(offsets), len(marks), ends))
+        corniche_blocks.append((name, start, len(offsets), len(marks), ends, len(ramp)))
         corridor = np.vstack(across)
         interior = interior[cKDTree(corridor).query(interior)[0] > 6.0]
         # (Les points de la côte restent tous : le talus sous-marin est construit anneau par anneau à partir d'eux.)
@@ -369,21 +372,22 @@ def main():
         lowered = heights.copy()
         heights[-graded_count:] = np.concatenate(graded_heights)
         from scipy.ndimage import gaussian_filter1d
-        for name, start, c_rows, c_count, c_ends in corniche_blocks:
+        for name, start, c_rows, c_count, c_ends, c_ramp in corniche_blocks:
             # Profil tiré du sol tel qu'il est dans le jeu (rivage abaissé), pour rester au niveau de la plage.
             block_at = first + start
             ground_now = lowered[block_at:block_at + c_rows * c_count].reshape(c_rows, c_count)
-            natural = np.median(ground_now[1:-1], axis=0)
+            natural = np.median(ground_now[c_ramp:-1], axis=0)
             profile = gaussian_filter1d(natural, 2.5, mode="nearest") * (1 - c_ends) + gaussian_filter1d(natural, 20, mode="nearest") * c_ends
             block = np.tile(profile, (c_rows, 1))
-            block[0] = np.maximum(profile, ground_now[0])   # crête côté terre : le talus s'il est plus haut
+            # Raccord côté terre : du plat de la corniche au relief naturel, en pente régulière (ni marche ni mur).
+            # Le relief naturel est lui-même adouci en long, pour que la rampe n'ondule pas d'un point à l'autre.
+            for r, weight in zip(range(c_ramp), (1.0, 0.72, 0.38, 0.12)):
+                target = gaussian_filter1d(ground_now[r], 3.0, mode="nearest")
+                block[r] = profile + (target - profile) * weight
             heights[block_at:block_at + c_rows * c_count] = block.ravel()
             ring = points[block_at:block_at + c_rows * c_count].reshape(c_rows, c_count, 2)
-            for j in range(c_count - 1):   # mur de soutènement côté terre si le talus dépasse 1,2 m
-                if block[0, j] - profile[j] > 1.2 or block[0, j + 1] - profile[j + 1] > 1.2:
-                    foot = ring[1]
-                    WALLS.extend(round(float(v), 2) for v in (foot[j, 0], foot[j, 1], foot[j + 1, 0], foot[j + 1, 1],
-                                 profile[j] - 0.4, block[0, j] + 0.9, profile[j + 1] - 0.4, block[0, j + 1] + 0.9))
+            ramp_slope = np.abs(block[0] - block[c_ramp]) / 25.0
+            print(f"  raccord côté terre : pente moyenne {ramp_slope.mean() * 100:.0f} %, maxi {ramp_slope.max() * 100:.0f} %")
             # Plage au pied de la promenade : pente régulière du muret jusqu'au bord de l'eau.
             wall_row = ring[-1]
             d, j = cKDTree(wall_row).query(points)
@@ -504,8 +508,10 @@ def build_trees(world, grid=None, grid_origin=None, cover=None):
     # Densité (m² par arbre) et espèces. Annaba a peu de palmiers dans ses espaces verts (retour de Houssem) :
     # surtout ficus, pins d'Alep, cyprès et massifs ; les zones vertes de la carte sont plantées plus densément.
     # Bois et maquis : de vraies forêts (pins d'Alep et chênes de l'Edough), serrées, sans clairières vides.
-    mixes = {"wood": (60, [("fpine", 0.55), ("oak", 0.25), ("cypress", 0.05), ("bush", 0.15)]),
-             "scrub": (120, [("bush", 0.55), ("fpine", 0.3), ("oak", 0.15)]),
+    # Retour de Houssem (19/11) : beaucoup de verdure n'est pas de la forêt mais du maquis bas — plus de buissons
+    # entre les arbres, et le maquis (« scrub ») presque seulement en buissons.
+    mixes = {"wood": (60, [("fpine", 0.42), ("oak", 0.22), ("cypress", 0.04), ("bush", 0.32)]),
+             "scrub": (90, [("bush", 0.86), ("oak", 0.1), ("fpine", 0.04)]),
              "grass": (160, [("palm", 0.04), ("ficus", 0.38), ("pine", 0.2), ("cypress", 0.08), ("bush", 0.3)])}
     for area in world["areas"]:
         if area["k"] not in mixes:
@@ -538,9 +544,10 @@ def build_trees(world, grid=None, grid_origin=None, cover=None):
     #    broussailles : maquis clairsemé ; herbe : quelques buissons et arbres isolés ; ailleurs (ville, port,
     #    cultures, sol nu, eau) : aucun arbre.
     rect = world["meta"]["rect_m"]
-    densities = {TREE: (140.0, ["fpine", "oak", "cypress", "bush"], [0.52, 0.33, 0.05, 0.10]),
-                 SHRUB: (520.0, ["bush", "fpine", "oak"], [0.65, 0.2, 0.15]),
-                 GRASS: (1600.0, ["bush", "oak", "fpine"], [0.6, 0.25, 0.15])}
+    # Vert foncé : arbres et maquis mêlés ; broussailles : buissons (quelques chênes isolés) ; herbe : buissons épars.
+    densities = {TREE: (120.0, ["fpine", "oak", "cypress", "bush"], [0.30, 0.22, 0.03, 0.45]),
+                 SHRUB: (300.0, ["bush", "oak"], [0.92, 0.08]),
+                 GRASS: (1400.0, ["bush"], [1.0])}
     for cls, (per_tree, names, weights) in densities.items():
         cells = np.argwhere(cover.grid == cls)
         area = len(cells) * cover.step ** 2
@@ -569,7 +576,7 @@ def build_trees(world, grid=None, grid_origin=None, cover=None):
             if kind in ("fpine", "oak"):
                 add(kind, x, n, 1.6, 2.3) if cls == TREE else add(kind, x, n, 1.1, 1.7)
             else:
-                add(kind, x, n, 0.9, 1.6)
+                add(kind, x, n, 0.7, 1.4)   # petits buissons de maquis
         print("satellite", cls, ":", len(spots), "plantes")
 
     # 3. Arbres d'alignement le long des rues à trottoir
