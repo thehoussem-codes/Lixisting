@@ -120,13 +120,25 @@ export class Car {
   set rider(shown: boolean) { if (this.riderNode) this.riderNode.visible = shown; if (!shown) this.wheelieHeld = false; }
   private lastSpeed = 0;
   private lastHeading = 0;
+  /** Images consécutives à l'arrêt complet, et où (voiture endormie : voir `settle`). */
+  private quiet = 0;
+  private restX = NaN;
+  private restZ = NaN;
+  private restHeading = NaN;
+  private restY: number | null = null;
+  private baseYChanged(): boolean { return this.baseY !== this.restY; }
   /** Niveau de la mer pour toutes les voitures (null dans la zone de test). */
   static waterLevel: number | null = null;
   private shadow: THREE.Mesh;
 
+  /** Ce qui est dessiné (modèle et ombre) : masqué au loin sans toucher aux réglages internes du modèle. */
+  private drawn = new THREE.Group();
+
   constructor(readonly spec: CarSpec, color: number) {
     const visual = createCarVisual(spec, color);
-    this.object = visual.group;
+    this.object = new THREE.Group();
+    this.object.add(this.drawn);
+    this.drawn.add(visual.group);
     this.object.traverse((node) => { node.castShadow = true; });
     this.wheels = visual.wheels;
     this.leanNode = visual.lean ?? null;
@@ -136,7 +148,12 @@ export class Car {
     this.halfWidth = spec.collision?.halfWidth ?? spec.width / 2;
     this.wheelbase = (spec.axleFront - spec.axleRear) * spec.length;
     this.shadow = createBlobShadow(spec.width * 1.35, spec.length * 1.15);
-    this.object.add(this.shadow);
+    this.drawn.add(this.shadow);
+  }
+
+  /** Loin de la caméra, la voiture n'est pas dessinée (elle reste là pour les collisions et la circulation). */
+  setDrawn(drawn: boolean): void {
+    this.drawn.visible = drawn;
   }
 
   /** Masse approximative (kg) : proportionnelle au volume ; un deux-roues pèse environ 150 kg avec son pilote. */
@@ -155,6 +172,7 @@ export class Car {
   place(x: number, z: number, heading = this.heading): void {
     this.dropPhysics();
     this.baseY = null;
+    this.quiet = 0;
     this.object.position.set(x, 0, z);
     this.heading = heading;
     this.object.rotation.y = heading;
@@ -170,6 +188,9 @@ export class Car {
     if (this.physics) return; // la simulation gère déjà sa position
     const position = this.object.position;
     const { x, z } = position;
+    // Voiture endormie : arrêtée depuis un moment au même endroit, rien ne bouge, on ne recalcule rien
+    // (une centaine de voitures garées : 5 mesures du sol et un test de collision chacune, à chaque image).
+    if (this.quiet > 30 && this.speed === 0 && x === this.restX && z === this.restZ && this.heading === this.restHeading && !this.baseYChanged()) return;
     // Sol vu de la voiture à sa hauteur d'avant ce pas : un toit juste en dessous (ou 60 cm au-dessus) la porte.
     // (Mesuré avant la chute de cette image : même une voiture qui tombe vite se pose sur le toit au lieu de le
     // traverser et de finir dans l'immeuble.)
@@ -233,6 +254,9 @@ export class Car {
     this.dip *= Math.exp(-7 * dt);
     position.y = this.baseY - this.dip;
     if (collider) this.unstickArcade(collider);
+    const calm = this.speed === 0 && !this.airborne && Math.abs(this.vy) < 1e-3 && this.dip < 1e-3 && this.steerAngle === 0 && (!this.leanNode || Math.abs(this.leanNode.rotation.z) < 1e-3);
+    this.quiet = calm ? this.quiet + 1 : 0;
+    this.restX = position.x; this.restZ = position.z; this.restHeading = this.heading; this.restY = this.baseY;
     this.slopePitch = this.airborne ? 0 : slopePitch;
 
     // --- Attitudes de caisse : discrètes, lissées

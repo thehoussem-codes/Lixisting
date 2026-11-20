@@ -41,6 +41,12 @@ const AUTO_SCALE = !new URLSearchParams(window.location.search).has('res');
 // Écran Retina (Mac) : le jeu peut monter jusqu'à 1,5 pixel par point quand il est fluide (image bien plus nette).
 const MAX_SCALE = MOBILE ? 1 : Math.min(1.5, Math.max(1, window.devicePixelRatio || 1));
 const ENTER_DISTANCE = 4.5;
+/** Petits détails au sol et décor fin : affichés moins loin que les bâtiments (ils sont noyés dans le brouillard). */
+const DETAIL_VIEW: Record<string, number> = {
+  'sol:marquage': 550, 'sol:carrefours': 650, 'sol:dallage': 650, 'sol:pistes': 600,
+  'detail:lampadaires': 450, 'detail:murs-dalles': 600, 'facade:rail': 450, 'toit:detail': 550,
+};
+const CAR_VIEW = MOBILE ? 220 : 340;   // distance d'affichage des voitures garées (m)
 const SECTOR = 400;          // taille des secteurs du monde (m)
 const VIEW_DISTANCE = MOBILE ? 850 : 1400; // au-delà, tout est noyé dans le brouillard
 const ROAD_SURFACE = 0.2;
@@ -110,6 +116,7 @@ export class Game {
   private planeWreck = new Map<Plane, number>();
   private fogBase = 0;
   private altitudeBoost = 0;
+  private miniSpan = 500;
   private marina: Marina | null = null;
   /** Toute la wilaya en détail léger, autour de la ville (chargée après elle). */
   private region: Region | null = null;
@@ -303,6 +310,11 @@ export class Game {
       swimming: this.player.swimming,
       character: this.player.probe(),
       regionTiles: this.region?.built ?? null,
+      logicMs: Math.round(this.timing.logic * 100) / 100,
+      renderMs: Math.round(this.timing.render * 10) / 10,
+      parts: Object.fromEntries(Object.entries(this.timing.parts).map(([k, v]) => [k, Math.round(v * 100) / 100])),
+      // Pics depuis la lecture précédente (à-coups), puis remise à zéro.
+      peaks: Object.fromEntries(Object.entries(this.timing.peaks).map(([k, v]) => { this.timing.peaks[k] = 0; return [k, Math.round(v * 10) / 10]; })),
       trunks: this.collider?.trunkCount ?? null,
       boat: this.boating ? { kmh: Math.round(this.boating.speed * 3.6), y: Math.round(this.boating.position.y * 100) / 100 } : null,
       car: this.driving ? { id: this.driving.spec.id, topKmh: Math.round(this.driving.topSpeed * 3.6), sprint: this.driving.spec.sprint ?? 1, gear: this.driving.gear, kmh: Math.round(this.driving.speed * 3.6), above: Math.round((this.driving.object.position.y - this.ground(this.driving.object.position.x, this.driving.object.position.z)) * 100) / 100, ...this.driving.telemetry } : null,
@@ -449,7 +461,17 @@ export class Game {
         if (!mesh.isMesh || mesh.parent !== this.scene || !mesh.frustumCulled) return; // ni la mer ni le ciel
         mesh.geometry.computeBoundingSphere();
         const sphere = mesh.geometry.boundingSphere;
-        if (sphere && sphere.radius > 6 && sphere.radius < 700) this.chunks.push({ mesh, x: sphere.center.x, z: sphere.center.z, reach: sphere.radius + ((mesh.userData.viewDistance as number | undefined) ?? VIEW_DISTANCE) });
+        const detail = DETAIL_VIEW[(mesh.material as THREE.Material).name];
+        const view = Math.min(VIEW_DISTANCE, (mesh.userData.viewDistance as number | undefined) ?? detail ?? VIEW_DISTANCE);
+        if (sphere && sphere.radius > 6 && sphere.radius < 700) this.chunks.push({ mesh, x: sphere.center.x, z: sphere.center.z, reach: sphere.radius + view });
+      });
+      // Fond marin : arrive après le reste (carte de la mer) ; ses secteurs sont affichés jusqu'à 1 km.
+      world.water.whenSeabed((parts) => {
+        for (const mesh of parts) {
+          const sphere = mesh.geometry.boundingSphere!;
+          mesh.visible = false;   // la prochaine mise à jour (0,25 s) affiche les secteurs proches
+          this.chunks.push({ mesh, x: sphere.center.x, z: sphere.center.z, reach: sphere.radius + Math.min(VIEW_DISTANCE, 1000) });
+        }
       });
       console.info(`Construction : ville ${Math.round(t1 - t0)} ms, végétation ${Math.round(t2 - t1)} ms, secteurs ${Math.round(performance.now() - t2)} ms, ${this.chunks.length} blocs ; mémoire ${h0} → ${h1} → ${h2} → ${heap()} Mo`);
       this.places = data.places;
@@ -582,6 +604,7 @@ export class Game {
     if (this.boating) this.leaveBoat();
     if (this.flying) this.leavePlane(true);
     this.player.teleport(place.x, this.ground(place.x, -place.n), -place.n);
+    this.trees?.update(place.x, -place.n, 300);   // végétation du lieu d'arrivée tout de suite (pas d'apparition progressive)
   }
 
   /** Téléportation vers un point de la carte (ville ou village de la wilaya). */
@@ -604,6 +627,7 @@ export class Game {
     if (road) { x = road.x - Math.cos(road.heading) * (road.w / 2 + 1.2); n = road.n - Math.sin(road.heading) * (road.w / 2 + 1.2); }
     this.region?.update(x, -n, 600);
     this.player.teleport(x, this.ground(x, -n), -n);
+    this.trees?.update(x, -n, 300);
   }
 
   /** Nom du repère le plus proche (à moins de 700 m), façon "nom de quartier". */
@@ -668,7 +692,7 @@ export class Game {
     const boat = this.nearestBoat(reach === ENTER_DISTANCE ? 5.5 : reach);
     if (boat && boat.distance < best + 1) { this.board(boat.boat); return; }
     // Un avion : on y monte à moins de 22 m de son centre (sous l'aile ou près de la porte), sauf voiture collée à soi.
-    const plane = this.nearestPlane(reach === ENTER_DISTANCE ? 22 : reach);
+    const plane = reach === ENTER_DISTANCE ? this.nearestPlane(22) : null;   // essais (portée infinie) : une voiture
     if (plane && (!nearest || best > 2.5)) { this.boardPlane(plane.plane); return; }
     if (nearest) {
       // Une voiture de la circulation devient une voiture du joueur.
@@ -818,19 +842,32 @@ export class Game {
     }
   };
 
+  /** Temps moyens d'une image (ms) : calcul du jeu et envoi du rendu (mesures de performance). */
+  private timing = { logic: 0, render: 0, parts: {} as Record<string, number>, peaks: {} as Record<string, number> };
+  private mark(name: string, since: number): number {
+    const now = performance.now();
+    this.timing.parts[name] = (this.timing.parts[name] ?? 0) * 0.95 + (now - since) * 0.05;
+    this.timing.peaks[name] = Math.max(this.timing.peaks[name] ?? 0, now - since);
+    return now;
+  }
+
   private frame = () => {
     this.frameId = requestAnimationFrame(this.frame);
+    const frameStart = performance.now();
     // dt plafonné : évite un "saut" du personnage après un onglet mis en pause.
     const elapsed = this.clock.getDelta();
     this.frameTime += (elapsed - this.frameTime) * 0.05;
     const dt = Math.min(elapsed, 0.05);
 
+    let t = frameStart;
     const everyCar = this.allCars();
     for (const car of this.cars) {
       if (car !== this.driving) car.coast(dt, this.collider, everyCar, this.ground);
     }
+    t = this.mark('parked', t);
     // Bateaux : flottent sur la houle ; celui qu'on pilote suit les commandes (mêmes touches que la voiture).
     if (this.water) for (const boat of this.boats) boat.update(dt, boat === this.boating ? this.input : null, this.water, this.time, this.collider, this.ground);
+    t = this.mark('boats', t);
     // Avions : celui qu'on pilote suit les commandes ; une épave est remise à son poste au bout de 15 s.
     for (const plane of this.planes) {
       if (plane === this.flying || plane.crashed || Math.abs(plane.speed) > 0.01) plane.update(dt, plane === this.flying ? this.input : null, this.planeGround, this.collider);
@@ -883,7 +920,9 @@ export class Game {
       this.player.update(dt, this.input, this.cameraRig.yaw, this.obstacles, this.playerGround);
       this.cameraRig.update(this.input, this.player.object.position, this.collider, dt, this.ground);
     }
+    t = this.mark('player', t);
     for (const car of this.cars) if (car !== this.driving) car.settle(this.ground, true, this.collider);
+    t = this.mark('settle', t);
     if (!this.flying) this.sound.jet(null);
     // En altitude, le voile s'éclaircit et la wilaya se construit plus loin (on voit la ville d'en haut).
     const height = this.flying ? this.flying.altitude : 0;
@@ -895,8 +934,15 @@ export class Game {
     }
     const me = this.player.object.position;
     this.lights?.update(dt);
+    t = this.mark('misc', t);
     this.traffic?.update(dt, me.x, me.z, this.driving === null, this.cars, this.ground, this.collider);
+    t = this.mark('traffic', t);
     const heading = this.flying ? this.flying.heading : this.driving ? this.driving.heading : this.boating ? this.boating.heading : this.player.object.rotation.y;
+    // Mini-carte : elle montre plus loin quand on va vite, et beaucoup plus loin en avion.
+    const wantedSpan = this.flying ? 900 + this.flying.altitude * 4 + Math.abs(this.flying.speed) * 3
+      : this.driving ? 500 + Math.min(400, Math.abs(this.driving.speed) * 8) : this.boating ? 500 + Math.min(500, Math.abs(this.boating.speed) * 10) : 500;
+    this.miniSpan += (wantedSpan - this.miniSpan) * Math.min(1, dt * 1.5);
+    this.map?.setSpan(this.miniSpan);
     this.map?.update(this.player.object.position.x, this.player.object.position.z, heading);
     if (DRONE) { // vue aérienne de contrôle : ?drone=hauteur,cap
       const target = this.player.object.position.clone(), heading = (DRONE[1] ?? 0) * Math.PI / 180;
@@ -916,12 +962,16 @@ export class Game {
       this.sun.position.set(fx + this.sunDirection.x * 260, focus.y + this.sunDirection.y * 260, fz + this.sunDirection.z * 260);
     }
     this.time += dt;
+    t = this.mark('map', t);
     this.water?.update(this.time, this.camera.position);
     this.harbor?.update(this.time, this.camera.position);
+    t = this.mark('water', t);
     this.touch?.setDriving(this.driving !== null || this.boating !== null || this.flying !== null);
     this.touch?.setFlying(this.flying !== null);
     this.trees?.update(this.camera.position.x, this.camera.position.z);
+    t = this.mark('trees', t);
     this.region?.update(this.camera.position.x, this.camera.position.z, this.region.built ? 5 : 400, this.altitudeBoost * (MOBILE ? 600 : 1300));
+    t = this.mark('region', t);
     // Résolution automatique : on allège le calcul si le jeu rame, on le raffine s'il a de la marge.
     this.scaleTimer -= elapsed;
     if (AUTO_SCALE && this.scaleTimer <= 0) {
@@ -936,22 +986,37 @@ export class Game {
     this.hudTimer -= dt;
     if (this.hudTimer <= 0) {
       this.hudTimer = 0.25;
+      let h = performance.now();
       const eye = this.camera.position;
       const extra = this.altitudeBoost * (MOBILE ? 400 : 900);
       for (const chunk of this.chunks) chunk.mesh.visible = Math.hypot(chunk.x - eye.x, chunk.z - eye.z) < chunk.reach + extra;
+      // Voitures (garées et circulation) : dessinées seulement à moins de 340 m (chaque voiture coûte 7 à 35 envois au processeur
+      // graphique ; au-delà, elle ne fait que quelques pixels dans le brouillard).
+      for (const car of this.allCars()) car.setDrawn(car === this.driving || Math.hypot(car.object.position.x - eye.x, car.object.position.z - eye.z) < CAR_VIEW);
+      h = this.mark('hud:visibility', h);
       if (this.locations) {
         const at = this.driving ? this.driving.object.position : this.player.object.position;
         const fix = this.locations.locate(at.x, this.ground(at.x, at.z), at.z);
         this.lastDetail = this.inspecting ? this.locations.inspect(fix) : '';
         this.district = fix.district;
+        h = this.mark('hud:locate', h);
         this.events.onLocation(this.locations.line(fix), this.inspecting ? `${this.lastDetail}\n\n${this.copied ? 'Copié dans le presse-papiers.' : 'C : copier cette fiche · I : fermer'}` : null);
+        h = this.mark('hud:location-ui', h);
       }
       const plane = this.flying;
       const gear = plane ? `alt. ${Math.round(plane.altitude)} m · poussée ${Math.round(plane.throttle * 100)} %${plane.crashed ? ' · ACCIDENT' : plane.stalling ? ' · DÉCROCHAGE !' : ''}`
         : this.driving ? (this.driving.gear === 0 ? 'R' : String(this.driving.gear)) : this.boating ? `${Math.round(Math.abs(this.boating.speed) * 1.944)} nœuds` : undefined;
-      this.events.onHud(this.nearestPlace(), plane ? Math.abs(plane.speed) * 3.6 : this.driving ? Math.abs(this.driving.speed) * 3.6 : this.boating ? Math.abs(this.boating.speed) * 3.6 : null, Math.round(1 / this.frameTime), gear);
+      const placeName = this.nearestPlace();
+      h = this.mark('hud:place', h);
+      this.events.onHud(placeName, plane ? Math.abs(plane.speed) * 3.6 : this.driving ? Math.abs(this.driving.speed) * 3.6 : this.boating ? Math.abs(this.boating.speed) * 3.6 : null, Math.round(1 / this.frameTime), gear);
+      this.mark('hud:ui', h);
     }
+    t = this.mark('hud', t);
+    const renderStart = performance.now();
     this.renderer.render(this.scene, this.camera);
+    const end = performance.now();
+    this.timing.logic = this.timing.logic * 0.95 + (renderStart - frameStart) * 0.05;
+    this.timing.render = this.timing.render * 0.95 + (end - renderStart) * 0.05;
   };
 
   private resize = () => {

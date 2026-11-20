@@ -52,6 +52,15 @@ export class MapView {
   private region: RegionData | null = null;
   private regionBase = document.createElement('canvas');
   private rx0 = 0; private rn1 = 0;
+  /** Routes de la wilaya rangées par cases de 1 km (indices), pour la mini-carte nette hors de la ville. */
+  private roadCells = new Map<number, number[]>();
+  /** Fond de la mini-carte hors de la ville : terre, mer, lacs seulement (routes et rails tracés par-dessus). */
+  private regionGround = document.createElement('canvas');
+  private railBoxes: Box[] = [];
+  private roadStamp = new Uint32Array(0);
+  private stamp = 0;
+  /** Largeur de terrain montrée par la mini-carte (m) : s'élargit en voiture rapide et en avion. */
+  private span = MINI_SPAN;
 
   constructor(private data: WorldData, private onPlace: (index: number) => void, private onPoint: (x: number, n: number) => void = () => undefined) {
     const [x0, n0, x1, n1] = data.meta.rect_m;
@@ -181,6 +190,14 @@ export class MapView {
     for (const ring of region.lakes) { trace(ring, true); ctx.fill(); }
     ctx.strokeStyle = SEA; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
     for (const river of region.rivers) { ctx.lineWidth = Math.max(1, river.w * REGION_SCALE); trace(river.p, false); ctx.stroke(); }
+    // Copie du fond sans routes (mini-carte), à moitié de la résolution.
+    this.regionGround.width = Math.ceil(this.regionBase.width / 2); this.regionGround.height = Math.ceil(this.regionBase.height / 2);
+    this.regionGround.getContext('2d')!.drawImage(this.regionBase, 0, 0, this.regionGround.width, this.regionGround.height);
+    this.railBoxes = region.rails.map((rail) => {
+      const box = { x0: Infinity, n0: Infinity, x1: -Infinity, n1: -Infinity };
+      for (let i = 0; i < rail.p.length; i += 2) { box.x0 = Math.min(box.x0, rail.p[i]); box.x1 = Math.max(box.x1, rail.p[i]); box.n0 = Math.min(box.n0, rail.p[i + 1]); box.n1 = Math.max(box.n1, rail.p[i + 1]); }
+      return box;
+    });
     for (const major of [false, true]) {
       for (const road of region.roads) {
         const big = road.w >= 9 || road.k.startsWith('motorway') || road.k.startsWith('trunk') || road.k.startsWith('primary');
@@ -196,6 +213,82 @@ export class MapView {
     const [cx0, , , cn1] = this.data.meta.rect_m;
     ctx.drawImage(this.base, X(cx0), Y(cn1), this.base.width * (REGION_SCALE / BASE_SCALE), this.base.height * (REGION_SCALE / BASE_SCALE));
     this.dirty = true;
+    // Routes par cases de 1 km (mini-carte).
+    this.roadStamp = new Uint32Array(region.roads.length);
+    region.roads.forEach((road, index) => {
+      let a = Infinity, b = Infinity, c = -Infinity, d = -Infinity;
+      for (let i = 0; i < road.p.length; i += 2) { a = Math.min(a, road.p[i]); c = Math.max(c, road.p[i]); b = Math.min(b, road.p[i + 1]); d = Math.max(d, road.p[i + 1]); }
+      for (let gx = Math.floor(a / 1000); gx <= Math.floor(c / 1000); gx++) for (let gn = Math.floor(b / 1000); gn <= Math.floor(d / 1000); gn++) {
+        const key = gx * 100003 + gn;
+        (this.roadCells.get(key) ?? this.roadCells.set(key, []).get(key)!).push(index);
+      }
+    });
+  }
+
+  /** Largeur de terrain de la mini-carte (m). */
+  setSpan(meters: number): void {
+    this.span = Math.max(MINI_SPAN, Math.min(6000, meters));
+  }
+
+  /**
+   * Mini-carte hors de la ville détaillée : routes de la wilaya et aéroport tracés trait par trait (l'image de la
+   * wilaya, à 3,5 cm par mètre, n'était qu'un aplat flou une fois agrandie dix fois).
+   */
+  private drawRegionVectors(ctx: CanvasRenderingContext2D, cx: number, cn: number, span: number): void {
+    const region = this.region;
+    if (!region) return;
+    const k = MINI_SIZE / span, half = span / 2 + 50;
+    const trace = (p: number[], close: boolean) => {
+      ctx.beginPath(); ctx.moveTo(MINI_SIZE / 2 + (p[0] - cx) * k, MINI_SIZE / 2 - (p[1] - cn) * k);
+      for (let i = 2; i < p.length; i += 2) ctx.lineTo(MINI_SIZE / 2 + (p[i] - cx) * k, MINI_SIZE / 2 - (p[i + 1] - cn) * k);
+      if (close) ctx.closePath();
+    };
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    const plan = region.airport;
+    if (plan && plan.boundary) {
+      let near = false;
+      for (let i = 0; i < plan.boundary.length && !near; i += 2) near = Math.abs(plan.boundary[i] - cx) < half + 3000 && Math.abs(plan.boundary[i + 1] - cn) < half + 3000;
+      if (near) {
+        ctx.fillStyle = '#c8c8c2';
+        for (const ring of plan.aprons) { trace(ring, true); ctx.fill(); }
+        ctx.strokeStyle = '#b4b4ae';
+        for (const t of plan.taxiways) { ctx.lineWidth = Math.max(1, t.w * k); trace(t.p, false); ctx.stroke(); }
+        ctx.strokeStyle = '#5f6266';
+        for (const r of plan.runways) { ctx.lineWidth = Math.max(2, r.w * k); trace(r.p, false); ctx.stroke(); }
+        ctx.fillStyle = BUILDING;
+        for (const t of plan.terminals) { trace(t.p, true); ctx.fill(); }
+      }
+    }
+    // Routes des cases voisines ; au large (avion), seulement les grands axes.
+    const stamp = ++this.stamp;
+    const minor: number[] = [], major: number[] = [];
+    for (let gx = Math.floor((cx - half) / 1000); gx <= Math.floor((cx + half) / 1000); gx++) {
+      for (let gn = Math.floor((cn - half) / 1000); gn <= Math.floor((cn + half) / 1000); gn++) {
+        for (const index of this.roadCells.get(gx * 100003 + gn) ?? []) {
+          if (this.roadStamp[index] === stamp) continue;
+          this.roadStamp[index] = stamp;
+          const road = region.roads[index];
+          const big = road.w >= 9 || road.k.startsWith('motorway') || road.k.startsWith('trunk') || road.k.startsWith('primary');
+          if (big) major.push(index); else if (span < 2500) minor.push(index);
+        }
+      }
+    }
+    ctx.strokeStyle = '#8a7c6e'; ctx.lineWidth = 1.2;
+    region.rails.forEach((rail, i) => {
+      const b = this.railBoxes[i];
+      if (b && b.x1 > cx - half && b.x0 < cx + half && b.n1 > cn - half && b.n0 < cn + half) { trace(rail.p, false); ctx.stroke(); }
+    });
+    for (const [list, edge, fill, extra] of [[minor, '#cbbfa9', '#ffffff', 0], [major, '#d0902a', '#f6c25a', 1]] as const) {
+      for (const pass of [0, 1]) {
+        ctx.strokeStyle = pass ? fill : edge;
+        for (const index of list) {
+          const road = region.roads[index];
+          const width = Math.max(1.6 + extra, road.w * k);
+          ctx.lineWidth = pass ? width : width + 1.5;
+          trace(road.p, false); ctx.stroke();
+        }
+      }
+    }
   }
 
   /** À appeler à chaque image : position du joueur et direction (radians). */
@@ -205,13 +298,16 @@ export class MapView {
 
     const px = (x - this.x0) * BASE_SCALE, py = (this.n1 + z) * BASE_SCALE;
     const mini = this.mini.getContext('2d')!;
-    const span = MINI_SPAN * BASE_SCALE;
+    const span = this.span * BASE_SCALE;
     mini.fillStyle = SEA;
     mini.fillRect(0, 0, MINI_SIZE, MINI_SIZE);
     if (this.region) {
-      const rpx = (x - this.rx0) * REGION_SCALE, rpy = (this.rn1 + z) * REGION_SCALE, rspan = MINI_SPAN * REGION_SCALE;
+      const g = REGION_SCALE / 2, rpx = (x - this.rx0) * g, rpy = (this.rn1 + z) * g, rspan = this.span * g;
       mini.imageSmoothingEnabled = true;
-      mini.drawImage(this.regionBase, rpx - rspan / 2, rpy - rspan / 2, rspan, rspan, 0, 0, MINI_SIZE, MINI_SIZE);
+      mini.drawImage(this.regionGround, rpx - rspan / 2, rpy - rspan / 2, rspan, rspan, 0, 0, MINI_SIZE, MINI_SIZE);
+      // Hors de la ville détaillée (ou en partie) : routes nettes par-dessus l'aplat.
+      const [cx0, cn0, cx1, cn1] = this.data.meta.rect_m, h = this.span / 2;
+      if (x - h < cx0 || x + h > cx1 || -z - h < cn0 || -z + h > cn1) this.drawRegionVectors(mini, x, -z, this.span);
     }
     mini.drawImage(this.base, px - span / 2, py - span / 2, span, span, 0, 0, MINI_SIZE, MINI_SIZE);
     this.drawMarker(mini, MINI_SIZE / 2, MINI_SIZE / 2, heading, 7);

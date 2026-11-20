@@ -85,7 +85,21 @@ function algerianFlag(): THREE.CanvasTexture {
   }, false);
 }
 
+const ringBoxes = new WeakMap<P[], [number, number, number, number]>();
+/** Rectangle englobant d'une ligne ou d'un contour (calculé une fois). */
+function bounds(points: P[]): [number, number, number, number] {
+  let box = ringBoxes.get(points);
+  if (!box) {
+    box = [Infinity, Infinity, -Infinity, -Infinity];
+    for (const [x, n] of points) { box[0] = Math.min(box[0], x); box[1] = Math.min(box[1], n); box[2] = Math.max(box[2], x); box[3] = Math.max(box[3], n); }
+    ringBoxes.set(points, box);
+  }
+  return box;
+}
+
 function pointInRing(x: number, n: number, ring: P[]): boolean {
+  const box = bounds(ring);
+  if (x < box[0] || x > box[2] || n < box[1] || n > box[3]) return false;
   let hit = false;
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
     const [xi, ni] = ring[i], [xj, nj] = ring[j];
@@ -94,7 +108,16 @@ function pointInRing(x: number, n: number, ring: P[]): boolean {
   return hit;
 }
 
-function distToLine(x: number, n: number, line: P[]): number {
+/**
+ * Distance à une ligne brisée. limit : seule une distance inférieure intéresse l'appelant ; un point plus loin
+ * que `limit` du rectangle englobant renvoie aussitôt une valeur supérieure (des dizaines de milliers d'appels
+ * au chargement pour dessiner pelouses et allées).
+ */
+function distToLine(x: number, n: number, line: P[], limit = Infinity): number {
+  if (limit !== Infinity) {
+    const box = bounds(line);
+    if (x < box[0] - limit || x > box[2] + limit || n < box[1] - limit || n > box[3] + limit) return limit + 1;
+  }
   let best = Infinity;
   for (let i = 0; i + 1 < line.length; i++) {
     const [ax, an] = line[i], [bx, bn] = line[i + 1];
@@ -368,15 +391,17 @@ export function buildSheratonGrounds(scene: THREE.Scene, data: WorldData, ground
   // --- Sols : pelouses, parvis dallé et allée d'accès au parvis, chemin piéton depuis le portillon.
   const footpath: P[] = [[261.2, fenceAt(261.2)], [268, 712], [292, 744], [300, 752]];
   const forecourtDrive: P[] = driveOut ? [driveOut[0], [306, 740], [313, 750]] : [[300, 728], [306, 740], [313, 750]];
-  const nearHotel = (x: number, n: number) => hotel.some((ring) => pointInRing(x, n, ring) || distToLine(x, n, [...ring, ring[0]]) < 8);
-  const onRoad = (x: number, n: number, margin: number) => site.some(({ line, half }) => distToLine(x, n, line) < half + margin);
-  const inCanopy = (x: number, n: number) => canopyZones.some((line) => distToLine(x, n, line) < 2.7) ||
-    [...aisles.west, ...aisles.east].some((line) => line !== null && distToLine(x, n, line) < 2.4);
+  const hotelLoops = hotel.map((ring) => [...ring, ring[0]]);
+  const nearHotel = (x: number, n: number) => hotel.some((ring, i) => pointInRing(x, n, ring) || distToLine(x, n, hotelLoops[i], 8) < 8);
+  const onRoad = (x: number, n: number, margin: number) => site.some(({ line, half }) => distToLine(x, n, line, half + margin) < half + margin);
+  const aisleLines = [...aisles.west, ...aisles.east].filter((line): line is P[] => line !== null);
+  const inCanopy = (x: number, n: number) => canopyZones.some((line) => distToLine(x, n, line, 2.7) < 2.7) ||
+    aisleLines.some((line) => distToLine(x, n, line, 2.4) < 2.4);
   const lawn = new MeshBuilder(), paving = new MeshBuilder();
   const classify = (x: number, n: number): string => {
     if (!pointInRing(x, n, property) || inDeck(x, n) || hotel.some((ring) => pointInRing(x, n, ring))) return '';
-    if (distToLine(x, n, forecourtDrive) < 4.5) return 'drive';
-    if (distToLine(x, n, footpath) < 1.5 && !onRoad(x, n, 0)) return 'path';
+    if (distToLine(x, n, forecourtDrive, 4.5) < 4.5) return 'drive';
+    if (distToLine(x, n, footpath, 1.5) < 1.5 && !onRoad(x, n, 0)) return 'path';
     if (onRoad(x, n, 0.6)) return '';
     if (nearHotel(x, n)) return 'path';
     if (!inCanopy(x, n) && n > fenceAt(x) + 0.4 && x > WEST_EDGE + 0.4) return 'lawn';

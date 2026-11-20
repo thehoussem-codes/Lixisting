@@ -4,7 +4,8 @@ import { ownedByLandmark } from './Landmarks';
 import { Collider } from './Collider';
 import { buildHouse, grow } from './Houses';
 import { MeshBuilder } from './MeshBuilder';
-import { FACADE_WIDTH, createClockTexture, createFacadeTexture, createRailTexture, type FacadeStyle } from './Textures';
+import { FACADE_WIDTH, createClockTexture, createRailTexture, type FacadeStyle } from './Textures';
+import { facadeAtlasMaterial, mergeFacades } from './FacadeAtlas';
 import type { WorldData } from './WorldData';
 
 const CHUNK = 400;        // regroupement par blocs de 400 m
@@ -257,6 +258,8 @@ export function buildBuildings(scene: THREE.Scene, data: WorldData, ground: (x: 
   const collider = new Collider();
   const walls = new Map<string, MeshBuilder>();
   const roofs = new Map<string, MeshBuilder>();
+  // Détails des toits (corniches, édicules, citernes, paraboles) : à part, affichés moins loin que les toits.
+  const roofDetails = new Map<string, MeshBuilder>();
   const builderIn = (map: Map<string, MeshBuilder>, key: string): MeshBuilder => {
     let builder = map.get(key);
     if (!builder) { builder = new MeshBuilder(); map.set(key, builder); }
@@ -414,7 +417,7 @@ export function buildBuildings(scene: THREE.Scene, data: WorldData, ground: (x: 
       wallQuad(upper, ax, az, bx, bz, upperFrom, top, wall, hasGround ? 0.92 : 0.75, 1, Math.round(length / FACADE_WIDTH[look.style]), 0, floors);
     }
 
-    const roof = builderIn(roofs, cell);
+    const roof = builderIn(roofs, cell), detail = builderIn(roofDetails, cell);
     if (building.t === 'house') {
       // Toit de tuiles à pentes : chaque mur rejoint le faîte au centre.
       const apex = roof.vertex(cx, top + 1.9, cz, roofColor, 1.05);
@@ -433,12 +436,12 @@ export function buildBuildings(scene: THREE.Scene, data: WorldData, ground: (x: 
       for (let i = 0; i < count; i++) {
         const j = (i + 1) % count;
         const a = ring[i], b = ring[j], ao = outer[i], bo = outer[j], y0 = top - 0.42, y1 = top + 0.02;
-        const v = [roof.vertex(ao[0], y0, -ao[1], tone, 0.82), roof.vertex(bo[0], y0, -bo[1], tone, 0.82), roof.vertex(bo[0], y1, -bo[1], tone, 1), roof.vertex(ao[0], y1, -ao[1], tone, 1)];
-        roof.triangle(v[0], v[1], v[2]); roof.triangle(v[0], v[2], v[3]);
-        const u = [roof.vertex(a[0], y0, -a[1], tone, 0.6), roof.vertex(b[0], y0, -b[1], tone, 0.6), roof.vertex(bo[0], y0, -bo[1], tone, 0.7), roof.vertex(ao[0], y0, -ao[1], tone, 0.7)];
-        roof.triangle(u[0], u[1], u[2]); roof.triangle(u[0], u[2], u[3]);
-        const t = [roof.vertex(a[0], y1, -a[1], tone, 1.02), roof.vertex(b[0], y1, -b[1], tone, 1.02), roof.vertex(bo[0], y1, -bo[1], tone, 1.02), roof.vertex(ao[0], y1, -ao[1], tone, 1.02)];
-        roof.triangle(t[0], t[2], t[1]); roof.triangle(t[0], t[3], t[2]);
+        const v = [detail.vertex(ao[0], y0, -ao[1], tone, 0.82), detail.vertex(bo[0], y0, -bo[1], tone, 0.82), detail.vertex(bo[0], y1, -bo[1], tone, 1), detail.vertex(ao[0], y1, -ao[1], tone, 1)];
+        detail.triangle(v[0], v[1], v[2]); detail.triangle(v[0], v[2], v[3]);
+        const u = [detail.vertex(a[0], y0, -a[1], tone, 0.6), detail.vertex(b[0], y0, -b[1], tone, 0.6), detail.vertex(bo[0], y0, -bo[1], tone, 0.7), detail.vertex(ao[0], y0, -ao[1], tone, 0.7)];
+        detail.triangle(u[0], u[1], u[2]); detail.triangle(u[0], u[2], u[3]);
+        const t = [detail.vertex(a[0], y1, -a[1], tone, 1.02), detail.vertex(b[0], y1, -b[1], tone, 1.02), detail.vertex(bo[0], y1, -bo[1], tone, 1.02), detail.vertex(ao[0], y1, -ao[1], tone, 1.02)];
+        detail.triangle(t[0], t[2], t[1]); detail.triangle(t[0], t[3], t[2]);
       }
     }
 
@@ -450,17 +453,17 @@ export function buildBuildings(scene: THREE.Scene, data: WorldData, ground: (x: 
         return [cx + (p[i * 2] - cx) * t, cz + (-p[i * 2 + 1] - cz) * t];
       };
       const [ex, ez] = spot(0, 0.3);
-      box(roof, ex, ez, 1.5, deck, deck + 2.3, wall.clone().multiplyScalar(0.93));
-      box(roof, ex, ez, 1.65, deck + 2.3, deck + 2.45, ROOF_EDGE);
+      box(detail, ex, ez, 1.5, deck, deck + 2.3, wall.clone().multiplyScalar(0.93));
+      box(detail, ex, ez, 1.65, deck + 2.3, deck + 2.45, ROOF_EDGE);
       for (let k = 1; k <= 1 + (index % 3); k++) {
         const [tx, tz] = spot(k, 0.5);
-        box(roof, tx, tz, 0.12, deck, deck + 0.7, TANK_LEG);
-        box(roof, tx, tz, 0.55, deck + 0.7, deck + 1.75, index % 2 ? TANK_BLUE : TANK_GREY);
+        box(detail, tx, tz, 0.12, deck, deck + 0.7, TANK_LEG);
+        box(detail, tx, tz, 0.55, deck + 0.7, deck + 1.75, index % 2 ? TANK_BLUE : TANK_GREY);
       }
       for (let k = 0; k < 2 + (index % 4); k++) {
         const [sx, sz] = spot(k + 4, 0.78 + (k % 2) * 0.1);
-        box(roof, sx, sz, 0.04, deck, deck + 1.0, TANK_LEG);
-        pyramid(roof, sx, sz, 0.48, deck + 1.45, deck + 0.95, DISH);
+        box(detail, sx, sz, 0.04, deck, deck + 1.0, TANK_LEG);
+        pyramid(detail, sx, sz, 0.48, deck + 1.45, deck + 0.95, DISH);
       }
     }
 
@@ -504,20 +507,22 @@ export function buildBuildings(scene: THREE.Scene, data: WorldData, ground: (x: 
     collider.addBuilding(footprint, -Infinity, Infinity, flatRoof);
   });
 
-  const materials = new Map<string, THREE.Material>();
+  // Murs : tous les styles d'un même bloc en un seul maillage (atlas des façades) ; garde-corps à part (texture à trous).
+  const railMaterial = new THREE.MeshLambertMaterial({ map: createRailTexture(), alphaTest: 0.5, side: THREE.DoubleSide, name: 'facade:rail' });
+  const byCell = new Map<string, [FacadeStyle, THREE.BufferGeometry][]>();
   for (const [key, builder] of walls) {
-    const style = key.split('|')[0] as FacadeStyle;
-    let material = materials.get(style);
-    if (!material && key.startsWith('rail|')) {
-      // Garde-corps : texture à trous (on voit à travers les barreaux).
-      material = new THREE.MeshLambertMaterial({ map: createRailTexture(), alphaTest: 0.5, side: THREE.DoubleSide });
-      materials.set(style, material);
-    }
-    if (!material) {
-      material = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, map: createFacadeTexture(style) });
-      materials.set(style, material);
-    }
-    if (!builder.isEmpty) { const mesh = new THREE.Mesh(builder.build(), material); mesh.castShadow = true; scene.add(mesh); }
+    if (builder.isEmpty) continue;
+    const [style, cell] = key.split('|');
+    if (style === 'rail') { const mesh = new THREE.Mesh(builder.build(), railMaterial); mesh.castShadow = true; scene.add(mesh); continue; }
+    const list = byCell.get(cell) ?? byCell.set(cell, []).get(cell)!;
+    list.push([style as FacadeStyle, builder.build()]);
+  }
+  for (const parts of byCell.values()) {
+    const geometry = mergeFacades(parts);
+    if (!geometry) continue;
+    const mesh = new THREE.Mesh(geometry, facadeAtlasMaterial());
+    mesh.castShadow = true;
+    scene.add(mesh);
   }
   if (!standSteps.isEmpty) {
     const steps = new THREE.Mesh(standSteps.build(), new THREE.MeshLambertMaterial({ vertexColors: true, map: createStepsTexture(), side: THREE.DoubleSide }));
@@ -525,7 +530,9 @@ export function buildBuildings(scene: THREE.Scene, data: WorldData, ground: (x: 
     scene.add(steps);
     scene.add(new THREE.Mesh(standWalls.build(), new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide })));
   }
-  const roofMaterial = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
+  const roofMaterial = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, name: 'toit' });
   for (const builder of roofs.values()) if (!builder.isEmpty) { const mesh = new THREE.Mesh(builder.build(), roofMaterial); mesh.castShadow = true; scene.add(mesh); }
+  const detailMaterial = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, name: 'toit:detail' });
+  for (const builder of roofDetails.values()) if (!builder.isEmpty) { const mesh = new THREE.Mesh(builder.build(), detailMaterial); mesh.castShadow = true; scene.add(mesh); }
   return collider;
 }

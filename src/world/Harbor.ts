@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { ringTester } from './RingIndex';
 import { MeshBuilder } from './MeshBuilder';
 import type { WorldData } from './WorldData';
 
@@ -244,25 +245,10 @@ export class Harbor {
   constructor(scene: THREE.Scene, data: WorldData, centerX: number, centerN: number, radius: number, ground: (x: number, z: number) => number) {
     this.center = new THREE.Vector3(centerX, 0, -centerN);
     const rings = data.land.map((r) => { const pts: [number, number][] = []; for (let i = 0; i < r.length; i += 2) pts.push([r[i], r[i + 1]]); return pts; });
-    const onLand = (x: number, n: number) => {
-      let inside = false;
-      for (const ring of rings) {
-        for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-          const [ax, an] = ring[i], [bx, bn] = ring[j];
-          if ((an > n) !== (bn > n) && x < ((bx - ax) * (n - an)) / (bn - an) + ax) inside = !inside;
-        }
-      }
-      return inside;
-    };
+    const onLand = ringTester(rings);   // côte de toute la ville : test par bandes (3 s de chargement en moins)
     const beaches = data.areas.filter((a) => a.k === 'beach').map((a) => { const pts: [number, number][] = []; for (let i = 0; i < a.p.length; i += 2) pts.push([a.p[i], a.p[i + 1]]); return pts; });
-    const onBeach = (x: number, n: number) => beaches.some((ring) => {
-      let inside = false;
-      for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-        const [ax, an] = ring[i], [bx, bn] = ring[j];
-        if ((an > n) !== (bn > n) && x < ((bx - ax) * (n - an)) / (bn - an) + ax) inside = !inside;
-      }
-      return inside;
-    });
+    const beachTests = beaches.map((ring) => ringTester([ring]));
+    const onBeach = (x: number, n: number) => beachTests.some((test) => test(x, n));
     // Bassin abrité : depuis un point d'eau, la terre est proche dans la plupart des directions (jetées, quais).
     const sheltered = (x: number, n: number) => {
       let hits = 0;

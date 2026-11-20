@@ -41,7 +41,7 @@ export class Terrain {
     this.index();
 
     const geometry = new THREE.BufferGeometry();
-    this.mesh = new THREE.Mesh(geometry, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, map: createGroundTexture() }));
+    this.mesh = new THREE.Mesh(geometry, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, map: createGroundTexture(), name: 'sol:terrain' }));
     this.rebuild();
   }
 

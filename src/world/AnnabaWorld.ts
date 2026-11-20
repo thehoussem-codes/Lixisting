@@ -161,13 +161,15 @@ export function buildAnnabaWorld(scene: THREE.Scene, data: WorldData, terrain: T
     if (rs > r + 0.3) walk.disc(x, z, rs, 0.12, white, ground, 2);
     crossings.disc(x, z, r + 0.05, 0.2, white, ground, 6);
   }
-  add(tracks, layer(1), 1);
-  add(walk, layer(2, createPavementTexture(false)), 2);
-  add(walkFine, layer(2, createPavementTexture(true)), 3);
-  add(minor, layer(3, createRoadTexture(false)), 4);
-  add(major, layer(4, createRoadTexture(true)), 5);
-  add(painted, layer(4, createRoadTexture(true, true)), 5);
-  add(crossings, layer(5, createAsphaltTexture()), 6);
+  // Noms des matériaux : servent aux mesures (répartition des draw calls) et aux distances d'affichage.
+  const named = <T extends THREE.Material>(m: T, name: string): T => { m.name = name; return m; };
+  add(tracks, named(layer(1), 'sol:pistes'), 1);
+  add(walk, named(layer(2, createPavementTexture(false)), 'sol:trottoirs'), 2);
+  add(walkFine, named(layer(2, createPavementTexture(true)), 'sol:dallage'), 3);
+  add(minor, named(layer(3, createRoadTexture(false)), 'sol:rues'), 4);
+  add(major, named(layer(4, createRoadTexture(true)), 'sol:avenues'), 5);
+  add(painted, named(layer(4, createRoadTexture(true, true)), 'sol:marquage'), 5);
+  add(crossings, named(layer(5, createAsphaltTexture()), 'sol:carrefours'), 6);
 
   // Ronds-points réels : îlot central surélevé, bordé de béton, engazonné et planté.
   const islands = new MeshBuilder();
@@ -216,7 +218,7 @@ export function buildAnnabaWorld(scene: THREE.Scene, data: WorldData, terrain: T
       lampPost(builder, x, y, z, lampColor, bulbColor);
     }
   }
-  const lampMaterial = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
+  const lampMaterial = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, name: 'detail:lampadaires' });
   for (const builder of lamps.values()) add(builder, lampMaterial);
 
   // Essais : ?detectes=0 retire les bâtiments détectés sur images aériennes (pour comparer avec OSM seul).

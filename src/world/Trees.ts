@@ -379,7 +379,7 @@ const DROP_DISTANCE = VIEW_DISTANCE + 900;    // et libéré quand le joueur s'e
  * tout bâtir d'un coup prenait la moitié du temps de chargement) ; `update` s'en charge autour du joueur.
  */
 export function buildTrees(scene: THREE.Scene, data: TreeData, ground: (x: number, z: number) => number): TreeStream {
-  interface Block { x: number; z: number; plants: number[]; meshes: THREE.Mesh[] | null }
+  interface Block { x: number; z: number; plants: number[]; meshes: THREE.Mesh[] | null; building?: boolean }
   const blocks = new Map<string, Block>();
   const speciesNames = Object.keys(data).filter((name) => SHAPES[name]);
   let count = 0;
@@ -396,12 +396,15 @@ export function buildTrees(scene: THREE.Scene, data: TreeData, ground: (x: numbe
       count++;
     }
   });
-  const material = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, map: createFoliageTexture(), alphaTest: 0.4 });
+  const material = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, map: createFoliageTexture(), alphaTest: 0.4, name: 'arbres' });
   const barkMaterial = new THREE.MeshLambertMaterial({ vertexColors: true, map: createPalmBarkTexture() });
   const ficusMaterial = new THREE.MeshLambertMaterial({ vertexColors: true, map: createPalmBarkTexture('ficus') });
   const plainMaterial = new THREE.MeshLambertMaterial({ vertexColors: true, map: createPalmBarkTexture('plain') });
 
-  const build = (block: Block) => {
+  // Construction d'un bloc par morceaux (générateur) : 150 plantes à la fois, le reste à l'image suivante.
+  // Avant, un bloc de forêt se construisait d'un coup (jusqu'à 20 ms) : à-coup visible en roulant.
+  function* build(block: Block): Generator<void, void> {
+    block.building = true;
     const leaves = new MeshBuilder();
     let bark: MeshBuilder | null = null, ficusBark: MeshBuilder | null = null, plainBark: MeshBuilder | null = null;
     const p = block.plants;
@@ -412,7 +415,9 @@ export function buildTrees(scene: THREE.Scene, data: TreeData, ground: (x: numbe
       else if (species === 'palm_plain') palm(leaves, rank, x, y, -n, size, (plainBark ??= new MeshBuilder()));
       else if (species === 'ficus') ficus(leaves, rank, x, y, -n, size, (ficusBark ??= new MeshBuilder()));
       else SHAPES[species](leaves, rank, x, y, -n, size);
+      if (i % 750 === 745) yield;
     }
+    block.building = false;
     block.meshes = [];
     for (const [builder, mat] of [[leaves, material], [bark, barkMaterial], [ficusBark, ficusMaterial], [plainBark, plainMaterial]] as const) {
       if (!builder) continue;
@@ -421,6 +426,15 @@ export function buildTrees(scene: THREE.Scene, data: TreeData, ground: (x: numbe
       scene.add(mesh);
       block.meshes.push(mesh);
     }
+  }
+  let job: Generator<void, void> | null = null;
+  /** Fait avancer le bloc en cours ; false si le temps de cette image est écoulé. */
+  const run = (start: number, budget: number): boolean => {
+    while (job) {
+      if (job.next().done) job = null;
+      if (performance.now() - start > budget) return false;
+    }
+    return true;
   };
 
   const list = [...blocks.values()];
@@ -437,14 +451,15 @@ export function buildTrees(scene: THREE.Scene, data: TreeData, ground: (x: numbe
         if (block.meshes) {
           if (d > DROP_DISTANCE) { for (const mesh of block.meshes) { scene.remove(mesh); mesh.geometry.dispose(); } block.meshes = null; }
           else for (const mesh of block.meshes) mesh.visible = d < VIEW_DISTANCE + CHUNK * 0.75;
-        } else if (d < BUILD_DISTANCE) wanted.push([d, block]);
+        } else if (d < BUILD_DISTANCE && !block.building) wanted.push([d, block]);
       }
       wanted.sort((a, b) => a[0] - b[0]);
-      // Un seul bloc par image en jeu (sauf au démarrage) : pas d'à-coups quand on avance.
+      // En jeu, au plus `budget` ms par image (2,5 ms) : pas d'à-coups quand on avance.
       for (const [, block] of wanted) {
-        build(block);
-        if (performance.now() - start > budget || budget < 100) break;
+        if (!run(start, budget)) return;
+        job = build(block);
       }
+      run(start, budget);
     },
   };
 }

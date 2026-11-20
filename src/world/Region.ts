@@ -3,7 +3,8 @@ import { MOBILE } from '../engine/Mobile';
 import type { AirportPlan } from './Airport';
 import type { Collider } from './Collider';
 import { MeshBuilder } from './MeshBuilder';
-import { FACADE_WIDTH, type FacadeStyle, createFacadeTexture, createFoliageTexture, createGroundTexture, createRoadTexture } from './Textures';
+import { facadeAtlasMaterial, mergeFacades } from './FacadeAtlas';
+import { FACADE_WIDTH, type FacadeStyle, createFoliageTexture, createGroundTexture, createRoadTexture } from './Textures';
 import { addPlant } from './Trees';
 
 /**
@@ -220,11 +221,9 @@ export class Region {
     this.materials.plain = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
     this.materials.water = layer(1);
     this.materials.leaves = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, map: createFoliageTexture(), alphaTest: 0.4 });
+    for (const [name, material] of Object.entries(this.materials)) material.name = `wilaya:${name}`;
   }
 
-  private facade(style: FacadeStyle): THREE.Material {
-    return (this.materials[style] ??= new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, map: createFacadeTexture(style) }));
-  }
 
   /**
    * Construit les cases proches (au plus une par appel, sauf `budget` plus large), libère les lointaines.
@@ -254,9 +253,27 @@ export class Region {
     }
     wanted.sort((a, b) => a[0] - b[0]);
     for (const [, tx, tn] of wanted) {
-      this.build(tx, tn);
-      if (performance.now() - start > budget) break;
+      if (!this.runJob(start, budget)) return;
+      this.job = this.build(tx, tn);
     }
+    this.runJob(start, budget);
+  }
+
+  /** Case en cours de construction (voir `build`). */
+  private job: Generator<void, Tile> | null = null;
+
+  /** Fait avancer la construction en cours ; false si le budget de temps de cette image est épuisé. */
+  private runJob(start: number, budget: number): boolean {
+    while (this.job) {
+      const step = this.job.next();
+      if (step.done) {
+        this.job = null;
+        // Case abandonnée pendant sa construction (le joueur s'est éloigné) : on libère ce qui a été fait.
+        if (this.tiles.get(step.value.key) !== step.value) for (const mesh of [...step.value.meshes, ...step.value.trees]) { this.scene?.remove(mesh); mesh.geometry.dispose(); }
+      }
+      if (performance.now() - start > budget) return false;
+    }
+    return true;
   }
 
   /** Nombre de cases construites (essais). */
@@ -277,7 +294,11 @@ export class Region {
     (trees ? tile.trees : tile.meshes).push(mesh);
   }
 
-  private build(tx: number, tn: number): void {
+  /**
+   * Construction d'une case, par étapes (générateur) : `update` en fait avancer un morceau à chaque image dans la
+   * limite de son budget, au lieu de tout construire d'un coup (jusqu'à 50 ms : un à-coup visible en roulant).
+   */
+  private *build(tx: number, tn: number): Generator<void, Tile> {
     const key = tn * this.tileCols + tx, size = this.tileSize;
     const ox = this.tx0 + tx * size, on = this.tn0 + tn * size;
     const tile: Tile = { key, tx, tn, cx: ox + size / 2, cz: -(on + size / 2), meshes: [], trees: [] };
@@ -318,6 +339,7 @@ export class Region {
       ground.triangle(a, b, c); ground.triangle(a, c, d);
     }
     this.add(tile, ground, this.materials.ground);
+    yield;
 
     // --- routes, rivières, lacs
     const minor = new MeshBuilder(), major = new MeshBuilder(), water = new MeshBuilder();
@@ -362,10 +384,14 @@ export class Region {
     this.add(tile, water, this.materials.water, 2);
     this.add(tile, minor, this.materials.minor, 4);
     this.add(tile, major, this.materials.major, 5);
+    yield;
 
     // --- bâtiments (boîtes orientées : maisons et petits immeubles)
     const walls = new Map<FacadeStyle, MeshBuilder>(), roofs = new MeshBuilder();
-    const homes: number[] = [];   // centres et rayons, pour ne pas planter d'arbre dedans
+    // Maisons rangées par cases de 32 m (centre et rayon), pour ne pas planter d'arbre dedans : chaque plante ne
+    // regarde que les maisons de sa case (avant : toutes les maisons de la case de 1 km, des millions de tests).
+    const homes = new Map<number, number[]>();
+    const HOME_CELL = 32;
     const first = this.tileOffsets[key], last = this.tileOffsets[key + 1];
     const addCollider = !this.colliderDone.has(key);
     for (let r = first; r < last; r++) {
@@ -402,15 +428,32 @@ export class Region {
       // Toit plat avec acrotère (le plus courant en Algérie), dalle claire.
       roofs.flatPolygon(ring, top - 0.5, new THREE.Color(ROOFS[Math.floor(hash(r, 5) * 3)]));
       if (addCollider) this.collider?.addBuilding(ring, -Infinity, Infinity, { y: top - 0.5 });
-      homes.push(bx, bn, Math.max(length, width) / 2 + 1.5);
+      const radius = Math.max(length, width) / 2 + 1.5;
+      for (let gx = Math.floor((bx - radius) / HOME_CELL); gx <= Math.floor((bx + radius) / HOME_CELL); gx++) {
+        for (let gn = Math.floor((bn - radius) / HOME_CELL); gn <= Math.floor((bn + radius) / HOME_CELL); gn++) {
+          const cell = gx * 100003 + gn;
+          (homes.get(cell) ?? homes.set(cell, []).get(cell)!).push(bx, bn, radius);
+        }
+      }
+      if ((r - first) % 300 === 299) yield;
     }
     this.colliderDone.add(key);
-    for (const [style, builder] of walls) this.add(tile, builder, this.facade(style));
+    // Tous les styles de façade de la case en un seul maillage (atlas) : un envoi au lieu de quatre.
+    const merged = mergeFacades([...walls].filter(([, builder]) => !builder.isEmpty).map(([style, builder]) => [style, builder.build()]));
+    if (merged && this.scene) {
+      const mesh = new THREE.Mesh(merged, facadeAtlasMaterial());
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      this.scene.add(mesh);
+      tile.meshes.push(mesh);
+    }
     this.add(tile, roofs, this.materials.plain);
+    yield;
 
     // --- végétation : forêts denses (classe 10), maquis (20), quelques arbustes sur l'herbe (30)
     const leaves = new MeshBuilder();
     const perCell = MOBILE ? [0, 3, 2, 0.3] : [0, 6, 3, 0.5];
+    let planted = 0;
     for (let i = i0; i < Math.min(i1, this.rows); i++) for (let j = j0; j < Math.min(j1, this.cols); j++) {
       const cls = this.cover[i * this.cols + j];
       const count = cls === 10 ? perCell[1] : cls === 20 ? perCell[2] : cls === 30 ? perCell[3] : 0;
@@ -425,7 +468,8 @@ export class Region {
         if (y < 1 || roadCells.has(Math.floor(px / 8) * 100003 + Math.floor(pn / 8))) continue;
         if (this.inAirport(px, pn)) continue;           // aérodrome dégagé : ni arbre ni buisson
         let inside = false;
-        for (let k = 0; k < homes.length && !inside; k += 3) inside = Math.hypot(homes[k] - px, homes[k + 1] - pn) < homes[k + 2];
+        const near = homes.get(Math.floor(px / HOME_CELL) * 100003 + Math.floor(pn / HOME_CELL));
+        if (near) for (let k = 0; k < near.length && !inside; k += 3) inside = Math.hypot(near[k] - px, near[k + 1] - pn) < near[k + 2];
         if (inside) continue;
         // Forêt : chênes et pins, avec du maquis (buissons) entre eux ; ailleurs, seulement des buissons.
         const pick = hash(seed, t + 90);
@@ -433,9 +477,11 @@ export class Region {
         const scale = (kind === 'bush' ? 0.75 : 1.1) * (0.8 + 0.5 * hash(seed, t + 70)) * (MOBILE ? 1.25 : 1);
         addPlant(leaves, kind, seed + t, px, y, -pn, scale);
         if (kind !== 'bush' && addCollider) this.collider?.addTrunk(px, -pn, Math.min(0.5, 0.24 * scale), y + 2.5 + 1.5 * scale);
+        if (++planted % 400 === 0) yield;
       }
     }
     this.add(tile, leaves, this.materials.leaves, 0, true);
+    return tile;
   }
 
   /** Dans l'enceinte de l'aéroport (contour OSM de l'aérodrome). */

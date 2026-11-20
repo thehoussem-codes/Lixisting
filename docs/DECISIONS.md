@@ -549,3 +549,28 @@ Skills chargés : `physics-tuning`, `game-ai`, `audio-design`, `threejs-material
 - Téléphone : joystick haut = piquer, bas = cabrer, gauche / droite = virer ; pédale = plus de poussée ; FREIN = moins de poussée et freins.
 - Touche 0 (ou clic sur ✈ sur la carte) : on arrive à la porte avant du premier avion.
 - Limites : modèle de vol arcade (pas de volets, pas de vent, pas de train escamotable commandé) ; les aérogares sont des volumes simples d'après leur contour OSM ; pas de passerelles ni d'autres avions qui circulent.
+
+## Fluidité, chargement et mini-carte (21/11/2026)
+
+Mesures avant / après (navigateur sans carte graphique, même vue, joueur immobile ; les « draw calls » sont les envois de dessin au processeur graphique, ce qui coûte le plus sur un Intel UHD 630) :
+
+| Lieu | Draw calls avant | après | Triangles avant | après |
+|---|---|---|---|---|
+| Cours de la Révolution (centre) | 767 | 357 | 947 000 | 465 000 |
+| Cours, vers la Vieille Ville | 522 | 284 | 755 000 | 348 000 |
+| Corniche (hauteurs) | 915 | 375 | 1 300 000 | 703 000 |
+| Chapuis | 790 | 342 | 847 000 | 321 000 |
+| Aéroport | 61 | 48 | 121 000 | 121 000 |
+| El Bouni (wilaya) | 121 | 88 | 504 000 | 149 000 |
+
+- Atlas des façades (`src/world/FacadeAtlas.ts`) : les 26 textures de façade sont réunies dans une seule image ; tous les murs d'un bloc de 400 m (et d'une case de la wilaya) sont dessinés en un seul envoi au lieu d'un par style. Le shader replie la texture dans sa case et choisit la finesse d'après la coordonnée non repliée (pas de ligne aux répétitions) ; marge de 8 pixels recopiée autour de chaque case.
+- Voitures garées et de la circulation dessinées à moins de 340 m (220 m sur téléphone) : à la corniche, 176 envois servaient à des voitures à plus de 700 m. Elles restent présentes pour les collisions.
+- Fond marin découpé en secteurs de 400 m et affiché jusqu'à 1 km : avant, 350 000 triangles étaient dessinés à chaque image, même loin de la mer.
+- Détails des toits (corniches, édicules, citernes, paraboles) et petits détails au sol (marquages, passages, dallages, lampadaires, garde-corps) affichés moins loin (450 à 650 m) que les bâtiments (1,4 km).
+- À-coups en roulant : les cases de la wilaya et les blocs de végétation se construisent par petits morceaux (au plus 5 ms et 2,5 ms par image) au lieu d'un seul coup ; pic mesuré en traversant la wilaya : 53 ms → 12 ms. Les arbres de la wilaya ne testent plus que les maisons voisines (avant : chaque arbre contre toutes les maisons de la case).
+- Voitures à l'arrêt « endormies » : plus de calcul de sol ni de collision tant qu'elles ne bougent pas.
+- Chargement : ville 9,5 s → 6,6 s, végétation 4,5 s → 0,9 s (navigateur sans carte graphique ; plus rapide sur un vrai ordinateur). Causes : test « sur la terre ? » du port (toute la côte pour chaque essai : tests rangés par bandes, `src/world/RingIndex.ts`), pelouses du Sheraton (distances aux allées : rectangle englobant d'abord), parkings contre 400 000 arbres (rangés par cases de 100 m).
+- Mini-carte : hors de la ville détaillée, routes, voies ferrées et aéroport tracés nettement (avant : un aplat beige flou). Elle montre plus loin en voiture rapide, en bateau et surtout en avion (jusqu'à environ 5 km).
+- En se téléportant (touches 1 à 9, carte), la végétation du lieu d'arrivée est construite tout de suite.
+- Mesure intégrée : `lixitingDebug()` donne le temps de calcul par partie du jeu (moyenne et pics).
+- Non vérifié sur le Mac ni sur un téléphone réels : les chiffres d'images par seconde dépendent de la carte graphique.

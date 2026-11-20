@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { splitIntoSectors } from './Sectors';
 import { createGroundTexture } from './Textures';
 import { MOBILE } from '../engine/Mobile';
 
@@ -243,7 +244,7 @@ function rippleTexture(): THREE.DataTexture {
 }
 
 /** Fond marin : sable clair près du bord, plus sombre en profondeur, taches d'herbiers (posidonies). */
-function buildSeabed(scene: THREE.Scene, map: SeaMap, cityRect?: number[]): void {
+function buildSeabed(scene: THREE.Scene, map: SeaMap, cityRect?: number[]): THREE.Mesh[] {
   const stride = MOBILE ? 3 : 2, reach = MOBILE ? 450 : 800;
   const positions: number[] = [], colors: number[] = [], index: number[] = [];
   const ids = new Map<number, number>();
@@ -291,13 +292,26 @@ function buildSeabed(scene: THREE.Scene, map: SeaMap, cityRect?: number[]): void
   geometry.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
   geometry.setIndex(index);
   geometry.computeVertexNormals();
-  const mesh = new THREE.Mesh(geometry, new THREE.MeshLambertMaterial({ vertexColors: true, map: createGroundTexture() }));
+  const mesh = new THREE.Mesh(geometry, new THREE.MeshLambertMaterial({ vertexColors: true, map: createGroundTexture(), name: 'fond marin' }));
   mesh.receiveShadow = false;
   mesh.name = 'fond marin';
-  if (new URLSearchParams(window.location.search).get('fond') !== '0') scene.add(mesh);
+  if (new URLSearchParams(window.location.search).get('fond') === '0') return [];
+  // Découpé en secteurs de 400 m : le jeu n'affiche que ceux qui sont proches (avant : 350 000 triangles
+  // dessinés à chaque image, même loin de la mer).
+  const parts = splitIntoSectors(mesh, 400);
+  geometry.dispose();
+  for (const part of parts) scene.add(part);
+  return parts;
 }
 
 export class Water {
+  private seabed: THREE.Mesh[] | null = null;
+  private seabedListener: ((parts: THREE.Mesh[]) => void) | null = null;
+  /** Appelle `listener` avec les secteurs du fond marin dès qu'ils existent (ils arrivent après le reste). */
+  whenSeabed(listener: (parts: THREE.Mesh[]) => void): void {
+    if (this.seabed) listener(this.seabed); else this.seabedListener = listener;
+  }
+
   private near: THREE.Mesh;
   private far: THREE.Mesh;
   private material: THREE.ShaderMaterial;
@@ -349,7 +363,8 @@ export class Water {
       this.sea = map;
       this.material.uniforms.uSea.value = map.texture;
       this.material.uniforms.uSeaRect.value = map.rect();
-      buildSeabed(scene, map, cityRect);
+      this.seabed = buildSeabed(scene, map, cityRect);
+      this.seabedListener?.(this.seabed);
     }).catch((error) => console.warn('Carte de la mer indisponible :', error));
     SeaMap.load(import.meta.env.BASE_URL, __BUILD_ID__, 'sea_region').then((map) => {
       this.seaRegion = map;

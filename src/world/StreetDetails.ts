@@ -198,8 +198,16 @@ export function buildStreetDetails(scene: THREE.Scene, data: WorldData, ground: 
   add(tarmac, new THREE.MeshLambertMaterial({ vertexColors: true, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }), false);
   add(lines, new THREE.MeshLambertMaterial({ vertexColors: true, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 }), false);
 
+  // Parkings rangés par cases de 100 m : chacun des 400 000 arbres ne regarde que ceux de sa case.
+  const parkingCells = new Map<number, typeof parkings>();
+  for (const p of parkings) {
+    for (let gx = Math.floor(p.x0 / 100); gx <= Math.floor(p.x1 / 100); gx++) for (let gn = Math.floor(p.n0 / 100); gn <= Math.floor(p.n1 / 100); gn++) {
+      const key = gx * 100003 + gn;
+      (parkingCells.get(key) ?? parkingCells.set(key, []).get(key)!).push(p);
+    }
+  }
   return {
     // Pas d'arbre posé par le générateur au milieu d'un parking.
-    keepTree: (x, n) => !parkings.some((p) => x > p.x0 && x < p.x1 && n > p.n0 && n < p.n1 && inRing(x, n, p.ring)),
+    keepTree: (x, n) => !(parkingCells.get(Math.floor(x / 100) * 100003 + Math.floor(n / 100)) ?? []).some((p) => x > p.x0 && x < p.x1 && n > p.n0 && n < p.n1 && inRing(x, n, p.ring)),
   };
 }

@@ -38,8 +38,8 @@ export function buildWalls(scene: THREE.Scene, values: number[] | undefined, col
     const tx = px / 0.3 * 0.45, tz = pz / 0.3 * 0.45;
     collider?.addBuilding([x0 - tx, -(z0 - tz), x1 - tx, -(z1 - tz), x1 + tx, -(z1 + tz), x0 + tx, -(z0 + tz)]);
   }
-  const stone = new THREE.Mesh(wall.build(), new THREE.MeshLambertMaterial({ map: createStoneWallTexture(), vertexColors: true, side: THREE.DoubleSide }));
-  const coping = new THREE.Mesh(cap.build(), new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }));
+  const stone = new THREE.Mesh(wall.build(), new THREE.MeshLambertMaterial({ map: createStoneWallTexture(), vertexColors: true, side: THREE.DoubleSide, name: 'detail:murs' }));
+  const coping = new THREE.Mesh(cap.build(), new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, name: 'detail:murs-dalles' }));
   stone.castShadow = coping.castShadow = true;
   scene.add(stone, coping);
   return values.length / 8;
